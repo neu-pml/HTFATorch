@@ -74,6 +74,9 @@ class Decoder(nn.Module):
 
         return p
 
+def Function_RBF(locations, centers, distances):
+    return torch.exp(-(locations + -centers).norm()**2 / torch.exp(distances))
+
 def elbo(q,p):
     return probtorch.objectives.montecarlo.kl(q,p)   #negative taken later
 
