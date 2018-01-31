@@ -91,7 +91,7 @@ def Function_RBF(locations, centers, distances):
     return torch.exp((((locations.unsqueeze(1) - centers.unsqueeze(2))**2).sum(3))/(-torch.exp(distances.unsqueeze(2))))
 
 def elbo(q,p,NUM_SAMPLES = NUM_SAMPLES):
-    return probtorch.objectives.montecarlo.kl(q,p,sample_dim=NUM_SAMPLES)   #negative taken later
+    return probtorch.objectives.montecarlo.kl(q,p,sample_dim=0)   #negative taken later
 
 enc = Encoder()
 dec = Decoder()
@@ -112,8 +112,6 @@ def train(data,R,enc,dec,optimizer,num_steps):
         if CUDA:
             data = data.cuda()
             R = R.cuda()
-        data = Variable(data)
-        R = Variable(R)
         p = dec(data = data,R =R, q = q)
         loss = -elbo(q, p)
         loss.backward()
@@ -125,14 +123,16 @@ def train(data,R,enc,dec,optimizer,num_steps):
     return losses
 
 
-losses = train(voxelActivations,voxelLocations,enc,dec,optimizer,num_steps=10)
+losses = train(Variable(voxelActivations),Variable(voxelLocations),enc,dec,optimizer,num_steps=10)
 
 
 if CUDA:
     q = enc()
     W = q['Weights'].value.data.cpu().numpy()
     M = q['FactorCenters'].value.data.cpu().numpy()
-    L = q['FactorWidths'].value.data.cpud().numpy()
+    L = q['FactorWidths'].value.data.cpu().numpy()
+
+r =3
 
 
 
