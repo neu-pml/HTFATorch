@@ -8,24 +8,22 @@ import scipy.io as sio
 import numpy as np
 
 CUDA =torch.cuda.is_available()
-NUM_EPOCH = 10 #placeholder values
-NUM_BATCH = 45 #placeholder values
+
 NUM_SAMPLES = 10 #placeholder values
 LEARNING_RATE = 0.1
 
-dataset = sio.loadmat('subj1.mat')
+dataset = sio.loadmat('s0.mat')
 voxelActivations = torch.Tensor(dataset['data']) #data
+voxelActivations = torch.transpose(voxelActivations,0,1)
 voxelLocations = torch.Tensor(dataset['R'])  #voxel locations
 del dataset
-NUM_TRs = voxelActivations.shape[1]     #no.of TRs
-NUM_VOXELS = voxelLocations.shape[0]     #no. of voxels
+NUM_TRs = voxelActivations.shape[0]     #no.of TRs
+NUM_VOXELS = voxelActivations.shape[1]     #no. of voxels
 NUM_FACTORS = 50             #no. of factors
 
 
-c = torch.mean(voxelLocations,0)#c
-brainCenter = c.unsqueeze(0)
-# brainCenter = torch.Tensor([[c[0]],[c[1]],[c[2]]])
-sourceCenterVariance = torch.Tensor([1,1,1]).unsqueeze(0) #kappa_u
+brainCenter = torch.mean(voxelLocations,0).unsqueeze(0)
+sourceCenterVariance = 10*torch.var(voxelLocations,0).unsqueeze(0) #kapp_u
 sourceWeightVariance = 2 #kappa_w
 sourceWidthVariance = 3
 voxelNoise = 0.1 #sigma2_y
@@ -80,25 +78,19 @@ class Decoder(nn.Module):
         FactorWidths = p.normal(self.MeanFactorWidth,self.SigmaFactorWidth,value = q['FactorWidths'],
                                 name = 'FactorWidths')
         Factors = Function_RBF(R,FactorCenters,FactorWidths)
-        data = p.normal(torch.matmul(Weights,Factors),self.Snoise.unsqueeze(0).expand(NUM_SAMPLES,NUM_TRs,NUM_VOXELS),value = data,name = 'Y')
+        data = p.normal(torch.matmul(Weights,Factors),self.Snoise,value = data,name = 'Y')
         # p.loss(((Yhat - data).T)*(Yhat-data),name='y') ##do we need this?
 
         return p
 
-#
-# 3 x V
-# 3 x K
-#
-# 3 x V x 1
-# 3 x 1 x K
-# 1 x 1 x K
+
 
 def Function_RBF(locations, centers, distances):
     locations = locations.unsqueeze(0)
-    locations = locations.expand(10,NUM_VOXELS,3)
+    locations = locations.expand(NUM_SAMPLES,NUM_VOXELS,3)
     return torch.exp((((locations.unsqueeze(1) - centers.unsqueeze(2))**2).sum(3))/(-torch.exp(distances.unsqueeze(2))))
 
-def elbo(q,p,NUM_SAMPLES = 10):
+def elbo(q,p,NUM_SAMPLES = NUM_SAMPLES):
     return probtorch.objectives.montecarlo.kl(q,p,sample_dim=NUM_SAMPLES)   #negative taken later
 
 enc = Encoder()
@@ -123,24 +115,18 @@ def train(data,R,enc,dec,optimizer,num_steps):
         data = Variable(data)
         R = Variable(R)
         p = dec(data = data,R =R, q = q)
-        loss = -elbo(p, q)
+        loss = -elbo(q, p)
         loss.backward()
         optimizer.step()
         if CUDA:
             loss = loss.cpu()
         losses[n] = loss.data.numpy()[0]
+        print (losses[n])
     return losses
 
 
 losses = train(voxelActivations,voxelLocations,enc,dec,optimizer,num_steps=10)
 
-#
-# for e in range(NUM_EPOCH):
-#     train_data = list(voxelActivations,voxelLocations)
-#     train_elbo = train(train_data,enc,dec)
-#     #test_elbo = test(test_data,enc,dec)
-#
-#     print('[Epoch %d] Train: ELBO %.4e Test: ELBO %.4e' % (e, train_elbo))
 
 if CUDA:
     q = enc()
