@@ -8,8 +8,8 @@ import numpy as np
 
 CUDA = torch.cuda.is_available()
 
-NUM_SAMPLES = 10  # placeholder values
-LEARNING_RATE = 0.1
+NUM_SAMPLES = 100  # placeholder values
+LEARNING_RATE = 1e-7
 
 dataset = sio.loadmat('s0.mat')
 voxelActivations = torch.Tensor(dataset['data'])  # data
@@ -76,7 +76,7 @@ class Decoder(nn.Module):
                                    self.SigmaLogFactorWidth, 
                                    value=q['LogFactorWidths'],
                                    name='LogFactorWidths')
-        Factors = RBF(R, FactorCenters, FactorWidths)
+        Factors = RBF(R, FactorCenters, LogFactorWidths)
         data = p.normal(torch.matmul(Weights, Factors), 
                         self.Snoise,
                         value=data,
@@ -109,7 +109,7 @@ if CUDA:
     enc.cuda()
     dec.cuda()
 
-optimizer = torch.optim.Adam(list(enc.parameters()),lr= LEARNING_RATE)
+optimizer = torch.optim.Adam(list(enc.parameters()), lr=LEARNING_RATE)
 
 def train(data,R,enc,dec,optimizer,num_steps):
     enc.train()
@@ -129,17 +129,22 @@ def train(data,R,enc,dec,optimizer,num_steps):
             loss = loss.cpu()
         losses[n] = loss.data.numpy()[0]
         print (losses[n])
+        # if n > 1:
+        #     assert(losses[-1] < losses[-2])
     return losses
 
 
-losses = train(Variable(voxelActivations),Variable(voxelLocations),enc,dec,optimizer,num_steps=10)
-
+losses = train(Variable(voxelActivations),
+               Variable(voxelLocations),
+               enc, dec, 
+               optimizer, 
+               num_steps=100)
 
 if CUDA:
     q = enc()
     W = q['Weights'].value.data.cpu().numpy()
     M = q['FactorCenters'].value.data.cpu().numpy()
-    L = q['FactorWidths'].value.data.cpu().numpy()
+    L = q['LogFactorWidths'].value.data.cpu().numpy()
 
 r =3
 
