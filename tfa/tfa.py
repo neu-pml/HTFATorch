@@ -298,6 +298,7 @@ if __name__ == '__main__':
         parameters, pcov = scipy.optimize.curve_fit(exponential, epochs, losses[0,:])
         func = exponential
     except RuntimeError:
+        logging.warn("Falling back to linear curve for free-energy figure")
         parameters, pcov = scipy.optimize.curve_fit(linear, epochs, losses[0,:])
         func = linear
     plt.plot(epochs, func(epochs, *parameters), 'b', label="Fit")
@@ -315,6 +316,7 @@ if __name__ == '__main__':
         parameters, pcov = scipy.optimize.curve_fit(exponential, epochs, losses[1,:])
         func = exponential
     except RuntimeError:
+        logging.warn("Falling back to linear curve for KL divergence figure")
         parameters, pcov = scipy.optimize.curve_fit(linear, epochs, losses[1,:])
         func = linear
     plt.plot(epochs, func(epochs, *parameters), 'r', label="Fit")
