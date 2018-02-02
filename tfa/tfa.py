@@ -6,6 +6,7 @@ __email__ = 'e.sennesh@northeastern.edu'
 
 import argparse
 import time
+import logging
 import numpy as np
 import probtorch
 import scipy.io as sio
@@ -238,7 +239,8 @@ class TopographicalFactorAnalysis:
 
             end = time.time()
             if log_optimization:
-                print(EPOCH_MSG % (n + 1, end - start, free_energy_n, kl))
+                msg = EPOCH_MSG % (n + 1, end - start, free_energy_n, kl)
+                logging.info(msg)
 
         self.losses = np.vstack([free_energies, kls])
         return self.losses
@@ -277,6 +279,13 @@ def exponential(x, a, b, c):
 
 if __name__ == '__main__':
     args = parser.parse_args()
+    if args.log:
+        level = logging.INFO
+    else:
+        level = logging.WARNING
+    logging.basicConfig(format='%(asctime)s %(message)s',
+                        datefmt='%m/%d/%Y %H:%M:%S',
+                        level=level)
     tfa = TopographicalFactorAnalysis(args.data_file)
     losses = tfa.train(num_steps=args.steps, log_optimization=args.log)
 
@@ -289,6 +298,7 @@ if __name__ == '__main__':
         parameters, pcov = scipy.optimize.curve_fit(exponential, epochs, losses[0,:])
         func = exponential
     except RuntimeError:
+        logging.warn("Falling back to linear curve for free-energy figure")
         parameters, pcov = scipy.optimize.curve_fit(linear, epochs, losses[0,:])
         func = linear
     plt.plot(epochs, func(epochs, *parameters), 'b', label="Fit")
@@ -306,6 +316,7 @@ if __name__ == '__main__':
         parameters, pcov = scipy.optimize.curve_fit(exponential, epochs, losses[1,:])
         func = exponential
     except RuntimeError:
+        logging.warn("Falling back to linear curve for KL divergence figure")
         parameters, pcov = scipy.optimize.curve_fit(linear, epochs, losses[1,:])
         func = linear
     plt.plot(epochs, func(epochs, *parameters), 'r', label="Fit")
