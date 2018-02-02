@@ -200,7 +200,7 @@ class TopographicalFactorAnalysis:
             self.enc.cuda()
             self.dec.cuda()
 
-    def train(self, num_steps=10):
+    def train(self, num_steps=10, log_optimization=False):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         activations = Variable(self.voxel_activations)
         locations = Variable(self.voxel_locations)
@@ -235,7 +235,8 @@ class TopographicalFactorAnalysis:
             kls[n] = kl.data.numpy()[0]
 
             end = time.time()
-            print(EPOCH_MSG % (n + 1, end - start, free_energy_n, kl))
+            if log_optimization:
+                print(EPOCH_MSG % (n + 1, end - start, free_energy_n, kl))
 
         self.losses = np.vstack([free_energies, kls])
         return self.losses
@@ -262,6 +263,7 @@ class TopographicalFactorAnalysis:
 parser = argparse.ArgumentParser(description='Topographical factor analysis for fMRI data')
 parser.add_argument('data_file', type=str, help='fMRI filename')
 parser.add_argument('--steps', type=int, default=100, help='Number of optimization steps')
+parser.add_argument('--log', action='store_true', help='Whether to log optimization')
 
 def linear(x, m, b):
     """Your basic linear function f(x) = mx+b"""
@@ -270,7 +272,7 @@ def linear(x, m, b):
 if __name__ == '__main__':
     args = parser.parse_args()
     tfa = TopographicalFactorAnalysis(args.data_file)
-    losses = tfa.train(num_steps=args.steps)
+    losses = tfa.train(num_steps=args.steps, log_optimization=args.log)
 
     epochs = range(losses.shape[1])
 
