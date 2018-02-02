@@ -277,6 +277,10 @@ def exponential(x, a, b, c):
     """Your basic exponential decay function"""
     return a * np.exp(-b * np.array(x)) - c
 
+def logistic(x, a, b, c):
+    """Your basic logistic function"""
+    return a * (1 + np.exp(-b * (np.array(x) - c)))
+
 if __name__ == '__main__':
     args = parser.parse_args()
     if args.log:
@@ -295,13 +299,25 @@ if __name__ == '__main__':
 
     plt.plot(epochs, losses[0,:], 'b.', label='Data')
     try:
-        parameters, pcov = scipy.optimize.curve_fit(exponential, epochs, losses[0,:])
-        func = exponential
+        parameters, pcov = scipy.optimize.curve_fit(logistic, epochs, losses[0,:])
+        func = logistic
+        fit = 'Logistic'
     except RuntimeError:
-        logging.warn("Falling back to linear curve for free-energy figure")
-        parameters, pcov = scipy.optimize.curve_fit(linear, epochs, losses[0,:])
-        func = linear
-    plt.plot(epochs, func(epochs, *parameters), 'b', label="Fit")
+        logging.warn("Falling back to exponential curve for free-energy figure")
+        try:
+            parameters, pcov = scipy.optimize.curve_fit(exponential,
+                                                        epochs,
+                                                        losses[0,:])
+            func = exponential
+            fit = 'Exponential'
+        except RuntimeError:
+            logging.warn("Falling back to linear curve for free-energy figure")
+            parameters, pcov = scipy.optimize.curve_fit(linear,
+                                                        epochs,
+                                                        losses[0,:])
+            func = linear
+            fit = 'Linear'
+    plt.plot(epochs, func(epochs, *parameters), 'b', label=fit + " Fit")
     plt.legend()
 
     free_energy_fig.tight_layout()
@@ -313,13 +329,25 @@ if __name__ == '__main__':
 
     plt.plot(epochs, losses[1, :], 'r.', label='Data')
     try:
-        parameters, pcov = scipy.optimize.curve_fit(exponential, epochs, losses[1,:])
-        func = exponential
+        parameters, pcov = scipy.optimize.curve_fit(logistic, epochs, losses[1,:])
+        func = logistic
+        fit = 'Logistic'
     except RuntimeError:
-        logging.warn("Falling back to linear curve for KL divergence figure")
-        parameters, pcov = scipy.optimize.curve_fit(linear, epochs, losses[1,:])
-        func = linear
-    plt.plot(epochs, func(epochs, *parameters), 'r', label="Fit")
+        logging.warn("Falling back to exponential curve for KL divergence figure")
+        try:
+            parameters, pcov = scipy.optimize.curve_fit(exponential,
+                                                        epochs,
+                                                        losses[1,:])
+            func = exponential
+            fit = 'Exponential'
+        except RuntimeError:
+            logging.warn("Falling back to linear curve for KL divergence figure")
+            parameters, pcov = scipy.optimize.curve_fit(linear,
+                                                        epochs,
+                                                        losses[1,:])
+            func = linear
+            fit = 'Linear'
+    plt.plot(epochs, func(epochs, *parameters), 'r', label=fit + " Fit")
     plt.legend()
 
     kl_fig.tight_layout()
