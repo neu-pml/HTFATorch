@@ -271,7 +271,7 @@ def linear(x, m, b):
 
 def exponential(x, a, b, c):
     """Your basic exponential decay function"""
-    return a * np.exp(-b * x) - c
+    return a * np.exp(-b * np.array(x)) - c
 
 if __name__ == '__main__':
     args = parser.parse_args()
