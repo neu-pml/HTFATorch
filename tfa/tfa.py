@@ -269,6 +269,10 @@ def linear(x, m, b):
     """Your basic linear function f(x) = mx+b"""
     return m * x + b
 
+def exponential(x, a, b, c):
+    """Your basic exponential decay function"""
+    return a * np.exp(-b * x) - c
+
 if __name__ == '__main__':
     args = parser.parse_args()
     tfa = TopographicalFactorAnalysis(args.data_file)
@@ -279,8 +283,13 @@ if __name__ == '__main__':
     free_energy_fig = plt.figure(figsize=(10, 10))
 
     plt.plot(epochs, losses[0,:], 'b.', label='Data')
-    parameters, pcov = scipy.optimize.curve_fit(linear, epochs, losses[0,:])
-    plt.plot(epochs, linear(epochs, *parameters), 'b', label="Fit")
+    try:
+        parameters, pcov = scipy.optimize.curve_fit(exponential, epochs, losses[0,:])
+        func = exponential
+    except RuntimeError:
+        parameters, pcov = scipy.optimize.curve_fit(linear, epochs, losses[0,:])
+        func = linear
+    plt.plot(epochs, func(epochs, *parameters), 'b', label="Fit")
     plt.legend()
 
     free_energy_fig.tight_layout()
@@ -291,8 +300,13 @@ if __name__ == '__main__':
     kl_fig = plt.figure(figsize=(10, 10))
 
     plt.plot(epochs, losses[1, :], 'r.', label='Data')
-    parameters, pcov = scipy.optimize.curve_fit(linear, epochs, losses[1, :])
-    plt.plot(epochs, linear(epochs, *parameters), 'r', label="Fit")
+    try:
+        parameters, pcov = scipy.optimize.curve_fit(exponential, epochs, losses[1,:])
+        func = exponential
+    except RuntimeError:
+        parameters, pcov = scipy.optimize.curve_fit(linear, epochs, losses[1,:])
+        func = linear
+    plt.plot(epochs, func(epochs, *parameters), 'r', label="Fit")
     plt.legend()
 
     kl_fig.tight_layout()
