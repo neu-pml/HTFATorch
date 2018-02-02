@@ -12,6 +12,7 @@ import probtorch
 import scipy.io as sio
 import scipy.optimize
 import torch
+import torch.distributions as dists
 from torch.autograd import Variable
 import torch.nn as nn
 from torch.nn import Parameter
@@ -66,26 +67,32 @@ class TFAEncoder(nn.Module):
         self._num_times = num_times
         self._num_factors = num_factors
 
-        self._mean_weight = Parameter(torch.randn(
+        self._mean_weight = torch.randn((self._num_times, self._num_factors))
+        self._weight_std_dev = torch.sqrt(torch.rand(
             (self._num_times, self._num_factors)
         ))
-        self._weight_std_dev = Parameter(torch.sqrt(torch.rand(
-            (self._num_times, self._num_factors)
-        )))
+        self._mean_weight = Parameter(dists.Normal(
+            self._mean_weight, self._weight_std_dev
+        ).sample())
+        self._weight_std_dev = Parameter(self._weight_std_dev)
 
-        self._mean_factor_center = Parameter(torch.randn(
+        self._mean_factor_center = torch.randn((self._num_factors, 3))
+        self._factor_center_std_dev = torch.sqrt(torch.rand(
             (self._num_factors, 3)
         ))
-        self._factor_center_std_dev = Parameter(torch.sqrt(torch.rand(
-            (self._num_factors, 3)
-        )))
+        self._mean_factor_center = Parameter(dists.Normal(
+            self._mean_factor_center, self._factor_center_std_dev
+        ).sample())
+        self._factor_center_std_dev = Parameter(self._factor_center_std_dev)
 
-        self._mean_factor_log_width = Parameter(torch.randn(
+        self._mean_factor_log_width = torch.randn((self._num_factors))
+        self._factor_log_width_std_dev = torch.sqrt(torch.rand(
             (self._num_factors)
         ))
-        self._factor_log_width_std_dev = Parameter(torch.sqrt(torch.rand(
-            (self._num_factors)
-        )))
+        self._mean_factor_log_width = Parameter(dists.Normal(
+            self._mean_factor_log_width, self._factor_log_width_std_dev
+        ).sample())
+        self._factor_log_width_std_dev = Parameter(self._factor_log_width_std_dev)
 
     def forward(self, num_samples=NUM_SAMPLES):
         q = probtorch.Trace()
