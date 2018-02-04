@@ -200,13 +200,13 @@ class TopographicalFactorAnalysis:
             10 * torch.var(self.voxel_locations, 0).unsqueeze(0)
         )
 
-        self.enc = torch.nn.DataParallel(TFAEncoder(self.num_times))
-        self.dec = torch.nn.DataParallel(
-            TFADecoder(self.brain_center, self.brain_center_std_dev,
-                       self.num_times, self.num_voxels)
-        )
+        self.enc = TFAEncoder(self.num_times)
+        self.dec = TFADecoder(self.brain_center, self.brain_center_std_dev,
+                              self.num_times, self.num_voxels)
 
         if CUDA:
+            self.enc = torch.nn.DataParallel(self.enc)
+            self.dec = torch.nn.DataParallel(self.dec)
             self.enc.cuda()
             self.dec.cuda()
 
@@ -229,7 +229,7 @@ class TopographicalFactorAnalysis:
             start = time.time()
 
             optimizer.zero_grad()
-            q = self.enc()
+            q = self.enc(num_samples=NUM_SAMPLES)
             p = self.dec(activations=activations, locations=locations, q=q)
 
             free_energy_n = free_energy(q, p)
@@ -254,7 +254,7 @@ class TopographicalFactorAnalysis:
 
     def results(self):
         """Return the inferred parameters"""
-        q = self.enc()
+        q = self.enc(num_samples=NUM_SAMPLES)
         if CUDA:
             q['Weights'].value.data.cpu()
             q['FactorCenters'].value.data.cpu()
