@@ -303,11 +303,11 @@ def linear(x, m, b):
 
 def exponential(x, a, b, c):
     """Your basic exponential decay function"""
-    return a * np.exp(-b * np.array(x)) - c
+    return np.array((a * torch.exp(-b * torch.DoubleTensor(x)) - c).tolist())
 
 def logistic(x, a, b, c):
     """Your basic logistic function"""
-    return a * (1 + np.exp(-b * (np.array(x) - c)))
+    return np.array((a * (1 + torch.exp(-b * (torch.DoubleTensor(x) - c)))).tolist())
 
 def plot_losses(losses):
     epochs = range(losses.shape[1])
