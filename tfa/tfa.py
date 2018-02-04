@@ -25,7 +25,6 @@ finally:
 
 # check the availability of CUDA
 CUDA = torch.cuda.is_available()
-CUDA = False
 
 # placeholder values for hyperparameters
 LEARNING_RATE = 1e-7
