@@ -159,6 +159,32 @@ class TFADecoder(nn.Module):
 
         self._voxel_noise = Variable(VOXEL_NOISE * torch.ones(self._num_times, self._num_voxels))
 
+    def cuda(self, device=None):
+        super().cuda(device)
+        self._mean_weight = self._mean_weight.cuda()
+        self._weight_std_dev = self._weight_std_dev.cuda()
+
+        self._mean_factor_center = self._mean_factor_center.cuda()
+        self._factor_center_std_dev = self._factor_center_std_dev.cuda()
+
+        self._mean_factor_log_width = self._mean_factor_log_width.cuda()
+        self._factor_log_width_std_dev = self._factor_log_width_std_dev.cuda()
+
+        self._voxel_noise = self._voxel_noise.cuda()
+
+    def cpu(self):
+        super().cpu()
+        self._mean_weight = self._mean_weight.cpu()
+        self._weight_std_dev = self._weight_std_dev.cpu()
+
+        self._mean_factor_center = self._mean_factor_center.cpu()
+        self._factor_center_std_dev = self._factor_center_std_dev.cpu()
+
+        self._mean_factor_log_width = self._mean_factor_log_width.cpu()
+        self._factor_log_width_std_dev = self._factor_log_width_std_dev.cpu()
+
+        self._voxel_noise = self._voxel_noise.cuda()
+
     def forward(self, activations, locations, q=None):
         p = probtorch.Trace()
 
