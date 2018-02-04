@@ -27,7 +27,7 @@ finally:
 CUDA = torch.cuda.is_available()
 
 # placeholder values for hyperparameters
-LEARNING_RATE = 1e-7
+LEARNING_RATE = 1e-4
 NUM_FACTORS = 50
 NUM_SAMPLES = 100
 SOURCE_WEIGHT_STD_DEV = np.sqrt(2.0)
