@@ -231,11 +231,11 @@ class TopographicalFactorAnalysis:
             self.enc.cuda()
             self.dec.cuda()
 
-    def train(self, num_steps=10, log_optimization=False):
+    def train(self, num_steps=10, learning_rate=0.1, log_optimization=False):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         activations = Variable(self.voxel_activations)
         locations = Variable(self.voxel_locations)
-        optimizer = torch.optim.Adam(list(self.enc.parameters()), lr=LEARNING_RATE)
+        optimizer = torch.optim.Adam(list(self.enc.parameters()), lr=learning_rate)
         if CUDA:
             activations = activations.cuda()
             locations = locations.cuda()
@@ -295,6 +295,7 @@ class TopographicalFactorAnalysis:
 parser = argparse.ArgumentParser(description='Topographical factor analysis for fMRI data')
 parser.add_argument('data_file', type=str, help='fMRI filename')
 parser.add_argument('--steps', type=int, default=100, help='Number of optimization steps')
+parser.add_argument('--learning_rate', type=float, default=1e-4, help='Learning Rate for optimization')
 parser.add_argument('--log', action='store_true', help='Whether to log optimization')
 
 if __name__ == '__main__':
@@ -307,5 +308,5 @@ if __name__ == '__main__':
                         datefmt='%m/%d/%Y %H:%M:%S',
                         level=level)
     tfa = TopographicalFactorAnalysis(args.data_file)
-    losses = tfa.train(num_steps=args.steps, log_optimization=args.log)
+    losses = tfa.train(num_steps=args.steps, learning_rate=args.learning_rate, log_optimization=args.log)
     utils.plot_losses(losses)
