@@ -29,7 +29,7 @@ SOURCE_WEIGHT_STD_DEV = np.sqrt(2.0)
 SOURCE_LOG_WIDTH_STD_DEV = np.sqrt(3.0)
 VOXEL_NOISE = 0.1
 
-EPOCH_MSG = '[Epoch %d] (%ds) Posterior free-energy %.8e, Joint KL divergence %.8e'
+EPOCH_MSG = '[Epoch %d] (%dms) Posterior free-energy %.8e, Joint KL divergence %.8e'
 
 # locations: V x 3
 # centers: S x K x 3
@@ -267,7 +267,7 @@ class TopographicalFactorAnalysis:
 
             end = time.time()
             if log_optimization:
-                msg = EPOCH_MSG % (n + 1, end - start, free_energy_n, kl)
+                msg = EPOCH_MSG % (n + 1, (end - start) * 1000, free_energy_n, kl)
                 logging.info(msg)
 
         self.losses = np.vstack([free_energies, kls])
