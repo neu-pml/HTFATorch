@@ -269,14 +269,14 @@ class TopographicalFactorAnalysis:
         # calculate mean image, center it, and fold it
         # use the top K peaks as initial centers for q
 
-        mean_image = torch.mean(self.voxel_activations,0)
+        mean_image = torch.mean(self.voxel_activations, 0)
         mean_activation = torch.mean(mean_image)
         mean_image = mean_image - mean_activation
         mean_image = torch.abs(mean_image)
 
         factor_centers = []
-        for k in range(NUM_FACTORS):
-            v, i = mean_image.max(0)
+        for k in range(num_factors):
+            _, i = mean_image.max(0)
             mean_image[i] = 0
             factor_centers.append(self.voxel_locations[i])
 
