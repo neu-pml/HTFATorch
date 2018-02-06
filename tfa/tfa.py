@@ -387,11 +387,11 @@ parser = argparse.ArgumentParser(description='Topographical factor analysis for 
 parser.add_argument('data_file', type=str, help='fMRI filename')
 parser.add_argument('--steps', type=int, default=100, help='Number of optimization steps')
 parser.add_argument('--learning_rate', type=float, default=1e-4, help='Learning Rate for optimization')
-parser.add_argument('--log', action='store_true', help='Whether to log optimization')
+parser.add_argument('--log-optimization', action='store_true', help='Whether to log optimization')
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    if args.log:
+    if args.log_optimization:
         level = logging.INFO
     else:
         level = logging.WARNING
@@ -399,6 +399,8 @@ if __name__ == '__main__':
                         datefmt='%m/%d/%Y %H:%M:%S',
                         level=level)
     tfa = TopographicalFactorAnalysis(args.data_file)
-    losses = tfa.train(num_steps=args.steps, learning_rate=args.learning_rate, log_optimization=args.log)
-    utils.plot_losses(losses)
+    losses = tfa.train(num_steps=args.steps, learning_rate=args.learning_rate,
+                       log_optimization=args.log_optimization)
+    if args.log_optimization:
+        utils.plot_losses(losses)
     tfa.mean_parameters()
