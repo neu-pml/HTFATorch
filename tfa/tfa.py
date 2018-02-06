@@ -230,6 +230,25 @@ class TopographicalFactorAnalysis:
             self.dec = torch.nn.DataParallel(self.dec)
             self.enc.cuda()
             self.dec.cuda()
+            
+    def hotspot_initialization(self, NUM_FACTORS=NUM_FACTORS):
+        # calculate mean image, center it, and fold it
+        # use the top K peaks as initial centers for q
+        
+        mean_image = torch.mean(self.voxel_activations,0)
+        mean_activation = torch.mean(mean_image)
+        mean_image = mean_image - mean_activation
+        mean_image = torch.abs(mean_image)
+
+        factor_centers = []
+        for k in range(NUM_FACTORS):
+            v, i = mean_image.max(0)
+            mean_image[i] = 0
+            factor_centers.append(self.voxel_locations[i])
+
+        hotspots = torch.cat(factor_centers) #Kx3 tensor
+
+        return hotspots
 
     def train(self, num_steps=10, learning_rate=0.1, log_optimization=False):
         """Optimize the variational guide to reflect the data for `num_steps`"""
