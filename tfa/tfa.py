@@ -262,8 +262,8 @@ class TopographicalFactorAnalysis:
         return initial_centers, np.log(initial_widths), initial_weights.T
 
     def hotspot_initialization(self, NUM_FACTORS=NUM_FACTORS):
-        # calculate mean image, center it, and fold it
-        # use the top K peaks as initial centers for q
+        """Calculate mean image, center it, and fold it.
+           Use the top K peaks as initial centers for q."""
 
         mean_image = torch.mean(self.voxel_activations, 0)
         mean_activation = torch.mean(mean_image)
