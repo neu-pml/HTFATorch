@@ -15,8 +15,11 @@ URL = 'https://github.com/neu-spiral/HTFATorch'
 SCRIPTS = ['tfa/tfa.py']
 
 REQUIRED = [
+    'hypertools',
     'matplotlib',
+    'nilearn',
     'probtorch',
+    'seaborn',
 ]
 
 # The rest you shouldn't have to touch too much :)
