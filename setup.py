@@ -12,6 +12,8 @@ NAME = 'HTFATorch'
 DESCRIPTION = 'An implementation of hierarchical topographic factor analysis in ProbTorch'
 URL = 'https://github.com/neu-spiral/HTFATorch'
 
+SCRIPTS = ['tfa/tfa.py']
+
 REQUIRED = [
     'matplotlib',
     'probtorch',
@@ -70,6 +72,7 @@ setup(
     long_description=long_description,
     url=URL,
     packages=find_packages(exclude=('tests',)),
+    scripts=SCRIPTS,
     install_requires=REQUIRED,
     include_package_data=True,
     license='MIT',
