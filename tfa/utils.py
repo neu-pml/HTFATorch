@@ -5,8 +5,9 @@ __author__ = 'Eli Sennesh'
 __email__ = 'e.sennesh@northeastern.edu'
 
 try:
-    import matplotlib
-    matplotlib.use('TkAgg')
+    if __name__ == '__main__':
+        import matplotlib
+        matplotlib.use('TkAgg')
 finally:
     import matplotlib.pyplot as plt
 
@@ -15,7 +16,7 @@ def plot_losses(losses):
 
     free_energy_fig = plt.figure(figsize=(10, 10))
 
-    plt.plot(epochs, losses[0,:], 'b-', label='Data')
+    plt.plot(epochs, losses[0, :], 'b-', label='Data')
     plt.legend()
 
     free_energy_fig.tight_layout()

@@ -283,6 +283,14 @@ class TopographicalFactorAnalysis:
 
     def train(self, num_steps=10, learning_rate=0.1, log_optimization=False):
         """Optimize the variational guide to reflect the data for `num_steps`"""
+        if log_optimization:
+            level = logging.INFO
+        else:
+            level = logging.WARNING
+        logging.basicConfig(format='%(asctime)s %(message)s',
+                            datefmt='%m/%d/%Y %H:%M:%S',
+                            level=level)
+
         activations = Variable(self.voxel_activations)
         locations = Variable(self.voxel_locations)
         optimizer = torch.optim.Adam(list(self.enc.parameters()), lr=learning_rate)
@@ -383,13 +391,6 @@ parser.add_argument('--log-optimization', action='store_true', help='Whether to 
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    if args.log_optimization:
-        level = logging.INFO
-    else:
-        level = logging.WARNING
-    logging.basicConfig(format='%(asctime)s %(message)s',
-                        datefmt='%m/%d/%Y %H:%M:%S',
-                        level=level)
     tfa = TopographicalFactorAnalysis(args.data_file)
     losses = tfa.train(num_steps=args.steps, learning_rate=args.learning_rate,
                        log_optimization=args.log_optimization)
