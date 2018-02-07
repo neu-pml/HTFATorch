@@ -31,7 +31,7 @@ SOURCE_WEIGHT_STD_DEV = np.sqrt(2.0)
 SOURCE_LOG_WIDTH_STD_DEV = np.sqrt(3.0)
 VOXEL_NOISE = 0.1
 
-EPOCH_MSG = '[Epoch %d] (%dms) Posterior free-energy %.8e, Joint KL divergence %.8e'
+EPOCH_MSG = '[Epoch %d] (%dms) Posterior free-energy %.8e'
 
 # locations: V x 3
 # centers: S x K x 3
@@ -53,9 +53,6 @@ def free_energy(q, p):
     """Calculate the free-energy (negative of the evidence lower bound)"""
     return -probtorch.objectives.montecarlo.elbo(q, p)
 
-def kl_divergence(q, p):
-    """Calculate the KL divergence from the joint distribution"""
-    return probtorch.objectives.montecarlo.kl(q, p)
     
 def log_likelihood(q, p):
     """The expected log-likelihood of observed data under the proposal distribution"""
@@ -297,7 +294,6 @@ class TopographicalFactorAnalysis:
         self.dec.train()
 
         free_energies = np.zeros(num_steps)
-        kls = np.zeros(num_steps)
         lls = np.zeros(num_steps)
 
         for n in range(num_steps):
@@ -308,7 +304,6 @@ class TopographicalFactorAnalysis:
             p = self.dec(activations=activations, locations=locations, q=q)
 
             free_energy_n = free_energy(q, p)
-            kl = kl_divergence(q, p)
             ll = log_likelihood(q,p)
 
             free_energy_n.backward()
@@ -316,19 +311,16 @@ class TopographicalFactorAnalysis:
 
             if CUDA:
                 free_energy_n = free_energy_n.cpu()
-                kl = kl.cpu()
                 ll = ll.cpu()
             free_energies[n] = free_energy_n.data.numpy()[0]
-            kls[n] = kl.data.numpy()[0]
             lls[n] = ll.data.numpy()[0]
 
             end = time.time()
             if log_optimization:
-                msg = EPOCH_MSG % (n + 1, (end - start) * 1000, free_energy_n, kl)
+                msg = EPOCH_MSG % (n + 1, (end - start) * 1000, free_energy_n)
                 logging.info(msg)
 
-        self.losses = np.vstack([free_energies, kls])
-        #plt.plot(lls)
+        self.losses = np.vstack([free_energies, lls])
         return self.losses
 
     def results(self):
