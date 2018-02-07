@@ -64,7 +64,6 @@ def free_energy(q, p):
     """Calculate the free-energy (negative of the evidence lower bound)"""
     return -probtorch.objectives.montecarlo.elbo(q, p)
 
-    
 def log_likelihood(q, p):
     """The expected log-likelihood of observed data under the proposal distribution"""
     return probtorch.objectives.montecarlo.log_like(q, p, sample_dim=0)
