@@ -49,6 +49,17 @@ def radial_basis(locations, centers, log_widths, num_voxels,
     log_widths = log_widths.unsqueeze(2)
     return torch.exp(-delta2s.sum(3) / torch.exp(log_widths))
 
+def initial_radial_basis(location, center, widths):
+    """The radial basis function used as the shape for the factors"""
+    # V x 3 -> 1 x V x 3
+    location = np.expand_dims(location, 0)
+    # K x 3 -> K x 1 x 3
+    center = np.expand_dims(center, 1)
+    #
+    delta2s = (location - center) ** 2
+    widths = np.expand_dims(widths,1)
+    return np.exp(-delta2s.sum(2) / (widths))
+
 def free_energy(q, p):
     """Calculate the free-energy (negative of the evidence lower bound)"""
     return -probtorch.objectives.montecarlo.elbo(q, p)
@@ -217,13 +228,13 @@ class TopographicalFactorAnalysis:
             10 * torch.var(self.voxel_locations, 0).unsqueeze(0)
         )
         
-        self.mean_centers_init,self.mean_widths_init,self.mean_weights_init = \
-            self.get_initialization(data,R)
-        self.mean_centers_init = torch.Tensor(self.mean_centers_init)
-        self.mean_weights_init = torch.Tensor(self.mean_weights_init)
+        mean_centers_init, mean_widths_init, mean_weights_init = \
+            self.get_initialization(data, R)
+        mean_centers_init = torch.Tensor(mean_centers_init)
+        mean_weights_init = torch.Tensor(mean_weights_init)
+        self.enc = TFAEncoder(self.num_times, mean_centers_init,
+                              mean_widths_init, mean_weights_init)
 
-
-        self.enc = TFAEncoder(self.num_times,self.mean_centers_init,self.mean_widths_init,self.mean_weights_init)
         self.dec = TFADecoder(self.brain_center, self.brain_center_std_dev,
                               self.num_times, self.num_voxels)
 
@@ -232,8 +243,8 @@ class TopographicalFactorAnalysis:
             self.dec = torch.nn.DataParallel(self.dec)
             self.enc.cuda()
             self.dec.cuda()
-            
-    def get_initialization(self,data,R):
+
+    def get_initialization(self, data, R):
         kmeans = KMeans(init='k-means++',
                         n_clusters=NUM_FACTORS,
                         n_init=10,
@@ -241,27 +252,15 @@ class TopographicalFactorAnalysis:
         kmeans.fit(R)
         initial_centers = kmeans.cluster_centers_
         initial_widths = 2.0 * math.pow(np.nanmax(np.std(R, axis=0)), 2)
-        F = self.rbf(R, initial_centers, initial_widths)
+        F = initial_radial_basis(R, initial_centers, initial_widths)
         F = F.T
 
         # beta = np.var(voxel_activations)
         trans_F = F.T.copy()
         initial_weights = np.linalg.solve(trans_F.dot(F), trans_F.dot(data))
 
-        return initial_centers,np.log(initial_widths),initial_weights.T
+        return initial_centers, np.log(initial_widths), initial_weights.T
 
-    def rbf(self,location, center, widths):
-        """The radial basis function used as the shape for the factors"""
-
-        # V x 3 -> 1 x V x 3
-        location = np.expand_dims(location, 0)
-        # K x 3 -> K x 1 x 3
-        center = np.expand_dims(center, 1)
-        #
-        delta2s = (location - center) ** 2
-        widths = np.expand_dims(widths,1)
-        return np.exp(-delta2s.sum(2) / (widths))
-            
     def hotspot_initialization(self, NUM_FACTORS=NUM_FACTORS):
         # calculate mean image, center it, and fold it
         # use the top K peaks as initial centers for q
@@ -359,7 +358,9 @@ class TopographicalFactorAnalysis:
         mean_factor_center = mean_factor_center.numpy()
         mean_factor_log_width = mean_factor_log_width.numpy()
         mean_weight = mean_weight.numpy()
-        mean_factors = self.rbf(self.voxel_locations.numpy(),mean_factor_center,np.exp(mean_factor_log_width))
+        mean_factors = initial_radial_basis(self.voxel_locations.numpy(),
+                                            mean_factor_center,
+                                            np.exp(mean_factor_log_width))
 
         if log_means:
             logging.info("Mean Factor Centers: %s", str(mean_factor_center))
