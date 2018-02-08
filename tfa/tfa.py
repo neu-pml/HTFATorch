@@ -58,7 +58,7 @@ def initial_radial_basis(location, center, widths):
     center = np.expand_dims(center, 1)
     #
     delta2s = (location - center) ** 2
-    widths = np.expand_dims(widths,1)
+    widths = np.expand_dims(widths, 1)
     return np.exp(-delta2s.sum(2) / (widths))
 
 def free_energy(q, p):
@@ -246,6 +246,7 @@ class TopographicalFactorAnalysis:
             self.dec.cuda()
 
     def get_initialization(self, data, R):
+        """Initialize our center, width, and weight parameters via K-means"""
         kmeans = KMeans(init='k-means++',
                         n_clusters=self.num_factors,
                         n_init=10,
@@ -272,7 +273,7 @@ class TopographicalFactorAnalysis:
         mean_image = torch.abs(mean_image)
 
         factor_centers = []
-        for k in range(self.num_factors):
+        for _ in range(self.num_factors):
             _, i = mean_image.max(0)
             mean_image[i] = 0
             factor_centers.append(self.voxel_locations[i])
@@ -306,7 +307,7 @@ class TopographicalFactorAnalysis:
         for n in range(num_steps):
             start = time.time()
 
-            for (batch, (activations, locations)) in enumerate(voxels_loader):
+            for (_, (activations, locations)) in enumerate(voxels_loader):
                 activations = Variable(activations.transpose(0, 1))
                 locations = Variable(locations)
                 if CUDA:
@@ -389,11 +390,11 @@ class TopographicalFactorAnalysis:
         }
         return mean_parameters
 
-
 parser = argparse.ArgumentParser(description='Topographical factor analysis for fMRI data')
 parser.add_argument('data_file', type=str, help='fMRI filename')
 parser.add_argument('--steps', type=int, default=100, help='Number of optimization steps')
-parser.add_argument('--learning_rate', type=float, default=1e-4, help='Learning Rate for optimization')
+parser.add_argument('--learning_rate', type=float, default=1e-4,
+                    help='Learning Rate for optimization')
 parser.add_argument('--log-optimization', action='store_true', help='Whether to log optimization')
 parser.add_argument('--factors', type=int, default=NUM_FACTORS, help='Number of latent factors')
 
