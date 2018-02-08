@@ -223,7 +223,7 @@ class TopographicalFactorAnalysis:
         self.brain_center_std_dev = torch.sqrt(
             10 * torch.var(self.voxel_locations, 0).unsqueeze(0)
         )
-        
+
         mean_centers_init, mean_widths_init, mean_weights_init = \
             self.get_initialization(data, R)
         mean_centers_init = torch.Tensor(mean_centers_init)
@@ -359,6 +359,10 @@ class TopographicalFactorAnalysis:
             mean_factor_center = self.enc.module._mean_factor_center.data.cpu()
             mean_factor_log_width = self.enc.module._mean_factor_log_width.data.cpu()
             mean_weight = self.enc.module._mean_weight.data.cpu()
+        else:
+            mean_factor_center = self.enc._mean_factor_center.data
+            mean_factor_log_width = self.enc._mean_factor_log_width.data
+            mean_weight = self.enc._mean_weight.data
 
         mean_factor_center = mean_factor_center.numpy()
         mean_factor_log_width = mean_factor_log_width.numpy()
