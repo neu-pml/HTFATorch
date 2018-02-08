@@ -334,23 +334,22 @@ class TopographicalFactorAnalysis:
     def results(self):
         """Return the inferred parameters"""
         q = self.enc(num_samples=NUM_SAMPLES)
-        if CUDA:
-            q['Weights'].value.data.cpu()
-            q['FactorCenters'].value.data.cpu()
-            q['FactorLogWidths'].value.data.cpu()
 
-        weights = q['Weights'].value.data.numpy()
-        factor_centers = q['FactorCenters'].value.data.numpy()
-        factor_log_widths = q['FactorLogWidths'].value.data.numpy()
+        weights = q['Weights'].value.data
+        factor_centers = q['FactorCenters'].value.data
+        factor_log_widths = q['FactorLogWidths'].value.data
+        if CUDA:
+            weights = weights.cpu()
+            factor_centers = factor_centers.cpu()
+            factor_log_widths = factor_log_widths.cpu()
 
         result = {
-            'weights': weights,
-            'factor_centers': factor_centers,
-            'factor_log_widths': factor_log_widths
+            'weights': weights.numpy(),
+            'factor_centers': factor_centers.numpy(),
+            'factor_log_widths': factor_log_widths.numpy(),
         }
         return result
-        
-        
+
     def mean_parameters(self):
         if CUDA:
             mean_factor_center = self.enc.module._mean_factor_center.data.cpu()
