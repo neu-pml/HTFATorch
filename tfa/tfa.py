@@ -15,6 +15,8 @@ import torch.distributions as dists
 from torch.autograd import Variable
 import torch.nn as nn
 from torch.nn import Parameter
+from sklearn.cluster import KMeans
+import math
 
 import utils
 
@@ -23,7 +25,7 @@ CUDA = torch.cuda.is_available()
 
 # placeholder values for hyperparameters
 LEARNING_RATE = 1e-4
-NUM_FACTORS = 50
+NUM_FACTORS = 5
 NUM_SAMPLES = 100
 SOURCE_WEIGHT_STD_DEV = np.sqrt(2.0)
 SOURCE_LOG_WIDTH_STD_DEV = np.sqrt(3.0)
@@ -54,39 +56,34 @@ def free_energy(q, p):
 def kl_divergence(q, p):
     """Calculate the KL divergence from the joint distribution"""
     return probtorch.objectives.montecarlo.kl(q, p)
+    
+def log_likelihood(q, p):
+    """The expected log-likelihood of observed data under the proposal distribution"""
+    return probtorch.objectives.montecarlo.log_like(q, p, sample_dim=0)
 
 class TFAEncoder(nn.Module):
     """Variational guide for topographic factor analysis"""
-    def __init__(self, num_times, num_factors=NUM_FACTORS):
+    def __init__(self, num_times, mean_centers, mean_widths, mean_weights, num_factors=NUM_FACTORS):
         super(self.__class__, self).__init__()
         self._num_times = num_times
         self._num_factors = num_factors
 
-        self._mean_weight = torch.randn((self._num_times, self._num_factors))
         self._weight_std_dev = torch.sqrt(torch.rand(
             (self._num_times, self._num_factors)
         ))
-        self._mean_weight = Parameter(dists.Normal(
-            self._mean_weight, self._weight_std_dev
-        ).sample())
+        self._mean_weight = Parameter(mean_weights)
         self._weight_std_dev = Parameter(self._weight_std_dev)
 
-        self._mean_factor_center = torch.randn((self._num_factors, 3))
         self._factor_center_std_dev = torch.sqrt(torch.rand(
             (self._num_factors, 3)
         ))
-        self._mean_factor_center = Parameter(dists.Normal(
-            self._mean_factor_center, self._factor_center_std_dev
-        ).sample())
+        self._mean_factor_center = Parameter(mean_centers)
         self._factor_center_std_dev = Parameter(self._factor_center_std_dev)
 
-        self._mean_factor_log_width = torch.randn((self._num_factors))
         self._factor_log_width_std_dev = torch.sqrt(torch.rand(
             (self._num_factors)
         ))
-        self._mean_factor_log_width = Parameter(dists.Normal(
-            self._mean_factor_log_width, self._factor_log_width_std_dev
-        ).sample())
+        self._mean_factor_log_width = Parameter(mean_widths*torch.ones(NUM_FACTORS))
         self._factor_log_width_std_dev = Parameter(self._factor_log_width_std_dev)
 
     def forward(self, num_samples=NUM_SAMPLES):
@@ -204,8 +201,10 @@ class TopographicalFactorAnalysis:
     def __init__(self, data_file):
         dataset = sio.loadmat(data_file)
         # pull out the voxel activations and locations
-        self.voxel_activations = torch.Tensor(dataset['data']).transpose(0, 1)
-        self.voxel_locations = torch.Tensor(dataset['R'])
+        data = dataset['data']
+        R = dataset['R']
+        self.voxel_activations = torch.Tensor(data).transpose(0, 1)
+        self.voxel_locations = torch.Tensor(R)
 
         # This could be a huge file.  Close it
         del dataset
@@ -220,8 +219,14 @@ class TopographicalFactorAnalysis:
         self.brain_center_std_dev = torch.sqrt(
             10 * torch.var(self.voxel_locations, 0).unsqueeze(0)
         )
+        
+        self.mean_centers_init,self.mean_widths_init,self.mean_weights_init = \
+            self.get_initialization(data,R)
+        self.mean_centers_init = torch.Tensor(self.mean_centers_init)
+        self.mean_weights_init = torch.Tensor(self.mean_weights_init)
 
-        self.enc = TFAEncoder(self.num_times)
+
+        self.enc = TFAEncoder(self.num_times,self.mean_centers_init,self.mean_widths_init,self.mean_weights_init)
         self.dec = TFADecoder(self.brain_center, self.brain_center_std_dev,
                               self.num_times, self.num_voxels)
 
@@ -230,6 +235,35 @@ class TopographicalFactorAnalysis:
             self.dec = torch.nn.DataParallel(self.dec)
             self.enc.cuda()
             self.dec.cuda()
+            
+    def get_initialization(self,data,R):
+        kmeans = KMeans(init='k-means++',
+                        n_clusters=NUM_FACTORS,
+                        n_init=10,
+                        random_state=100)
+        kmeans.fit(R)
+        initial_centers = kmeans.cluster_centers_
+        initial_widths = 2.0 * math.pow(np.nanmax(np.std(R, axis=0)), 2)
+        F = self.rbf(R, initial_centers, initial_widths)
+        F = F.T
+
+        # beta = np.var(voxel_activations)
+        trans_F = F.T.copy()
+        initial_weights = np.linalg.solve(trans_F.dot(F), trans_F.dot(data))
+
+        return initial_centers,np.log(initial_widths),initial_weights.T
+
+    def rbf(self,location, center, widths):
+        """The radial basis function used as the shape for the factors"""
+
+        # V x 3 -> 1 x V x 3
+        location = np.expand_dims(location, 0)
+        # K x 3 -> K x 1 x 3
+        center = np.expand_dims(center, 1)
+        #
+        delta2s = (location - center) ** 2
+        widths = np.expand_dims(widths,1)
+        return np.exp(-delta2s.sum(2) / (widths))
             
     def hotspot_initialization(self, NUM_FACTORS=NUM_FACTORS):
         # calculate mean image, center it, and fold it
@@ -264,6 +298,7 @@ class TopographicalFactorAnalysis:
 
         free_energies = np.zeros(num_steps)
         kls = np.zeros(num_steps)
+        lls = np.zeros(num_steps)
 
         for n in range(num_steps):
             start = time.time()
@@ -274,6 +309,7 @@ class TopographicalFactorAnalysis:
 
             free_energy_n = free_energy(q, p)
             kl = kl_divergence(q, p)
+            ll = log_likelihood(q,p)
 
             free_energy_n.backward()
             optimizer.step()
@@ -281,8 +317,10 @@ class TopographicalFactorAnalysis:
             if CUDA:
                 free_energy_n = free_energy_n.cpu()
                 kl = kl.cpu()
+                ll = ll.cpu()
             free_energies[n] = free_energy_n.data.numpy()[0]
             kls[n] = kl.data.numpy()[0]
+            lls[n] = ll.data.numpy()[0]
 
             end = time.time()
             if log_optimization:
@@ -290,6 +328,7 @@ class TopographicalFactorAnalysis:
                 logging.info(msg)
 
         self.losses = np.vstack([free_energies, kls])
+        #plt.plot(lls)
         return self.losses
 
     def results(self):
@@ -310,6 +349,39 @@ class TopographicalFactorAnalysis:
             'factor_log_widths': factor_log_widths
         }
         return result
+        
+        
+    def mean_parameters(self):
+        if CUDA:
+            mean_factor_center = self.enc.module._mean_factor_center.data.cpu()
+            mean_factor_log_width = self.enc.module._mean_factor_log_width.data.cpu()
+            mean_weight = self.enc.module._mean_weight.data.cpu()
+
+        mean_factor_center = mean_factor_center.numpy()
+        mean_factor_log_width = mean_factor_log_width.numpy()
+        mean_weight = mean_weight.numpy()
+        mean_factors = self.rbf(self.voxel_locations.numpy(),mean_factor_center,np.exp(mean_factor_log_width))
+
+        print('Factor Centers: ')
+        print(mean_factor_center)
+
+        print('Factor Log Widths: ')
+        print(mean_factor_log_width)
+
+        print('Weights: ')
+        print(mean_weight)
+
+        #print('Reconstruction Error (Frobenius Norm):')
+        #print(np.linalg.norm(mean_weight@mean_factors - self.voxel_activations.numpy()))
+        
+
+        mean_parameters = {
+            'mean_weight': mean_weight,
+            'mean_factor_center': mean_factor_center,
+            'mean_actor_log_width': mean_factor_log_width
+        }
+        return mean_parameters
+
 
 parser = argparse.ArgumentParser(description='Topographical factor analysis for fMRI data')
 parser.add_argument('data_file', type=str, help='fMRI filename')
@@ -329,3 +401,4 @@ if __name__ == '__main__':
     tfa = TopographicalFactorAnalysis(args.data_file)
     losses = tfa.train(num_steps=args.steps, learning_rate=args.learning_rate, log_optimization=args.log)
     utils.plot_losses(losses)
+    tfa.mean_parameters()
