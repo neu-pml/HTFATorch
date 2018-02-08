@@ -350,7 +350,7 @@ class TopographicalFactorAnalysis:
         }
         return result
 
-    def mean_parameters(self):
+    def mean_parameters(self, log_means=False):
         if CUDA:
             mean_factor_center = self.enc.module._mean_factor_center.data.cpu()
             mean_factor_log_width = self.enc.module._mean_factor_log_width.data.cpu()
@@ -361,18 +361,12 @@ class TopographicalFactorAnalysis:
         mean_weight = mean_weight.numpy()
         mean_factors = self.rbf(self.voxel_locations.numpy(),mean_factor_center,np.exp(mean_factor_log_width))
 
-        print('Factor Centers: ')
-        print(mean_factor_center)
-
-        print('Factor Log Widths: ')
-        print(mean_factor_log_width)
-
-        print('Weights: ')
-        print(mean_weight)
-
-        #print('Reconstruction Error (Frobenius Norm):')
-        #print(np.linalg.norm(mean_weight@mean_factors - self.voxel_activations.numpy()))
-        
+        if log_means:
+            logging.info("Mean Factor Centers: %s", str(mean_factor_center))
+            logging.info("Mean Factor Log Widths: %s", str(mean_factor_log_width))
+            logging.info("Mean Weights: %s", str(mean_weight))
+            logging.info('Reconstruction Error (Frobenius Norm): %.8e',
+                         np.linalg.norm(mean_weight @ mean_factors - self.voxel_activations.numpy()))
 
         mean_parameters = {
             'mean_weight': mean_weight,
@@ -395,4 +389,4 @@ if __name__ == '__main__':
                        log_optimization=args.log_optimization)
     if args.log_optimization:
         utils.plot_losses(losses)
-    tfa.mean_parameters()
+    tfa.mean_parameters(log_means=args.log_optimization)
