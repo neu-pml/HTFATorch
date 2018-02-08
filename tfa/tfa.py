@@ -276,16 +276,12 @@ class TopographicalFactorAnalysis:
 
         return hotspots
 
-    def train(self, num_steps=10, learning_rate=0.1, log_optimization=False,
+    def train(self, num_steps=10, learning_rate=0.1, log_level=logging.WARNING,
               batch_size=64):
         """Optimize the variational guide to reflect the data for `num_steps`"""
-        if log_optimization:
-            level = logging.INFO
-        else:
-            level = logging.WARNING
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
-                            level=level)
+                            level=log_level)
 
         voxels_loader = torch.utils.data.DataLoader(
             torch.utils.data.TensorDataset(
@@ -330,9 +326,8 @@ class TopographicalFactorAnalysis:
             lls[n] = ll.data.numpy()[0]
 
             end = time.time()
-            if log_optimization:
-                msg = EPOCH_MSG % (n + 1, (end - start) * 1000, free_energy_n)
-                logging.info(msg)
+            msg = EPOCH_MSG % (n + 1, (end - start) * 1000, free_energy_n)
+            logging.info(msg)
 
         self.losses = np.vstack([free_energies, lls])
         return self.losses
@@ -357,7 +352,11 @@ class TopographicalFactorAnalysis:
         }
         return result
 
-    def mean_parameters(self, log_means=False):
+    def mean_parameters(self, log_level=logging.WARNING):
+        logging.basicConfig(format='%(asctime)s %(message)s',
+                            datefmt='%m/%d/%Y %H:%M:%S',
+                            level=log_level)
+
         if CUDA:
             mean_factor_center = self.enc.module._mean_factor_center.data.cpu()
             mean_factor_log_width = self.enc.module._mean_factor_log_width.data.cpu()
@@ -370,12 +369,11 @@ class TopographicalFactorAnalysis:
                                             mean_factor_center,
                                             np.exp(mean_factor_log_width))
 
-        if log_means:
-            logging.info("Mean Factor Centers: %s", str(mean_factor_center))
-            logging.info("Mean Factor Log Widths: %s", str(mean_factor_log_width))
-            logging.info("Mean Weights: %s", str(mean_weight))
-            logging.info('Reconstruction Error (Frobenius Norm): %.8e',
-                         np.linalg.norm(mean_weight @ mean_factors - self.voxel_activations.numpy()))
+        logging.info("Mean Factor Centers: %s", str(mean_factor_center))
+        logging.info("Mean Factor Log Widths: %s", str(mean_factor_log_width))
+        logging.info("Mean Weights: %s", str(mean_weight))
+        logging.info('Reconstruction Error (Frobenius Norm): %.8e',
+                     np.linalg.norm(mean_weight @ mean_factors - self.voxel_activations.numpy()))
 
         mean_parameters = {
             'mean_weight': mean_weight,
@@ -394,8 +392,12 @@ parser.add_argument('--log-optimization', action='store_true', help='Whether to 
 if __name__ == '__main__':
     args = parser.parse_args()
     tfa = TopographicalFactorAnalysis(args.data_file)
+    if args.log_optimization:
+        log_level = logging.INFO
+    else:
+        log_level = logging.WARNING
     losses = tfa.train(num_steps=args.steps, learning_rate=args.learning_rate,
-                       log_optimization=args.log_optimization)
+                       log_level=log_level)
     if args.log_optimization:
         utils.plot_losses(losses)
-    tfa.mean_parameters(log_means=args.log_optimization)
+    tfa.mean_parameters(log_level=log_level)
