@@ -302,8 +302,6 @@ class TopographicalFactorAnalysis:
             start = time.time()
 
             for (batch, (activations, locations)) in enumerate(voxels_loader):
-                logging.debug("activations shape: " + str(activations.shape))
-                logging.debug("locations shape: " + str(locations.shape))
                 activations = Variable(activations.transpose(0, 1))
                 locations = Variable(locations)
                 if CUDA:
