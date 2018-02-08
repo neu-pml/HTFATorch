@@ -15,6 +15,7 @@ import torch.distributions as dists
 from torch.autograd import Variable
 import torch.nn as nn
 from torch.nn import Parameter
+import torch.utils.data
 from sklearn.cluster import KMeans
 import math
 
@@ -193,7 +194,7 @@ class TFADecoder(nn.Module):
                                      value=q['FactorLogWidths'],
                                      name='FactorLogWidths')
         factors = radial_basis(locations, factor_centers, factor_log_widths,
-                               num_voxels=self._num_voxels)
+                               num_voxels=locations.shape[0])
         p.normal(torch.matmul(weights, factors), self._voxel_noise,
                  value=activations, name='Y')
 
@@ -275,7 +276,8 @@ class TopographicalFactorAnalysis:
 
         return hotspots
 
-    def train(self, num_steps=10, learning_rate=0.1, log_optimization=False):
+    def train(self, num_steps=10, learning_rate=0.1, log_optimization=False,
+              batch_size=64):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         if log_optimization:
             level = logging.INFO
@@ -285,12 +287,14 @@ class TopographicalFactorAnalysis:
                             datefmt='%m/%d/%Y %H:%M:%S',
                             level=level)
 
-        activations = Variable(self.voxel_activations)
-        locations = Variable(self.voxel_locations)
+        voxels_loader = torch.utils.data.DataLoader(
+            torch.utils.data.TensorDataset(
+                self.voxel_activations.transpose(0, 1),
+                self.voxel_locations
+            ),
+            batch_size=batch_size
+        )
         optimizer = torch.optim.Adam(list(self.enc.parameters()), lr=learning_rate)
-        if CUDA:
-            activations = activations.cuda()
-            locations = locations.cuda()
 
         self.enc.train()
         self.dec.train()
@@ -301,15 +305,23 @@ class TopographicalFactorAnalysis:
         for n in range(num_steps):
             start = time.time()
 
-            optimizer.zero_grad()
-            q = self.enc(num_samples=NUM_SAMPLES)
-            p = self.dec(activations=activations, locations=locations, q=q)
+            for (batch, (activations, locations)) in enumerate(voxels_loader):
+                logging.debug("activations shape: " + str(activations.shape))
+                logging.debug("locations shape: " + str(locations.shape))
+                activations = Variable(activations.transpose(0, 1))
+                locations = Variable(locations)
+                if CUDA:
+                    activations.cuda()
+                    locations.cuda()
 
-            free_energy_n = free_energy(q, p)
-            ll = log_likelihood(q,p)
+                optimizer.zero_grad()
+                q = self.enc(num_samples=NUM_SAMPLES)
+                p = self.dec(activations=activations, locations=locations, q=q)
 
-            free_energy_n.backward()
-            optimizer.step()
+                free_energy_n = free_energy(q, p)
+                ll = log_likelihood(q, p)
+                free_energy_n.backward()
+                optimizer.step()
 
             if CUDA:
                 free_energy_n = free_energy_n.cpu()
@@ -332,6 +344,7 @@ class TopographicalFactorAnalysis:
         weights = q['Weights'].value.data
         factor_centers = q['FactorCenters'].value.data
         factor_log_widths = q['FactorLogWidths'].value.data
+
         if CUDA:
             weights = weights.cpu()
             factor_centers = factor_centers.cpu()
