@@ -71,7 +71,8 @@ def log_likelihood(q, p):
 
 class TFAEncoder(nn.Module):
     """Variational guide for topographic factor analysis"""
-    def __init__(self, num_times, mean_centers, mean_widths, mean_weights, num_factors=NUM_FACTORS):
+    def __init__(self, num_times, mean_centers, mean_widths, mean_weights,
+                 num_factors=NUM_FACTORS):
         super(self.__class__, self).__init__()
         self._num_times = num_times
         self._num_factors = num_factors
@@ -91,21 +92,21 @@ class TFAEncoder(nn.Module):
         self._factor_log_width_std_dev = torch.sqrt(torch.rand(
             (self._num_factors)
         ))
-        self.mean_factor_log_width = Parameter(mean_widths*torch.ones(NUM_FACTORS))
+        self.mean_factor_log_width = Parameter(mean_widths*torch.ones(self._num_factors))
         self._factor_log_width_std_dev = Parameter(self._factor_log_width_std_dev)
 
     def forward(self, num_samples=NUM_SAMPLES):
         q = probtorch.Trace()
 
         mean_weight = self.mean_weight.expand(num_samples, self._num_times,
-                                               self._num_factors)
+                                              self._num_factors)
         weight_std_dev = self._weight_std_dev.expand(num_samples,
                                                      self._num_times,
                                                      self._num_factors)
 
         mean_factor_center = self.mean_factor_center.expand(num_samples,
-                                                             self._num_factors,
-                                                             3)
+                                                            self._num_factors,
+                                                            3)
         factor_center_std_dev = self._factor_center_std_dev.expand(
             num_samples, self._num_factors, 3
         )
@@ -202,7 +203,9 @@ class TFADecoder(nn.Module):
 
 class TopographicalFactorAnalysis:
     """Overall container for a run of TFA"""
-    def __init__(self, data_file):
+    def __init__(self, data_file, num_factors=NUM_FACTORS):
+        self.num_factors = num_factors
+
         dataset = sio.loadmat(data_file)
         # pull out the voxel activations and locations
         data = dataset['data']
@@ -229,10 +232,12 @@ class TopographicalFactorAnalysis:
         mean_centers_init = torch.Tensor(mean_centers_init)
         mean_weights_init = torch.Tensor(mean_weights_init)
         self.enc = TFAEncoder(self.num_times, mean_centers_init,
-                              mean_widths_init, mean_weights_init)
+                              mean_widths_init, mean_weights_init,
+                              num_factors=self.num_factors)
 
         self.dec = TFADecoder(self.brain_center, self.brain_center_std_dev,
-                              self.num_times, self.num_voxels)
+                              self.num_times, self.num_voxels,
+                              num_factors=self.num_factors)
 
         if CUDA:
             self.enc = torch.nn.DataParallel(self.enc)
@@ -242,7 +247,7 @@ class TopographicalFactorAnalysis:
 
     def get_initialization(self, data, R):
         kmeans = KMeans(init='k-means++',
-                        n_clusters=NUM_FACTORS,
+                        n_clusters=self.num_factors,
                         n_init=10,
                         random_state=100)
         kmeans.fit(R)
@@ -257,7 +262,7 @@ class TopographicalFactorAnalysis:
 
         return initial_centers, np.log(initial_widths), initial_weights.T
 
-    def hotspot_initialization(self, NUM_FACTORS=NUM_FACTORS):
+    def hotspot_initialization(self):
         """Calculate mean image, center it, and fold it.
            Use the top K peaks as initial centers for q."""
 
@@ -267,7 +272,7 @@ class TopographicalFactorAnalysis:
         mean_image = torch.abs(mean_image)
 
         factor_centers = []
-        for k in range(num_factors):
+        for k in range(self.num_factors):
             _, i = mean_image.max(0)
             mean_image[i] = 0
             factor_centers.append(self.voxel_locations[i])
@@ -394,7 +399,7 @@ parser.add_argument('--factors', type=int, default=50, help='Number of latent fa
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    tfa = TopographicalFactorAnalysis(args.data_file)
+    tfa = TopographicalFactorAnalysis(args.data_file, num_factors=args.factors)
     if args.log_optimization:
         log_level = logging.INFO
     else:
