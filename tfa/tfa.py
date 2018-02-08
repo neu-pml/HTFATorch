@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """Perform plain topographic factor analysis on a given fMRI data file."""
 
-__author__ = 'Eli Sennesh'
-__email__ = 'e.sennesh@northeastern.edu'
+__author__ = 'Eli Sennesh', 'Zulqarnain Khan'
+__email__ = 'e.sennesh@northeastern.edu', 'khan.zu@husky.neu.edu'
 
 import argparse
 import time
