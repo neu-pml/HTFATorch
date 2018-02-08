@@ -128,7 +128,7 @@ class TFAEncoder(nn.Module):
 class TFADecoder(nn.Module):
     """Generative model for topographic factor analysis"""
     def __init__(self, brain_center, brain_center_std_dev, num_times,
-                 num_voxels, num_factors=NUM_FACTORS):
+                 num_voxels, num_factors=NUM_FACTORS, voxel_noise=VOXEL_NOISE):
         super(self.__class__, self).__init__()
         self._num_times = num_times
         self._num_factors = num_factors
@@ -155,7 +155,7 @@ class TFADecoder(nn.Module):
             SOURCE_LOG_WIDTH_STD_DEV * torch.ones((self._num_factors))
         )
 
-        self._voxel_noise = Variable(VOXEL_NOISE * torch.ones(self._num_times, self._num_voxels))
+        self._voxel_noise = voxel_noise
 
     def cuda(self, device=None):
         super().cuda(device)
@@ -168,8 +168,6 @@ class TFADecoder(nn.Module):
         self._mean_factor_log_width = self._mean_factor_log_width.cuda()
         self._factor_log_width_std_dev = self._factor_log_width_std_dev.cuda()
 
-        self._voxel_noise = self._voxel_noise.cuda()
-
     def cpu(self):
         super().cpu()
         self._mean_weight = self._mean_weight.cpu()
@@ -180,8 +178,6 @@ class TFADecoder(nn.Module):
 
         self._mean_factor_log_width = self._mean_factor_log_width.cpu()
         self._factor_log_width_std_dev = self._factor_log_width_std_dev.cpu()
-
-        self._voxel_noise = self._voxel_noise.cuda()
 
     def forward(self, activations, locations, q=None):
         p = probtorch.Trace()
