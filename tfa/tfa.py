@@ -390,6 +390,7 @@ parser.add_argument('data_file', type=str, help='fMRI filename')
 parser.add_argument('--steps', type=int, default=100, help='Number of optimization steps')
 parser.add_argument('--learning_rate', type=float, default=1e-4, help='Learning Rate for optimization')
 parser.add_argument('--log-optimization', action='store_true', help='Whether to log optimization')
+parser.add_argument('--factors', type=int, default=50, help='Number of latent factors')
 
 if __name__ == '__main__':
     args = parser.parse_args()
