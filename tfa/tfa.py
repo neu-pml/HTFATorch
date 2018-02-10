@@ -8,6 +8,7 @@ import argparse
 import time
 import logging
 import numpy as np
+import os
 import probtorch
 import scipy.io as sio
 import torch
@@ -206,7 +207,11 @@ class TopographicalFactorAnalysis:
     def __init__(self, data_file, num_factors=NUM_FACTORS):
         self.num_factors = num_factors
 
-        dataset = sio.loadmat(data_file)
+        _, ext = os.path.splitext(data_file)
+        if ext == '.nii':
+            dataset = utils.nii2cmu(data_file)
+        else:
+            dataset = sio.loadmat(data_file)
         # pull out the voxel activations and locations
         data = dataset['data']
         R = dataset['R']
