@@ -26,7 +26,7 @@ import tfa.utils as utils
 CUDA = torch.cuda.is_available()
 
 # placeholder values for hyperparameters
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 0.1
 NUM_FACTORS = 5
 NUM_SAMPLES = 100
 SOURCE_WEIGHT_STD_DEV = np.sqrt(2.0)
@@ -287,8 +287,8 @@ class TopographicalFactorAnalysis:
 
         return hotspots
 
-    def train(self, num_steps=10, learning_rate=0.1, log_level=logging.WARNING,
-              batch_size=64):
+    def train(self, num_steps=10, learning_rate=LEARNING_RATE, log_level=logging.WARNING,
+              batch_size=int(np.power(2, np.ceil(np.log2(NUM_SAMPLES)) + 1))):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
@@ -299,7 +299,9 @@ class TopographicalFactorAnalysis:
                 self.voxel_activations.transpose(0, 1),
                 self.voxel_locations
             ),
-            batch_size=batch_size
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=2
         )
         optimizer = torch.optim.Adam(list(self.enc.parameters()), lr=learning_rate)
 
@@ -309,10 +311,12 @@ class TopographicalFactorAnalysis:
         free_energies = np.zeros(num_steps)
         lls = np.zeros(num_steps)
 
-        for n in range(num_steps):
+        for epoch in range(num_steps):
             start = time.time()
 
-            for (_, (activations, locations)) in enumerate(voxels_loader):
+            epoch_free_energies = list(range(len(voxels_loader)))
+            epoch_lls = list(range(len(voxels_loader)))
+            for (batch, (activations, locations)) in enumerate(voxels_loader):
                 activations = Variable(activations.transpose(0, 1))
                 locations = Variable(locations)
                 if CUDA:
@@ -323,19 +327,20 @@ class TopographicalFactorAnalysis:
                 q = self.enc(num_samples=NUM_SAMPLES)
                 p = self.dec(activations=activations, locations=locations, q=q)
 
-                free_energy_n = free_energy(q, p)
-                ll = log_likelihood(q, p)
-                free_energy_n.backward()
+                epoch_free_energies[batch] = free_energy(q, p)
+                epoch_lls[batch] = log_likelihood(q, p)
+                epoch_free_energies[batch].backward()
                 optimizer.step()
 
-            if CUDA:
-                free_energy_n = free_energy_n.cpu()
-                ll = ll.cpu()
-            free_energies[n] = free_energy_n.data.numpy()[0]
-            lls[n] = ll.data.numpy()[0]
+                if CUDA:
+                    epoch_free_energies[batch] = epoch_free_energies[batch].cpu().data.numpy()
+                    epoch_lls[batch] = epoch_lls[batch].cpu().data.numpy()
+
+            free_energies[epoch] = np.array(epoch_free_energies).sum(0)
+            lls[epoch] = np.array(epoch_lls).sum(0)
 
             end = time.time()
-            msg = EPOCH_MSG % (n + 1, (end - start) * 1000, free_energy_n)
+            msg = EPOCH_MSG % (epoch + 1, (end - start) * 1000, free_energies[epoch])
             logging.info(msg)
 
         self.losses = np.vstack([free_energies, lls])
