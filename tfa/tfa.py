@@ -288,6 +288,7 @@ class TopographicalFactorAnalysis:
         return hotspots
 
     def train(self, num_steps=10, learning_rate=LEARNING_RATE, log_level=logging.WARNING,
+              batch_size=int(np.power(2, np.ceil(np.log2(NUM_SAMPLES)) + 1))):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
@@ -298,7 +299,9 @@ class TopographicalFactorAnalysis:
                 self.voxel_activations.transpose(0, 1),
                 self.voxel_locations
             ),
-            batch_size=batch_size
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=2
         )
         optimizer = torch.optim.Adam(list(self.enc.parameters()), lr=learning_rate)
 
