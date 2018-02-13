@@ -20,7 +20,7 @@ import torch.utils.data
 from sklearn.cluster import KMeans
 import math
 
-import utils
+import tfa.utils as utils
 
 # check the availability of CUDA
 CUDA = torch.cuda.is_available()
