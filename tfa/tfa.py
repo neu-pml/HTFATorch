@@ -26,7 +26,7 @@ import tfa.utils as utils
 CUDA = torch.cuda.is_available()
 
 # placeholder values for hyperparameters
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 0.1
 NUM_FACTORS = 5
 NUM_SAMPLES = 100
 SOURCE_WEIGHT_STD_DEV = np.sqrt(2.0)
@@ -287,8 +287,7 @@ class TopographicalFactorAnalysis:
 
         return hotspots
 
-    def train(self, num_steps=10, learning_rate=0.1, log_level=logging.WARNING,
-              batch_size=64):
+    def train(self, num_steps=10, learning_rate=LEARNING_RATE, log_level=logging.WARNING,
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
