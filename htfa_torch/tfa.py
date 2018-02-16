@@ -353,8 +353,7 @@ class TopographicalFactorAnalysis:
             msg = EPOCH_MSG % (epoch + 1, (end - start) * 1000, free_energies[epoch])
             logging.info(msg)
 
-        self.losses = np.vstack([free_energies, lls])
-        return self.losses
+        return np.vstack([free_energies, lls])
 
     def results(self):
         """Return the inferred parameters"""
