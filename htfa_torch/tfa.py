@@ -1,10 +1,8 @@
-#!/usr/bin/env python
 """Perform plain topographic factor analysis on a given fMRI data file."""
 
 __author__ = 'Eli Sennesh', 'Zulqarnain Khan'
 __email__ = 'e.sennesh@northeastern.edu', 'khan.zu@husky.neu.edu'
 
-import argparse
 import time
 import logging
 import numpy as np
@@ -20,7 +18,7 @@ import torch.utils.data
 from sklearn.cluster import KMeans
 import math
 
-import tfa.utils as utils
+from . import utils
 
 # check the availability of CUDA
 CUDA = torch.cuda.is_available()
@@ -399,24 +397,3 @@ class TopographicalFactorAnalysis:
             'mean_factor_log_width': mean_factor_log_width
         }
         return mean_parameters
-
-parser = argparse.ArgumentParser(description='Topographical factor analysis for fMRI data')
-parser.add_argument('data_file', type=str, help='fMRI filename')
-parser.add_argument('--steps', type=int, default=100, help='Number of optimization steps')
-parser.add_argument('--learning_rate', type=float, default=1e-4,
-                    help='Learning Rate for optimization')
-parser.add_argument('--log-optimization', action='store_true', help='Whether to log optimization')
-parser.add_argument('--factors', type=int, default=NUM_FACTORS, help='Number of latent factors')
-
-if __name__ == '__main__':
-    args = parser.parse_args()
-    tfa = TopographicalFactorAnalysis(args.data_file, num_factors=args.factors)
-    if args.log_optimization:
-        log_level = logging.INFO
-    else:
-        log_level = logging.WARNING
-    losses = tfa.train(num_steps=args.steps, learning_rate=args.learning_rate,
-                       log_level=log_level)
-    if args.log_optimization:
-        utils.plot_losses(losses)
-    tfa.mean_parameters(log_level=log_level)
