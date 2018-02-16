@@ -180,7 +180,7 @@ class TFADecoder(nn.Module):
         self.mean_factor_log_width = self.mean_factor_log_width.cpu()
         self._factor_log_width_std_dev = self._factor_log_width_std_dev.cpu()
 
-    def forward(self, activations, locations, q=None):
+    def forward(self, activations, locations, q=None, tr_start=None):
         p = probtorch.Trace()
 
         weights = p.normal(self.mean_weight, self._weight_std_dev,
@@ -195,6 +195,9 @@ class TFADecoder(nn.Module):
                                      name='FactorLogWidths')
         factors = radial_basis(locations, factor_centers, factor_log_widths,
                                num_voxels=locations.shape[0])
+        if tr_start is not None:
+            tr_end = tr_start + activations.shape[0]
+            weights = weights[:, tr_start:tr_end, :]
         p.normal(torch.matmul(weights, factors), self._voxel_noise,
                  value=activations, name='Y')
 
@@ -292,15 +295,15 @@ class TopographicalFactorAnalysis:
                             datefmt='%m/%d/%Y %H:%M:%S',
                             level=log_level)
 
-        voxels_loader = torch.utils.data.DataLoader(
+        activations_loader = torch.utils.data.DataLoader(
             torch.utils.data.TensorDataset(
-                self.voxel_activations.transpose(0, 1),
-                self.voxel_locations
+                self.voxel_activations,
+                torch.zeros(self.voxel_activations.shape)
             ),
             batch_size=batch_size,
-            shuffle=True,
             num_workers=2
         )
+        locations_var = Variable(self.voxel_locations)
         optimizer = torch.optim.Adam(list(self.enc.parameters()), lr=learning_rate)
 
         self.enc.train()
@@ -312,18 +315,18 @@ class TopographicalFactorAnalysis:
         for epoch in range(num_steps):
             start = time.time()
 
-            epoch_free_energies = list(range(len(voxels_loader)))
-            epoch_lls = list(range(len(voxels_loader)))
-            for (batch, (activations, locations)) in enumerate(voxels_loader):
-                activations = Variable(activations.transpose(0, 1))
-                locations = Variable(locations)
+            epoch_free_energies = list(range(len(activations_loader)))
+            epoch_lls = list(range(len(activations_loader)))
+            for (batch, (activations, _)) in enumerate(activations_loader):
+                activations = Variable(activations)
                 if CUDA:
                     activations.cuda()
-                    locations.cuda()
+                    locations_var.cuda()
 
                 optimizer.zero_grad()
                 q = self.enc(num_samples=NUM_SAMPLES)
-                p = self.dec(activations=activations, locations=locations, q=q)
+                p = self.dec(activations=activations, locations=locations_var,
+                             q=q, tr_start=batch*batch_size)
 
                 epoch_free_energies[batch] = free_energy(q, p)
                 epoch_lls[batch] = log_likelihood(q, p)
