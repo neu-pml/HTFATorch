@@ -94,14 +94,18 @@ class TFAEncoder(nn.Module):
         self.mean_factor_log_width = Parameter(mean_widths*torch.ones(self._num_factors))
         self._factor_log_width_std_dev = Parameter(self._factor_log_width_std_dev)
 
-    def forward(self, num_samples=NUM_SAMPLES):
+    def forward(self, num_samples=NUM_SAMPLES, trs=None):
         q = probtorch.Trace()
 
-        mean_weight = self.mean_weight.expand(num_samples, self._num_times,
-                                              self._num_factors)
-        weight_std_dev = self._weight_std_dev.expand(num_samples,
-                                                     self._num_times,
-                                                     self._num_factors)
+        if trs is None:
+            trs = (0, self._num_times)
+        mean_weight = self.mean_weight[trs[0]:trs[1], :]
+        mean_weight = mean_weight.expand(num_samples, trs[1] - trs[0],
+                                         self._num_factors)
+        weight_std_dev = self._weight_std_dev[trs[0]:trs[1], :]
+        weight_std_dev = weight_std_dev.expand(num_samples,
+                                               trs[1] - trs[0],
+                                               self._num_factors)
 
         mean_factor_center = self.mean_factor_center.expand(num_samples,
                                                             self._num_factors,
@@ -180,10 +184,16 @@ class TFADecoder(nn.Module):
         self.mean_factor_log_width = self.mean_factor_log_width.cpu()
         self._factor_log_width_std_dev = self._factor_log_width_std_dev.cpu()
 
-    def forward(self, activations, locations, q=None, tr_start=None):
+    def forward(self, activations, locations, q=None, trs=None):
         p = probtorch.Trace()
 
-        weights = p.normal(self.mean_weight, self._weight_std_dev,
+        mean_weight = self.mean_weight
+        weight_std_dev = self._weight_std_dev
+        if trs is not None:
+            mean_weight = mean_weight[trs[0]:trs[1], :]
+            weight_std_dev = weight_std_dev[trs[0]:trs[1], :]
+
+        weights = p.normal(mean_weight, weight_std_dev,
                            value=q['Weights'], name='Weights')
         factor_centers = p.normal(self.mean_factor_center,
                                   self._factor_center_std_dev,
@@ -195,9 +205,6 @@ class TFADecoder(nn.Module):
                                      name='FactorLogWidths')
         factors = radial_basis(locations, factor_centers, factor_log_widths,
                                num_voxels=locations.shape[0])
-        if tr_start is not None:
-            tr_end = tr_start + activations.shape[0]
-            weights = weights[:, tr_start:tr_end, :]
         p.normal(torch.matmul(weights, factors), self._voxel_noise,
                  value=activations, name='Y')
 
@@ -322,11 +329,13 @@ class TopographicalFactorAnalysis:
                 if CUDA:
                     activations.cuda()
                     locations_var.cuda()
+                trs = (batch*batch_size, None)
+                trs = (trs[0], trs[0] + activations.shape[0])
 
                 optimizer.zero_grad()
-                q = self.enc(num_samples=NUM_SAMPLES)
+                q = self.enc(num_samples=NUM_SAMPLES, trs=trs)
                 p = self.dec(activations=activations, locations=locations_var,
-                             q=q, tr_start=batch*batch_size)
+                             q=q, trs=trs)
 
                 epoch_free_energies[batch] = free_energy(q, p)
                 epoch_lls[batch] = log_likelihood(q, p)
