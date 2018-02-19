@@ -1,10 +1,8 @@
-#!/usr/bin/env python
 """Perform plain topographic factor analysis on a given fMRI data file."""
 
 __author__ = 'Eli Sennesh', 'Zulqarnain Khan'
 __email__ = 'e.sennesh@northeastern.edu', 'khan.zu@husky.neu.edu'
 
-import argparse
 import time
 import logging
 import numpy as np
@@ -20,7 +18,7 @@ import torch.utils.data
 from sklearn.cluster import KMeans
 import math
 
-import tfa.utils as utils
+from . import utils
 
 # check the availability of CUDA
 CUDA = torch.cuda.is_available()
@@ -96,14 +94,18 @@ class TFAEncoder(nn.Module):
         self.mean_factor_log_width = Parameter(mean_widths*torch.ones(self._num_factors))
         self._factor_log_width_std_dev = Parameter(self._factor_log_width_std_dev)
 
-    def forward(self, num_samples=NUM_SAMPLES):
+    def forward(self, num_samples=NUM_SAMPLES, trs=None):
         q = probtorch.Trace()
 
-        mean_weight = self.mean_weight.expand(num_samples, self._num_times,
-                                              self._num_factors)
-        weight_std_dev = self._weight_std_dev.expand(num_samples,
-                                                     self._num_times,
-                                                     self._num_factors)
+        if trs is None:
+            trs = (0, self._num_times)
+        mean_weight = self.mean_weight[trs[0]:trs[1], :]
+        mean_weight = mean_weight.expand(num_samples, trs[1] - trs[0],
+                                         self._num_factors)
+        weight_std_dev = self._weight_std_dev[trs[0]:trs[1], :]
+        weight_std_dev = weight_std_dev.expand(num_samples,
+                                               trs[1] - trs[0],
+                                               self._num_factors)
 
         mean_factor_center = self.mean_factor_center.expand(num_samples,
                                                             self._num_factors,
@@ -182,10 +184,16 @@ class TFADecoder(nn.Module):
         self.mean_factor_log_width = self.mean_factor_log_width.cpu()
         self._factor_log_width_std_dev = self._factor_log_width_std_dev.cpu()
 
-    def forward(self, activations, locations, q=None):
+    def forward(self, activations, locations, q=None, trs=None):
         p = probtorch.Trace()
 
-        weights = p.normal(self.mean_weight, self._weight_std_dev,
+        mean_weight = self.mean_weight
+        weight_std_dev = self._weight_std_dev
+        if trs is not None:
+            mean_weight = mean_weight[trs[0]:trs[1], :]
+            weight_std_dev = weight_std_dev[trs[0]:trs[1], :]
+
+        weights = p.normal(mean_weight, weight_std_dev,
                            value=q['Weights'], name='Weights')
         factor_centers = p.normal(self.mean_factor_center,
                                   self._factor_center_std_dev,
@@ -294,15 +302,15 @@ class TopographicalFactorAnalysis:
                             datefmt='%m/%d/%Y %H:%M:%S',
                             level=log_level)
 
-        voxels_loader = torch.utils.data.DataLoader(
+        activations_loader = torch.utils.data.DataLoader(
             torch.utils.data.TensorDataset(
-                self.voxel_activations.transpose(0, 1),
-                self.voxel_locations
+                self.voxel_activations,
+                torch.zeros(self.voxel_activations.shape)
             ),
             batch_size=batch_size,
-            shuffle=True,
             num_workers=2
         )
+        locations_var = Variable(self.voxel_locations)
         optimizer = torch.optim.Adam(list(self.enc.parameters()), lr=learning_rate)
 
         self.enc.train()
@@ -314,18 +322,20 @@ class TopographicalFactorAnalysis:
         for epoch in range(num_steps):
             start = time.time()
 
-            epoch_free_energies = list(range(len(voxels_loader)))
-            epoch_lls = list(range(len(voxels_loader)))
-            for (batch, (activations, locations)) in enumerate(voxels_loader):
-                activations = Variable(activations.transpose(0, 1))
-                locations = Variable(locations)
+            epoch_free_energies = list(range(len(activations_loader)))
+            epoch_lls = list(range(len(activations_loader)))
+            for (batch, (activations, _)) in enumerate(activations_loader):
+                activations = Variable(activations)
                 if CUDA:
                     activations.cuda()
-                    locations.cuda()
+                    locations_var.cuda()
+                trs = (batch*batch_size, None)
+                trs = (trs[0], trs[0] + activations.shape[0])
 
                 optimizer.zero_grad()
-                q = self.enc(num_samples=NUM_SAMPLES)
-                p = self.dec(activations=activations, locations=locations, q=q)
+                q = self.enc(num_samples=NUM_SAMPLES, trs=trs)
+                p = self.dec(activations=activations, locations=locations_var,
+                             q=q, trs=trs)
 
                 epoch_free_energies[batch] = free_energy(q, p)
                 epoch_lls[batch] = log_likelihood(q, p)
@@ -343,8 +353,7 @@ class TopographicalFactorAnalysis:
             msg = EPOCH_MSG % (epoch + 1, (end - start) * 1000, free_energies[epoch])
             logging.info(msg)
 
-        self.losses = np.vstack([free_energies, lls])
-        return self.losses
+        return np.vstack([free_energies, lls])
 
     def results(self):
         """Return the inferred parameters"""
@@ -399,24 +408,3 @@ class TopographicalFactorAnalysis:
             'mean_factor_log_width': mean_factor_log_width
         }
         return mean_parameters
-
-parser = argparse.ArgumentParser(description='Topographical factor analysis for fMRI data')
-parser.add_argument('data_file', type=str, help='fMRI filename')
-parser.add_argument('--steps', type=int, default=100, help='Number of optimization steps')
-parser.add_argument('--learning_rate', type=float, default=1e-4,
-                    help='Learning Rate for optimization')
-parser.add_argument('--log-optimization', action='store_true', help='Whether to log optimization')
-parser.add_argument('--factors', type=int, default=NUM_FACTORS, help='Number of latent factors')
-
-if __name__ == '__main__':
-    args = parser.parse_args()
-    tfa = TopographicalFactorAnalysis(args.data_file, num_factors=args.factors)
-    if args.log_optimization:
-        log_level = logging.INFO
-    else:
-        log_level = logging.WARNING
-    losses = tfa.train(num_steps=args.steps, learning_rate=args.learning_rate,
-                       log_level=log_level)
-    if args.log_optimization:
-        utils.plot_losses(losses)
-    tfa.mean_parameters(log_level=log_level)
