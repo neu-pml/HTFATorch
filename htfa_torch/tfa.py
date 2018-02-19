@@ -140,50 +140,31 @@ class TFADecoder(nn.Module):
         self._num_factors = num_factors
         self._num_voxels = num_voxels
 
-        self.mean_weight = Variable(torch.zeros(
+        self.register_buffer('mean_weight', Variable(torch.zeros(
             (self._num_times, self._num_factors)
+        )))
+        self.register_buffer('_weight_std_dev', Variable(
+            SOURCE_WEIGHT_STD_DEV *  torch.ones(
+                (self._num_times, self._num_factors)
+            )
         ))
-        self._weight_std_dev = Variable(SOURCE_WEIGHT_STD_DEV *
-                                        torch.ones((self._num_times,
-                                                    self._num_factors)))
 
-        self.mean_factor_center = Variable(
+        self.register_buffer('mean_factor_center', Variable(
             brain_center.expand(self._num_factors, 3) *
             torch.ones((self._num_factors, 3))
-        )
-        self._factor_center_std_dev = Variable(
+        ))
+        self.register_buffer('_factor_center_std_dev', Variable(
             brain_center_std_dev.expand(self._num_factors, 3) *
             torch.ones((self._num_factors, 3))
-        )
+        ))
 
-        self.mean_factor_log_width = Variable(torch.ones((self._num_factors)))
-        self._factor_log_width_std_dev = Variable(
+        self.register_buffer('mean_factor_log_width',
+                             Variable(torch.ones((self._num_factors))))
+        self.register_buffer('_factor_log_width_std_dev', Variable(
             SOURCE_LOG_WIDTH_STD_DEV * torch.ones((self._num_factors))
-        )
+        ))
 
         self._voxel_noise = voxel_noise
-
-    def cuda(self, device=None):
-        super().cuda(device)
-        self.mean_weight = self.mean_weight.cuda()
-        self._weight_std_dev = self._weight_std_dev.cuda()
-
-        self.mean_factor_center = self.mean_factor_center.cuda()
-        self._factor_center_std_dev = self._factor_center_std_dev.cuda()
-
-        self.mean_factor_log_width = self.mean_factor_log_width.cuda()
-        self._factor_log_width_std_dev = self._factor_log_width_std_dev.cuda()
-
-    def cpu(self):
-        super().cpu()
-        self.mean_weight = self.mean_weight.cpu()
-        self._weight_std_dev = self._weight_std_dev.cpu()
-
-        self.mean_factor_center = self.mean_factor_center.cpu()
-        self._factor_center_std_dev = self._factor_center_std_dev.cpu()
-
-        self.mean_factor_log_width = self.mean_factor_log_width.cpu()
-        self._factor_log_width_std_dev = self._factor_log_width_std_dev.cpu()
 
     def forward(self, activations, locations, q=None, trs=None):
         p = probtorch.Trace()
