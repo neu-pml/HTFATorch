@@ -413,3 +413,19 @@ class TopographicalFactorAnalysis:
     def plot_voxels(self):
         hyp.plot(self.voxel_locations.numpy(), 'k.')
 
+    def plot_factor_centers(self, filename=None, show=True,
+                            log_level=logging.WARNING):
+        means = self.mean_parameters(log_level=log_level)
+
+        plot = niplot.plot_connectome(
+            np.eye(self.num_factors),
+            means['mean_factor_center'],
+            node_color='k'
+        )
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
