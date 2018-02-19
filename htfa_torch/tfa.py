@@ -19,6 +19,11 @@ import torch.utils.data
 from sklearn.cluster import KMeans
 import math
 
+import hypertools as hyp
+import seaborn as sns
+
+import nilearn.plotting as niplot
+
 from . import utils
 
 # check the availability of CUDA
@@ -200,6 +205,7 @@ class TopographicalFactorAnalysis:
         name, ext = os.path.splitext(data_file)
         if ext == '.nii':
             dataset = utils.nii2cmu(data_file)
+            self._template = data_file
         else:
             dataset = sio.loadmat(data_file)
         _, self._name = os.path.split(name)
