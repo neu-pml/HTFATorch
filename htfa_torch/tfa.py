@@ -7,6 +7,7 @@ import time
 import logging
 import numpy as np
 import os
+import pickle
 import probtorch
 import scipy.io as sio
 import torch
@@ -215,11 +216,12 @@ class TopographicalFactorAnalysis:
     def __init__(self, data_file, num_factors=NUM_FACTORS):
         self.num_factors = num_factors
 
-        _, ext = os.path.splitext(data_file)
+        name, ext = os.path.splitext(data_file)
         if ext == '.nii':
             dataset = utils.nii2cmu(data_file)
         else:
             dataset = sio.loadmat(data_file)
+        _, self._name = os.path.split(name)
         # pull out the voxel activations and locations
         data = dataset['data']
         R = dataset['R']
@@ -408,3 +410,15 @@ class TopographicalFactorAnalysis:
             'mean_factor_log_width': mean_factor_log_width
         }
         return mean_parameters
+
+    def save(self, out_dir='.'):
+        '''Save a TopographicalFactorAnalysis in full to a file for later'''
+        with open(out_dir + '/' + self._name + '.tfa', 'wb') as file:
+            pickle.dump(self, file)
+
+    @classmethod
+    def load(cls, filename):
+        '''Load a saved TopographicalFactorAnalysis from a file, saving the
+           effort of rerunning inference from scratch.'''
+        with open(filename, 'rb') as file:
+            return pickle.load(file)
