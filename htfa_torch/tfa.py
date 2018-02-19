@@ -7,6 +7,7 @@ import time
 import logging
 import numpy as np
 import os
+import pickle
 import probtorch
 import scipy.io as sio
 import torch
@@ -409,3 +410,15 @@ class TopographicalFactorAnalysis:
             'mean_factor_log_width': mean_factor_log_width
         }
         return mean_parameters
+
+    def save(self, out_dir='.'):
+        '''Save a TopographicalFactorAnalysis in full to a file for later'''
+        with open(out_dir + '/' + self._name + '.tfa', 'wb') as file:
+            pickle.dump(self, file)
+
+    @classmethod
+    def load(cls, filename):
+        '''Load a saved TopographicalFactorAnalysis from a file, saving the
+           effort of rerunning inference from scratch.'''
+        with open(filename, 'rb') as file:
+            return pickle.load(file)
