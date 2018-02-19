@@ -3,26 +3,25 @@
 __author__ = 'Eli Sennesh', 'Zulqarnain Khan'
 __email__ = 'e.sennesh@northeastern.edu', 'khan.zu@husky.neu.edu'
 
-import time
 import logging
-import numpy as np
+import math
 import os
 import pickle
-import probtorch
+import time
+
+import hypertools as hyp
+import nilearn.plotting as niplot
+import numpy as np
 import scipy.io as sio
+from sklearn.cluster import KMeans
 import torch
 import torch.distributions as dists
 from torch.autograd import Variable
 import torch.nn as nn
 from torch.nn import Parameter
 import torch.utils.data
-from sklearn.cluster import KMeans
-import math
 
-import hypertools as hyp
-import seaborn as sns
-
-import nilearn.plotting as niplot
+import probtorch
 
 from . import utils
 
