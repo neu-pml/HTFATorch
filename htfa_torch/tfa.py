@@ -409,3 +409,7 @@ class TopographicalFactorAnalysis:
            effort of rerunning inference from scratch.'''
         with open(filename, 'rb') as file:
             return pickle.load(file)
+
+    def plot_voxels(self):
+        hyp.plot(self.voxel_locations.numpy(), 'k.')
+
