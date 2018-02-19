@@ -140,26 +140,29 @@ class TFADecoder(nn.Module):
         self._num_factors = num_factors
         self._num_voxels = num_voxels
 
-        self.mean_weight = Variable(torch.zeros(
+        self.register_buffer('mean_weight', Variable(torch.zeros(
             (self._num_times, self._num_factors)
+        )))
+        self.register_buffer('_weight_std_dev', Variable(
+            SOURCE_WEIGHT_STD_DEV *  torch.ones(
+                (self._num_times, self._num_factors)
+            )
         ))
-        self._weight_std_dev = Variable(SOURCE_WEIGHT_STD_DEV *
-                                        torch.ones((self._num_times,
-                                                    self._num_factors)))
 
-        self.mean_factor_center = Variable(
+        self.register_buffer('mean_factor_center', Variable(
             brain_center.expand(self._num_factors, 3) *
             torch.ones((self._num_factors, 3))
-        )
-        self._factor_center_std_dev = Variable(
+        ))
+        self.register_buffer('_factor_center_std_dev', Variable(
             brain_center_std_dev.expand(self._num_factors, 3) *
             torch.ones((self._num_factors, 3))
-        )
+        ))
 
-        self.mean_factor_log_width = Variable(torch.ones((self._num_factors)))
-        self._factor_log_width_std_dev = Variable(
+        self.register_buffer('mean_factor_log_width',
+                             Variable(torch.ones((self._num_factors))))
+        self.register_buffer('_factor_log_width_std_dev', Variable(
             SOURCE_LOG_WIDTH_STD_DEV * torch.ones((self._num_factors))
-        )
+        ))
 
         self._voxel_noise = voxel_noise
 
