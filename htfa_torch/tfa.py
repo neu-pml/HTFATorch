@@ -429,3 +429,16 @@ class TopographicalFactorAnalysis:
             niplot.show()
 
         return plot
+
+    def plot_original_brain(self, filename=None, show=True, plot_abs=False):
+        original_image = utils.cmu2nii(self.voxel_activations.numpy(),
+                                       self.voxel_locations.numpy(),
+                                       'data/pieman_data/sub-001-task-intact1.nii')
+        plot = niplot.plot_glass_brain(original_image, plot_abs=plot_abs)
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
