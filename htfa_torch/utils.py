@@ -12,11 +12,10 @@ try:
         matplotlib.use('TkAgg')
 finally:
     import matplotlib.pyplot as plt
-
-from nilearn.input_data import NiftiMasker
-import nibabel as nib
-
 import numpy as np
+
+import nibabel as nib
+from nilearn.input_data import NiftiMasker
 
 def plot_losses(losses):
     epochs = range(losses.shape[1])
