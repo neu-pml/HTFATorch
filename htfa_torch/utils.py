@@ -13,11 +13,6 @@ try:
 finally:
     import matplotlib.pyplot as plt
 
-import hypertools as hyp
-import seaborn as sns
-
-import nilearn.plotting as niplot
-
 from nilearn.input_data import NiftiMasker
 import nibabel as nib
 
@@ -82,3 +77,20 @@ def nii2cmu(nifti_file, mask_file=None):
     voxel_locations = np.array(np.dot(voxel_coordinates, sform[0:3, 0:3])) + sform[:3, 3]
 
     return {'data': voxel_activations, 'R': voxel_locations}
+
+def cmu2nii(activations, locations, template):
+    image = nib.load(template)
+    sform = image.affine
+    coords = np.array(
+        np.dot(locations - sform[:3, 3],
+               np.linalg.inv(sform[0:3, 0:3])),
+        dtype='int'
+    )
+    data = np.zeros(image.shape[0:3] + (activations.shape[0],))
+
+    for i in range(activations.shape[0]):
+        for j in range(locations.shape[0]):
+            x, y, z = coords[j, 0], coords[j, 1], coords[j, 2]
+            data[x, y, z, i] = activations[i, j]
+
+    return nib.Nifti1Image(data[:, :, :, 0], affine=sform)

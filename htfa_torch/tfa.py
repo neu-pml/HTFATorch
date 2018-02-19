@@ -19,6 +19,11 @@ import torch.utils.data
 from sklearn.cluster import KMeans
 import math
 
+import hypertools as hyp
+import seaborn as sns
+
+import nilearn.plotting as niplot
+
 from . import utils
 
 # check the availability of CUDA
@@ -200,6 +205,7 @@ class TopographicalFactorAnalysis:
         name, ext = os.path.splitext(data_file)
         if ext == '.nii':
             dataset = utils.nii2cmu(data_file)
+            self._template = data_file
         else:
             dataset = sio.loadmat(data_file)
         _, self._name = os.path.split(name)
@@ -403,3 +409,36 @@ class TopographicalFactorAnalysis:
            effort of rerunning inference from scratch.'''
         with open(filename, 'rb') as file:
             return pickle.load(file)
+
+    def plot_voxels(self):
+        hyp.plot(self.voxel_locations.numpy(), 'k.')
+
+    def plot_factor_centers(self, filename=None, show=True,
+                            log_level=logging.WARNING):
+        means = self.mean_parameters(log_level=log_level)
+
+        plot = niplot.plot_connectome(
+            np.eye(self.num_factors),
+            means['mean_factor_center'],
+            node_color='k'
+        )
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
+
+    def plot_original_brain(self, filename=None, show=True, plot_abs=False):
+        original_image = utils.cmu2nii(self.voxel_activations.numpy(),
+                                       self.voxel_locations.numpy(),
+                                       'data/pieman_data/sub-001-task-intact1.nii')
+        plot = niplot.plot_glass_brain(original_image, plot_abs=plot_abs)
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
