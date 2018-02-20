@@ -1,26 +1,29 @@
-#!/usr/bin/env python
 """Perform plain topographic factor analysis on a given fMRI data file."""
 
 __author__ = 'Eli Sennesh', 'Zulqarnain Khan'
 __email__ = 'e.sennesh@northeastern.edu', 'khan.zu@husky.neu.edu'
 
-import argparse
-import time
 import logging
-import numpy as np
+import math
 import os
-import probtorch
+import pickle
+import time
+
+import hypertools as hyp
+import nilearn.plotting as niplot
+import numpy as np
 import scipy.io as sio
+from sklearn.cluster import KMeans
 import torch
 import torch.distributions as dists
 from torch.autograd import Variable
 import torch.nn as nn
 from torch.nn import Parameter
 import torch.utils.data
-from sklearn.cluster import KMeans
-import math
 
-import tfa.utils as utils
+import probtorch
+
+from . import utils
 
 # check the availability of CUDA
 CUDA = torch.cuda.is_available()
@@ -96,14 +99,18 @@ class TFAEncoder(nn.Module):
         self.mean_factor_log_width = Parameter(mean_widths*torch.ones(self._num_factors))
         self._factor_log_width_std_dev = Parameter(self._factor_log_width_std_dev)
 
-    def forward(self, num_samples=NUM_SAMPLES):
+    def forward(self, num_samples=NUM_SAMPLES, trs=None):
         q = probtorch.Trace()
 
-        mean_weight = self.mean_weight.expand(num_samples, self._num_times,
-                                              self._num_factors)
-        weight_std_dev = self._weight_std_dev.expand(num_samples,
-                                                     self._num_times,
-                                                     self._num_factors)
+        if trs is None:
+            trs = (0, self._num_times)
+        mean_weight = self.mean_weight[trs[0]:trs[1], :]
+        mean_weight = mean_weight.expand(num_samples, trs[1] - trs[0],
+                                         self._num_factors)
+        weight_std_dev = self._weight_std_dev[trs[0]:trs[1], :]
+        weight_std_dev = weight_std_dev.expand(num_samples,
+                                               trs[1] - trs[0],
+                                               self._num_factors)
 
         mean_factor_center = self.mean_factor_center.expand(num_samples,
                                                             self._num_factors,
@@ -137,55 +144,42 @@ class TFADecoder(nn.Module):
         self._num_factors = num_factors
         self._num_voxels = num_voxels
 
-        self.mean_weight = Variable(torch.zeros(
+        self.register_buffer('mean_weight', Variable(torch.zeros(
             (self._num_times, self._num_factors)
+        )))
+        self.register_buffer('_weight_std_dev', Variable(
+            SOURCE_WEIGHT_STD_DEV *  torch.ones(
+                (self._num_times, self._num_factors)
+            )
         ))
-        self._weight_std_dev = Variable(SOURCE_WEIGHT_STD_DEV *
-                                        torch.ones((self._num_times,
-                                                    self._num_factors)))
 
-        self.mean_factor_center = Variable(
+        self.register_buffer('mean_factor_center', Variable(
             brain_center.expand(self._num_factors, 3) *
             torch.ones((self._num_factors, 3))
-        )
-        self._factor_center_std_dev = Variable(
+        ))
+        self.register_buffer('_factor_center_std_dev', Variable(
             brain_center_std_dev.expand(self._num_factors, 3) *
             torch.ones((self._num_factors, 3))
-        )
+        ))
 
-        self.mean_factor_log_width = Variable(torch.ones((self._num_factors)))
-        self._factor_log_width_std_dev = Variable(
+        self.register_buffer('mean_factor_log_width',
+                             Variable(torch.ones((self._num_factors))))
+        self.register_buffer('_factor_log_width_std_dev', Variable(
             SOURCE_LOG_WIDTH_STD_DEV * torch.ones((self._num_factors))
-        )
+        ))
 
         self._voxel_noise = voxel_noise
 
-    def cuda(self, device=None):
-        super().cuda(device)
-        self.mean_weight = self.mean_weight.cuda()
-        self._weight_std_dev = self._weight_std_dev.cuda()
-
-        self.mean_factor_center = self.mean_factor_center.cuda()
-        self._factor_center_std_dev = self._factor_center_std_dev.cuda()
-
-        self.mean_factor_log_width = self.mean_factor_log_width.cuda()
-        self._factor_log_width_std_dev = self._factor_log_width_std_dev.cuda()
-
-    def cpu(self):
-        super().cpu()
-        self.mean_weight = self.mean_weight.cpu()
-        self._weight_std_dev = self._weight_std_dev.cpu()
-
-        self.mean_factor_center = self.mean_factor_center.cpu()
-        self._factor_center_std_dev = self._factor_center_std_dev.cpu()
-
-        self.mean_factor_log_width = self.mean_factor_log_width.cpu()
-        self._factor_log_width_std_dev = self._factor_log_width_std_dev.cpu()
-
-    def forward(self, activations, locations, q=None):
+    def forward(self, activations, locations, q=None, trs=None):
         p = probtorch.Trace()
 
-        weights = p.normal(self.mean_weight, self._weight_std_dev,
+        mean_weight = self.mean_weight
+        weight_std_dev = self._weight_std_dev
+        if trs is not None:
+            mean_weight = mean_weight[trs[0]:trs[1], :]
+            weight_std_dev = weight_std_dev[trs[0]:trs[1], :]
+
+        weights = p.normal(mean_weight, weight_std_dev,
                            value=q['Weights'], name='Weights')
         factor_centers = p.normal(self.mean_factor_center,
                                   self._factor_center_std_dev,
@@ -207,11 +201,13 @@ class TopographicalFactorAnalysis:
     def __init__(self, data_file, num_factors=NUM_FACTORS):
         self.num_factors = num_factors
 
-        _, ext = os.path.splitext(data_file)
+        name, ext = os.path.splitext(data_file)
         if ext == '.nii':
             dataset = utils.nii2cmu(data_file)
+            self._template = data_file
         else:
             dataset = sio.loadmat(data_file)
+        _, self._name = os.path.split(name)
         # pull out the voxel activations and locations
         data = dataset['data']
         R = dataset['R']
@@ -294,15 +290,15 @@ class TopographicalFactorAnalysis:
                             datefmt='%m/%d/%Y %H:%M:%S',
                             level=log_level)
 
-        voxels_loader = torch.utils.data.DataLoader(
+        activations_loader = torch.utils.data.DataLoader(
             torch.utils.data.TensorDataset(
-                self.voxel_activations.transpose(0, 1),
-                self.voxel_locations
+                self.voxel_activations,
+                torch.zeros(self.voxel_activations.shape)
             ),
             batch_size=batch_size,
-            shuffle=True,
             num_workers=2
         )
+        locations_var = Variable(self.voxel_locations)
         optimizer = torch.optim.Adam(list(self.enc.parameters()), lr=learning_rate)
 
         self.enc.train()
@@ -314,18 +310,20 @@ class TopographicalFactorAnalysis:
         for epoch in range(num_steps):
             start = time.time()
 
-            epoch_free_energies = list(range(len(voxels_loader)))
-            epoch_lls = list(range(len(voxels_loader)))
-            for (batch, (activations, locations)) in enumerate(voxels_loader):
-                activations = Variable(activations.transpose(0, 1))
-                locations = Variable(locations)
+            epoch_free_energies = list(range(len(activations_loader)))
+            epoch_lls = list(range(len(activations_loader)))
+            for (batch, (activations, _)) in enumerate(activations_loader):
+                activations = Variable(activations)
                 if CUDA:
                     activations.cuda()
-                    locations.cuda()
+                    locations_var.cuda()
+                trs = (batch*batch_size, None)
+                trs = (trs[0], trs[0] + activations.shape[0])
 
                 optimizer.zero_grad()
-                q = self.enc(num_samples=NUM_SAMPLES)
-                p = self.dec(activations=activations, locations=locations, q=q)
+                q = self.enc(num_samples=NUM_SAMPLES, trs=trs)
+                p = self.dec(activations=activations, locations=locations_var,
+                             q=q, trs=trs)
 
                 epoch_free_energies[batch] = free_energy(q, p)
                 epoch_lls[batch] = log_likelihood(q, p)
@@ -343,8 +341,7 @@ class TopographicalFactorAnalysis:
             msg = EPOCH_MSG % (epoch + 1, (end - start) * 1000, free_energies[epoch])
             logging.info(msg)
 
-        self.losses = np.vstack([free_energies, lls])
-        return self.losses
+        return np.vstack([free_energies, lls])
 
     def results(self):
         """Return the inferred parameters"""
@@ -400,23 +397,47 @@ class TopographicalFactorAnalysis:
         }
         return mean_parameters
 
-parser = argparse.ArgumentParser(description='Topographical factor analysis for fMRI data')
-parser.add_argument('data_file', type=str, help='fMRI filename')
-parser.add_argument('--steps', type=int, default=100, help='Number of optimization steps')
-parser.add_argument('--learning_rate', type=float, default=1e-4,
-                    help='Learning Rate for optimization')
-parser.add_argument('--log-optimization', action='store_true', help='Whether to log optimization')
-parser.add_argument('--factors', type=int, default=NUM_FACTORS, help='Number of latent factors')
+    def save(self, out_dir='.'):
+        '''Save a TopographicalFactorAnalysis in full to a file for later'''
+        with open(out_dir + '/' + self._name + '.tfa', 'wb') as file:
+            pickle.dump(self, file)
 
-if __name__ == '__main__':
-    args = parser.parse_args()
-    tfa = TopographicalFactorAnalysis(args.data_file, num_factors=args.factors)
-    if args.log_optimization:
-        log_level = logging.INFO
-    else:
-        log_level = logging.WARNING
-    losses = tfa.train(num_steps=args.steps, learning_rate=args.learning_rate,
-                       log_level=log_level)
-    if args.log_optimization:
-        utils.plot_losses(losses)
-    tfa.mean_parameters(log_level=log_level)
+    @classmethod
+    def load(cls, filename):
+        '''Load a saved TopographicalFactorAnalysis from a file, saving the
+           effort of rerunning inference from scratch.'''
+        with open(filename, 'rb') as file:
+            return pickle.load(file)
+
+    def plot_voxels(self):
+        hyp.plot(self.voxel_locations.numpy(), 'k.')
+
+    def plot_factor_centers(self, filename=None, show=True,
+                            log_level=logging.WARNING):
+        means = self.mean_parameters(log_level=log_level)
+
+        plot = niplot.plot_connectome(
+            np.eye(self.num_factors),
+            means['mean_factor_center'],
+            node_color='k'
+        )
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
+
+    def plot_original_brain(self, filename=None, show=True, plot_abs=False):
+        original_image = utils.cmu2nii(self.voxel_activations.numpy(),
+                                       self.voxel_locations.numpy(),
+                                       'data/pieman_data/sub-001-task-intact1.nii')
+        plot = niplot.plot_glass_brain(original_image, plot_abs=plot_abs)
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
