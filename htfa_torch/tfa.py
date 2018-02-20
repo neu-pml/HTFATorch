@@ -393,7 +393,8 @@ class TopographicalFactorAnalysis:
         mean_parameters = {
             'mean_weight': mean_weight,
             'mean_factor_center': mean_factor_center,
-            'mean_factor_log_width': mean_factor_log_width
+            'mean_factor_log_width': mean_factor_log_width,
+            'mean_factors': mean_factors
         }
         return mean_parameters
 
