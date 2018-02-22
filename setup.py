@@ -12,7 +12,7 @@ NAME = 'HTFATorch'
 DESCRIPTION = 'An implementation of hierarchical topographic factor analysis in ProbTorch'
 URL = 'https://github.com/neu-spiral/HTFATorch'
 
-SCRIPTS = ['tfa/tfa.py']
+SCRIPTS = ['htfa_torch/__main__.py']
 
 REQUIRED = [
     'hypertools',
