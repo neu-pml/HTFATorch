@@ -132,3 +132,10 @@ class GaussianTower(nn.Module):
             else:
                 value = None
             return model.normal(mu, sigma, name=self.name, value=value)
+
+def batch_weights(weights, start, end, num_samples, num_factors):
+    result = weights[start:end, :]
+    if num_samples > 1:
+        return result.expand(num_samples, end - start, num_factors)
+    else:
+        return result
