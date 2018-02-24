@@ -393,7 +393,8 @@ class TopographicalFactorAnalysis:
         mean_parameters = {
             'mean_weight': mean_weight,
             'mean_factor_center': mean_factor_center,
-            'mean_factor_log_width': mean_factor_log_width
+            'mean_factor_log_width': mean_factor_log_width,
+            'mean_factors': mean_factors
         }
         return mean_parameters
 
@@ -434,6 +435,23 @@ class TopographicalFactorAnalysis:
                                        self.voxel_locations.numpy(),
                                        self._template)
         plot = niplot.plot_glass_brain(original_image, plot_abs=plot_abs)
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
+
+    def plot_reconstruction(self, filename=None, show=True, plot_abs=False,
+                            log_level=logging.WARNING):
+        means = self.mean_parameters(log_level=log_level)
+
+        reconstruction = means['mean_weight'] @ means['mean_factors']
+        image = utils.cmu2nii(reconstruction,
+                              self.voxel_locations.numpy(),
+                              self._template)
+        plot = niplot.plot_glass_brain(image, plot_abs=plot_abs)
 
         if filename is not None:
             plot.savefig(filename)
