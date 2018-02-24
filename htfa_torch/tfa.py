@@ -363,7 +363,7 @@ class TopographicalFactorAnalysis:
         }
         return result
 
-    def mean_parameters(self, log_level=logging.WARNING):
+    def mean_parameters(self, log_level=logging.WARNING, matfile=None):
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
                             level=log_level)
@@ -396,6 +396,10 @@ class TopographicalFactorAnalysis:
             'mean_factor_log_width': mean_factor_log_width,
             'mean_factors': mean_factors
         }
+
+        if matfile is not None:
+            sio.savemat(matfile, mean_parameters, do_compression=True)
+
         return mean_parameters
 
     def save(self, out_dir='.'):
