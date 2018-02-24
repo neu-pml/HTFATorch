@@ -17,6 +17,10 @@ import numpy as np
 import nibabel as nib
 from nilearn.input_data import NiftiMasker
 
+from torch.autograd import Variable
+import torch.nn as nn
+from torch.nn import Parameter
+
 def plot_losses(losses):
     epochs = range(losses.shape[1])
 
@@ -93,3 +97,38 @@ def cmu2nii(activations, locations, template):
             data[x, y, z, i] = activations[i, j]
 
     return nib.Nifti1Image(data[:, :, :, 0], affine=sform)
+
+class GaussianTower(nn.Module):
+    """A class for handling Gaussians recursively parameterized by other
+       Gaussians.  We can treat the leaves as hyperparameters (variational or
+       not), and name or clamp any element of the tree, all while maintaining a
+       sane naming scheme."""
+    def __init__(self, initializers, name=None, levels=1,
+                 variational=False):
+        super(__class__, self).__init__()
+        self.name = name
+        self.levels = levels
+        if levels == 1:
+            if variational:
+                self.register_parameter('hyper', Parameter(initializers[0]()))
+            else:
+                self.register_buffer('hyper', Variable(initializers[0]()))
+        else:
+            left = initializers[0:len(initializers) // 2]
+            right = initializers[len(initializers) // 2:len(initializers)]
+            self.mu = GaussianTower(left, name='mu', levels=levels - 1,
+                                    variational=variational)
+            self.sigma = GaussianTower(right, name='sigma', levels=levels - 1,
+                                       variational=variational)
+
+    def forward(self, f, model, clamp):
+        if self.levels == 1:
+            return f(self.hyper)
+        else:
+            mu = self.mu(f, model, clamp)
+            sigma = self.sigma(f, model, clamp)
+            if clamp:
+                value = clamp[self.name]
+            else:
+                value = None
+            return model.normal(mu, sigma, name=self.name, value=value)
