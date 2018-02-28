@@ -89,9 +89,9 @@ class TopographicalFactorAnalysis:
             self.get_initialization(data, R)
         mean_centers_init = torch.Tensor(mean_centers_init)
         mean_weights_init = torch.Tensor(mean_weights_init)
-        self.enc = tfa_models.TFAEncoder(self.num_times, mean_centers_init,
-                                         mean_widths_init, mean_weights_init,
-                                         num_factors=self.num_factors)
+        self.enc = tfa_models.TFAGuide(self.num_times, mean_centers_init,
+                                       mean_widths_init, mean_weights_init,
+                                       num_factors=self.num_factors)
 
         self.dec = tfa_models.TFADecoder(self.brain_center,
                                          self.brain_center_std_dev,

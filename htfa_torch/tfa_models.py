@@ -35,7 +35,7 @@ def radial_basis(locations, centers, log_widths, num_voxels,
     log_widths = log_widths.unsqueeze(2)
     return torch.exp(-delta2s.sum(3) / torch.exp(log_widths))
 
-class TFAEncoder(nn.Module):
+class TFAGuide(nn.Module):
     """Variational guide for topographic factor analysis"""
     def __init__(self, num_times, mean_centers, mean_widths, mean_weights,
                  num_factors=NUM_FACTORS):
