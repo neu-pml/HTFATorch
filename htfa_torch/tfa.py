@@ -239,7 +239,7 @@ class TopographicalFactorAnalysis:
             mean_factor_log_width = self.enc.factor_log_width_params['mu'].data
             mean_weight = self.enc.weight_params['mu'].data
 
-        mean_factor_center = mean_factor_center.numpy()
+        mean_factor_center = np.mean(mean_factor_center.numpy(), axis=0)
         mean_factor_log_width = mean_factor_log_width.numpy()
         mean_weight = mean_weight.numpy()
         mean_factors = initial_radial_basis(self.voxel_locations.numpy(),
