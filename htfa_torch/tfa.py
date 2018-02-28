@@ -87,11 +87,14 @@ class TopographicalFactorAnalysis:
 
         mean_centers_init, mean_widths_init, mean_weights_init = \
             self.get_initialization(data, R)
-        mean_centers_init = torch.Tensor(mean_centers_init)
-        mean_weights_init = torch.Tensor(mean_weights_init)
-        self.enc = tfa_models.TFAGuide(self.num_times, mean_centers_init,
-                                       mean_widths_init, mean_weights_init,
-                                       num_factors=self.num_factors)
+        hyper_means = {
+            'factor_centers': torch.Tensor(mean_centers_init),
+            'factor_log_widths': mean_widths_init,
+            'weights': torch.Tensor(mean_weights_init)
+        }
+        self.enc = tfa_models.TFAGuide(self.num_times,
+                                       num_factors=self.num_factors,
+                                       hyper_means=hyper_means)
 
         self.dec = tfa_models.TFADecoder(self.brain_center,
                                          self.brain_center_std_dev,
@@ -182,7 +185,7 @@ class TopographicalFactorAnalysis:
                 optimizer.zero_grad()
                 q = self.enc(num_samples=num_samples, trs=trs)
                 p = self.dec(activations=activations, locations=locations_var,
-                             q=q, trs=trs)
+                             q=q, times=trs)
 
                 epoch_free_energies[batch] = free_energy(q, p)
                 epoch_lls[batch] = log_likelihood(q, p)
@@ -228,20 +231,20 @@ class TopographicalFactorAnalysis:
                             level=log_level)
 
         if CUDA:
-            mean_factor_center = self.enc.module.mean_factor_center.data.cpu()
-            mean_factor_log_width = self.enc.module.mean_factor_log_width.data.cpu()
-            mean_weight = self.enc.module.mean_weight.data.cpu()
+            mean_factor_center = self.enc.module.factor_center_params['mu'].data.cpu()
+            mean_factor_log_width = self.enc.module.factor_log_width_params['mu'].data.cpu()
+            mean_weight = self.enc.module.weight_params['mu'].data.cpu()
         else:
-            mean_factor_center = self.enc.mean_factor_center.data
-            mean_factor_log_width = self.enc.mean_factor_log_width.data
-            mean_weight = self.enc.mean_weight.data
+            mean_factor_center = self.enc.factor_center_params['mu'].data
+            mean_factor_log_width = self.enc.factor_log_width_params['mu'].data
+            mean_weight = self.enc.weight_params['mu'].data
 
         mean_factor_center = mean_factor_center.numpy()
         mean_factor_log_width = mean_factor_log_width.numpy()
         mean_weight = mean_weight.numpy()
         mean_factors = initial_radial_basis(self.voxel_locations.numpy(),
                                             mean_factor_center,
-                                            np.exp(mean_factor_log_width))
+                                            np.exp(mean_factor_log_width[0, :]))
 
         logging.info("Mean Factor Centers: %s", str(mean_factor_center))
         logging.info("Mean Factor Log Widths: %s", str(mean_factor_log_width))

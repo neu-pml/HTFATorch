@@ -37,63 +37,85 @@ def radial_basis(locations, centers, log_widths, num_voxels,
 
 class TFAGuide(nn.Module):
     """Variational guide for topographic factor analysis"""
-    def __init__(self, num_times, mean_centers, mean_widths, mean_weights,
-                 num_factors=NUM_FACTORS):
+    def __init__(self, num_times, num_factors=NUM_FACTORS, hyper_means=None):
         super(self.__class__, self).__init__()
         self._num_times = num_times
         self._num_factors = num_factors
 
-        self._weight_std_dev = torch.sqrt(torch.rand(
-            (self._num_times, self._num_factors)
-        ))
-        self.mean_weight = Parameter(mean_weights)
-        self._weight_std_dev = Parameter(self._weight_std_dev)
+        if hyper_means:
+            self.weight_params = {
+                'mu': Parameter(hyper_means['weights']),
+                'sigma': Parameter(torch.sqrt(torch.rand(
+                    (self._num_times, self._num_factors)
+                )))
+            }
+            self._weight_params = nn.ParameterList(
+                list(self.weight_params.values())
+            )
+            self.factor_center_params = {
+                'mu': Parameter(hyper_means['factor_centers']),
+                'sigma': Parameter(torch.sqrt(torch.rand(
+                    (self._num_factors, 3)
+                )))
+            }
+            self._factor_center_params = nn.ParameterList(
+                list(self.factor_center_params.values())
+            )
+            self.factor_log_width_params = {
+                'mu': Parameter(hyper_means['factor_log_widths'] *
+                                torch.ones(self._num_factors)),
+                'sigma': Parameter(torch.sqrt(torch.rand(
+                    (self._num_factors)
+                )))
+            }
+            self._factor_log_width_params = nn.ParameterList(
+                list(self.factor_log_width_params.values())
+            )
 
-        self._factor_center_std_dev = torch.sqrt(torch.rand(
-            (self._num_factors, 3)
-        ))
-        self.mean_factor_center = Parameter(mean_centers)
-        self._factor_center_std_dev = Parameter(self._factor_center_std_dev)
-
-        self._factor_log_width_std_dev = torch.sqrt(torch.rand(
-            (self._num_factors)
-        ))
-        self.mean_factor_log_width = Parameter(mean_widths*torch.ones(self._num_factors))
-        self._factor_log_width_std_dev = Parameter(self._factor_log_width_std_dev)
-
-    def forward(self, num_samples=NUM_SAMPLES, trs=None):
+    def forward(self, weight_params=None, factor_center_params=None,
+                factor_log_width_params=None, num_samples=NUM_SAMPLES,
+                times=None):
         q = probtorch.Trace()
 
-        if trs is None:
-            trs = (0, self._num_times)
-        mean_weight = self.mean_weight[trs[0]:trs[1], :]
-        mean_weight = mean_weight.expand(num_samples, trs[1] - trs[0],
-                                         self._num_factors)
-        weight_std_dev = self._weight_std_dev[trs[0]:trs[1], :]
-        weight_std_dev = weight_std_dev.expand(num_samples,
-                                               trs[1] - trs[0],
-                                               self._num_factors)
+        if times is None:
+            times = (0, self._num_times)
 
-        mean_factor_center = self.mean_factor_center.expand(num_samples,
-                                                            self._num_factors,
-                                                            3)
-        factor_center_std_dev = self._factor_center_std_dev.expand(
+        if weight_params is None:
+            weight_params = {
+                'mu': self.weight_params['mu'][times[0]:times[1], :],
+                'sigma': self.weight_params['sigma'][times[0]:times[1], :],
+            }
+        weight_params['mu'] = weight_params['mu'].expand(
+            num_samples, times[1] - times[0], self._num_factors
+        )
+        weight_params['sigma'] = weight_params['sigma'].expand(
+            num_samples, times[1] - times[0], self._num_factors
+        )
+
+        if factor_center_params is None:
+            factor_center_params = self.factor_center_params
+        factor_center_params['mu'] = factor_center_params['mu'].expand(
+            num_samples, self._num_factors, 3
+        )
+        factor_center_params['sigma'] = factor_center_params['sigma'].expand(
             num_samples, self._num_factors, 3
         )
 
-        mean_factor_log_width = self.mean_factor_log_width.expand(
+        if factor_log_width_params is None:
+            factor_log_width_params = self.factor_log_width_params
+        factor_log_width_params['mu'] = factor_log_width_params['mu'].expand(
             num_samples, self._num_factors
         )
-        factor_log_width_std_dev = self._factor_log_width_std_dev.expand(
-            num_samples, self._num_factors
-        )
+        factor_log_width_params['sigma'] =\
+            factor_log_width_params['sigma'].expand(num_samples,
+                                                    self._num_factors)
 
-        q.normal(mean_weight, weight_std_dev, name='Weights')
+        q.normal(weight_params['mu'], weight_params['sigma'], name='Weights')
 
-        q.normal(mean_factor_center, factor_center_std_dev,
+        q.normal(factor_center_params['mu'], factor_center_params['sigma'],
                  name='FactorCenters')
-        q.normal(mean_factor_log_width, factor_log_width_std_dev,
-                 name='FactorLogWidths')
+        q.normal(factor_log_width_params['mu'],
+                 factor_log_width_params['sigma'], name='FactorLogWidths')
 
         return q
 
@@ -132,14 +154,14 @@ class TFADecoder(nn.Module):
 
         self._voxel_noise = voxel_noise
 
-    def forward(self, activations, locations, q=None, trs=None):
+    def forward(self, activations, locations, q=None, times=None):
         p = probtorch.Trace()
 
         mean_weight = self.mean_weight
         weight_std_dev = self._weight_std_dev
-        if trs is not None:
-            mean_weight = mean_weight[trs[0]:trs[1], :]
-            weight_std_dev = weight_std_dev[trs[0]:trs[1], :]
+        if times is not None:
+            mean_weight = mean_weight[times[0]:times[1], :]
+            weight_std_dev = weight_std_dev[times[0]:times[1], :]
 
         weights = p.normal(mean_weight, weight_std_dev,
                            value=q['Weights'], name='Weights')
