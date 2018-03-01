@@ -5,6 +5,7 @@ __email__ = 'e.sennesh@northeastern.edu', 'khan.zu@husky.neu.edu'
 
 import collections
 
+import flatdict
 import numpy as np
 import torch
 import torch.distributions as dists
@@ -78,6 +79,46 @@ class GenerativeLikelihood(Model):
 
     def forward(self, trace, *args, observations=collections.defaultdict()):
         pass
+
+class TFAGuideHyperPrior(HyperPrior):
+    def __init__(self, means, num_times, num_factors=NUM_FACTORS):
+        self._num_times = num_times
+        self._num_factors = num_factors
+
+        params = flatdict.FlatDict(delimiter='_')
+        params['weights'] = {
+            'mu': means['weights'],
+            'sigma': torch.sqrt(torch.rand(
+                (self._num_times, self._num_factors)
+            ))
+        }
+        params['factor_centers'] = {
+            'mu': means['factor_centers'],
+            'sigma': torch.sqrt(torch.rand((self._num_factors, 3)))
+        }
+        params['factor_log_widths'] = {
+            'mu': means['factor_log_widths'] * torch.ones(self._num_factors),
+            'sigma': torch.sqrt(torch.rand((self._num_factors)))
+        }
+        super(self.__class__, self).__init__(params, guide=True)
+
+    def forward(self):
+        state_dict = super(self.__class__, self).forward()
+
+        return {
+            'weights': {
+                'mu': state_dict['weights_mu'],
+                'sigma': state_dict['weights_sigma']
+            },
+            'factor_centers': {
+                'mu': state_dict['factor_centers_mu'],
+                'sigma': state_dict['factor_centers_sigma']
+            },
+            'factor_log_widths': {
+                'mu': state_dict['factor_log_widths_mu'],
+                'sigma': state_dict['factor_log_widths_sigma']
+            }
+        }
 
 class TFAGuide(nn.Module):
     """Variational guide for topographic factor analysis"""
