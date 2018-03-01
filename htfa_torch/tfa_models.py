@@ -146,87 +146,15 @@ class TFAGuidePrior(GuidePrior):
 
 class TFAGuide(nn.Module):
     """Variational guide for topographic factor analysis"""
-    def __init__(self, num_times, num_factors=NUM_FACTORS, hyper_means=None):
+    def __init__(self, means, num_times, num_factors=NUM_FACTORS):
         super(self.__class__, self).__init__()
-        self._num_times = num_times
-        self._num_factors = num_factors
 
-        if hyper_means:
-            self.weight_params = {
-                'mu': Parameter(hyper_means['weights']),
-                'sigma': Parameter(torch.sqrt(torch.rand(
-                    (self._num_times, self._num_factors)
-                )))
-            }
-            self._weight_params = nn.ParameterList(
-                list(self.weight_params.values())
-            )
-            self.factor_center_params = {
-                'mu': Parameter(hyper_means['factor_centers']),
-                'sigma': Parameter(torch.sqrt(torch.rand(
-                    (self._num_factors, 3)
-                )))
-            }
-            self._factor_center_params = nn.ParameterList(
-                list(self.factor_center_params.values())
-            )
-            self.factor_log_width_params = {
-                'mu': Parameter(hyper_means['factor_log_widths'] *
-                                torch.ones(self._num_factors)),
-                'sigma': Parameter(torch.sqrt(torch.rand(
-                    (self._num_factors)
-                )))
-            }
-            self._factor_log_width_params = nn.ParameterList(
-                list(self.factor_log_width_params.values())
-            )
+        self.hyperprior = TFAGuideHyperPrior(means, num_times, num_factors)
+        self._prior = TFAGuidePrior()
 
-    def forward(self, weight_params=None, factor_center_params=None,
-                factor_log_width_params=None, num_samples=NUM_SAMPLES,
-                times=None):
-        q = probtorch.Trace()
-
-        if times is None:
-            times = (0, self._num_times)
-
-        if weight_params is None:
-            weight_params = {
-                'mu': self.weight_params['mu'][times[0]:times[1], :],
-                'sigma': self.weight_params['sigma'][times[0]:times[1], :],
-            }
-        weight_params['mu'] = weight_params['mu'].expand(
-            num_samples, times[1] - times[0], self._num_factors
-        )
-        weight_params['sigma'] = weight_params['sigma'].expand(
-            num_samples, times[1] - times[0], self._num_factors
-        )
-
-        if factor_center_params is None:
-            factor_center_params = self.factor_center_params
-        factor_center_params['mu'] = factor_center_params['mu'].expand(
-            num_samples, self._num_factors, 3
-        )
-        factor_center_params['sigma'] = factor_center_params['sigma'].expand(
-            num_samples, self._num_factors, 3
-        )
-
-        if factor_log_width_params is None:
-            factor_log_width_params = self.factor_log_width_params
-        factor_log_width_params['mu'] = factor_log_width_params['mu'].expand(
-            num_samples, self._num_factors
-        )
-        factor_log_width_params['sigma'] =\
-            factor_log_width_params['sigma'].expand(num_samples,
-                                                    self._num_factors)
-
-        q.normal(weight_params['mu'], weight_params['sigma'], name='Weights')
-
-        q.normal(factor_center_params['mu'], factor_center_params['sigma'],
-                 name='FactorCenters')
-        q.normal(factor_log_width_params['mu'],
-                 factor_log_width_params['sigma'], name='FactorLogWidths')
-
-        return q
+    def forward(self, trace, times=None, num_samples=NUM_SAMPLES):
+        params = self.hyperprior()
+        return self._prior(trace, params, times=times, num_samples=num_samples)
 
 class TFADecoder(nn.Module):
     """Generative model for topographic factor analysis"""

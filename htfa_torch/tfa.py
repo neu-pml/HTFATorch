@@ -92,9 +92,8 @@ class TopographicalFactorAnalysis:
             'factor_log_widths': mean_widths_init,
             'weights': torch.Tensor(mean_weights_init)
         }
-        self.enc = tfa_models.TFAGuide(self.num_times,
-                                       num_factors=self.num_factors,
-                                       hyper_means=hyper_means)
+        self.enc = tfa_models.TFAGuide(hyper_means, self.num_times,
+                                       num_factors=self.num_factors)
 
         self.dec = tfa_models.TFADecoder(self.brain_center,
                                          self.brain_center_std_dev,
@@ -183,7 +182,8 @@ class TopographicalFactorAnalysis:
                 trs = (trs[0], trs[0] + activations.shape[0])
 
                 optimizer.zero_grad()
-                q = self.enc(num_samples=num_samples, trs=trs)
+                q = probtorch.Trace()
+                self.enc(q, times=trs, num_samples=num_samples)
                 p = self.dec(activations=activations, locations=locations_var,
                              q=q, times=trs)
 
@@ -207,7 +207,8 @@ class TopographicalFactorAnalysis:
 
     def results(self):
         """Return the inferred parameters"""
-        q = self.enc(num_samples=tfa_models.NUM_SAMPLES)
+        q = probtorch.Trace()
+        self.enc(q, num_samples=tfa_models.NUM_SAMPLES)
 
         weights = q['Weights'].value.data
         factor_centers = q['FactorCenters'].value.data
@@ -231,20 +232,17 @@ class TopographicalFactorAnalysis:
                             level=log_level)
 
         if CUDA:
-            mean_factor_center = self.enc.module.factor_center_params['mu'].data.cpu()
-            mean_factor_log_width = self.enc.module.factor_log_width_params['mu'].data.cpu()
-            mean_weight = self.enc.module.weight_params['mu'].data.cpu()
-        else:
-            mean_factor_center = self.enc.factor_center_params['mu'].data
-            mean_factor_log_width = self.enc.factor_log_width_params['mu'].data
-            mean_weight = self.enc.weight_params['mu'].data
+            self.enc.module.hyperprior.cpu()
+        params = dict(self.enc.module.hyperprior.named_parameters())
+        for k, v in params.items():
+            params[k] = v.data
 
-        mean_factor_center = np.mean(mean_factor_center.numpy(), axis=0)
-        mean_factor_log_width = mean_factor_log_width.numpy()
-        mean_weight = mean_weight.numpy()
+        mean_factor_center = params['factor_centers_mu'].numpy()
+        mean_factor_log_width = params['factor_log_widths_mu'].numpy()
+        mean_weight = params['weights_mu'].numpy()
         mean_factors = initial_radial_basis(self.voxel_locations.numpy(),
                                             mean_factor_center,
-                                            np.exp(mean_factor_log_width[0, :]))
+                                            np.exp(mean_factor_log_width[0]))
 
         logging.info("Mean Factor Centers: %s", str(mean_factor_center))
         logging.info("Mean Factor Log Widths: %s", str(mean_factor_log_width))
