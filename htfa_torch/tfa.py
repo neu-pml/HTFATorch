@@ -81,57 +81,49 @@ class TFAEncoder(nn.Module):
         self._num_times = num_times
         self._num_factors = num_factors
 
-        self._weight_std_dev = torch.sqrt(torch.rand(
-            (self._num_times, self._num_factors)
-        ))
-        self.mean_weight = Parameter(mean_weights)
-        self._weight_std_dev = Parameter(self._weight_std_dev)
+        inits = [lambda: mean_weights,
+                 lambda: torch.sqrt(torch.rand(
+                     (self._num_times, self._num_factors)
+                 ))
+                ]
+        self.weights_tower = utils.GaussianTower(inits, name='Weights',
+                                                 levels=2,
+                                                 variational=True)
 
-        self._factor_center_std_dev = torch.sqrt(torch.rand(
-            (self._num_factors, 3)
-        ))
-        self.mean_factor_center = Parameter(mean_centers)
-        self._factor_center_std_dev = Parameter(self._factor_center_std_dev)
+        inits = [lambda: mean_centers,
+                 lambda: torch.sqrt(torch.rand(
+                     (self._num_factors, 3)
+                 ))
+                ]
+        self.factor_centers_tower = utils.GaussianTower(
+            inits, name='FactorCenters', levels=2, variational=True
+        )
 
-        self._factor_log_width_std_dev = torch.sqrt(torch.rand(
-            (self._num_factors)
-        ))
-        self.mean_factor_log_width = Parameter(mean_widths*torch.ones(self._num_factors))
-        self._factor_log_width_std_dev = Parameter(self._factor_log_width_std_dev)
+        inits = [lambda: mean_widths * torch.ones(self._num_factors),
+                 lambda: torch.sqrt(torch.rand((self._num_factors)))]
+        self.factor_log_width_tower = utils.GaussianTower(
+            inits, name='FactorLogWidths', levels=2, variational=True
+        )
+
+        self.apply(lambda m: [self.register_parameter('', p) for p in m.parameters()])
 
     def forward(self, num_samples=NUM_SAMPLES, trs=None):
         q = probtorch.Trace()
 
         if trs is None:
             trs = (0, self._num_times)
-        mean_weight = self.mean_weight[trs[0]:trs[1], :]
-        mean_weight = mean_weight.expand(num_samples, trs[1] - trs[0],
-                                         self._num_factors)
-        weight_std_dev = self._weight_std_dev[trs[0]:trs[1], :]
-        weight_std_dev = weight_std_dev.expand(num_samples,
-                                               trs[1] - trs[0],
-                                               self._num_factors)
-
-        mean_factor_center = self.mean_factor_center.expand(num_samples,
-                                                            self._num_factors,
-                                                            3)
-        factor_center_std_dev = self._factor_center_std_dev.expand(
-            num_samples, self._num_factors, 3
+        batch_weights = lambda weights: utils.batch_weights(
+            weights, trs[0], trs[1], num_samples, self._num_factors
         )
+        self.weights_tower(batch_weights, q, None)
 
-        mean_factor_log_width = self.mean_factor_log_width.expand(
-            num_samples, self._num_factors
-        )
-        factor_log_width_std_dev = self._factor_log_width_std_dev.expand(
-            num_samples, self._num_factors
-        )
+        def expand_factor_centers(centers):
+            return centers.expand(num_samples, self._num_factors, 3)
+        self.factor_centers_tower(expand_factor_centers, q, None)
 
-        q.normal(mean_weight, weight_std_dev, name='Weights')
-
-        q.normal(mean_factor_center, factor_center_std_dev,
-                 name='FactorCenters')
-        q.normal(mean_factor_log_width, factor_log_width_std_dev,
-                 name='FactorLogWidths')
+        def expand_factor_log_widths(log_widths):
+            return log_widths.expand(num_samples, self._num_factors)
+        self.factor_log_width_tower(expand_factor_log_widths, q, None)
 
         return q
 
@@ -144,51 +136,46 @@ class TFADecoder(nn.Module):
         self._num_factors = num_factors
         self._num_voxels = num_voxels
 
-        self.register_buffer('mean_weight', Variable(torch.zeros(
-            (self._num_times, self._num_factors)
-        )))
-        self.register_buffer('_weight_std_dev', Variable(
-            SOURCE_WEIGHT_STD_DEV *  torch.ones(
-                (self._num_times, self._num_factors)
-            )
-        ))
+        inits = [lambda: torch.zeros((self._num_times, self._num_factors)),
+                 lambda: SOURCE_WEIGHT_STD_DEV *  torch.ones(
+                     (self._num_times, self._num_factors)
+                 )
+                ]
+        self.weights_tower = utils.GaussianTower(inits, name='Weights',
+                                                 levels=2, variational=False)
 
-        self.register_buffer('mean_factor_center', Variable(
-            brain_center.expand(self._num_factors, 3) *
-            torch.ones((self._num_factors, 3))
-        ))
-        self.register_buffer('_factor_center_std_dev', Variable(
-            brain_center_std_dev.expand(self._num_factors, 3) *
-            torch.ones((self._num_factors, 3))
-        ))
+        def expand_centers(centers):
+            return centers.expand(self._num_factors, 3) *\
+                   torch.ones((self._num_factors, 3))
+        inits = [lambda: expand_centers(brain_center),
+                 lambda: expand_centers(brain_center_std_dev)]
+        self.factor_centers_tower = utils.GaussianTower(inits,
+                                                        name='FactorCenters',
+                                                        levels=2,
+                                                        variational=False)
 
-        self.register_buffer('mean_factor_log_width',
-                             Variable(torch.ones((self._num_factors))))
-        self.register_buffer('_factor_log_width_std_dev', Variable(
-            SOURCE_LOG_WIDTH_STD_DEV * torch.ones((self._num_factors))
-        ))
+        inits = [lambda: torch.ones((self._num_factors)),
+                 lambda: SOURCE_LOG_WIDTH_STD_DEV *\
+                         torch.ones((self._num_factors))]
+        self.factor_log_width_tower = utils.GaussianTower(
+            inits, name='FactorLogWidths', levels=2, variational=False
+        )
 
         self._voxel_noise = voxel_noise
 
     def forward(self, activations, locations, q=None, trs=None):
         p = probtorch.Trace()
 
-        mean_weight = self.mean_weight
-        weight_std_dev = self._weight_std_dev
-        if trs is not None:
-            mean_weight = mean_weight[trs[0]:trs[1], :]
-            weight_std_dev = weight_std_dev[trs[0]:trs[1], :]
+        if trs is None:
+            trs = (0, self._num_times)
+        batch_weights = lambda weights: utils.batch_weights(
+            weights, trs[0], trs[1], 1, self._num_factors
+        )
+        weights = self.weights_tower(batch_weights, p, q)
 
-        weights = p.normal(mean_weight, weight_std_dev,
-                           value=q['Weights'], name='Weights')
-        factor_centers = p.normal(self.mean_factor_center,
-                                  self._factor_center_std_dev,
-                                  value=q['FactorCenters'],
-                                  name='FactorCenters')
-        factor_log_widths = p.normal(self.mean_factor_log_width,
-                                     self._factor_log_width_std_dev,
-                                     value=q['FactorLogWidths'],
-                                     name='FactorLogWidths')
+        factor_centers = self.factor_centers_tower(lambda x: x, p, q)
+        factor_log_widths = self.factor_log_width_tower(lambda x: x, p, q)
+
         factors = radial_basis(locations, factor_centers, factor_log_widths,
                                num_voxels=locations.shape[0])
         p.normal(torch.matmul(weights, factors), self._voxel_noise,
@@ -369,13 +356,13 @@ class TopographicalFactorAnalysis:
                             level=log_level)
 
         if CUDA:
-            mean_factor_center = self.enc.module.mean_factor_center.data.cpu()
-            mean_factor_log_width = self.enc.module.mean_factor_log_width.data.cpu()
-            mean_weight = self.enc.module.mean_weight.data.cpu()
+            mean_factor_center = self.enc.module.factor_centers_tower.mu.hyper.data.cpu()
+            mean_factor_log_width = self.enc.module.factor_log_width_tower.mu.hyper.data.cpu()
+            mean_weight = self.enc.module.weights_tower.mu.hyper.data.cpu()
         else:
-            mean_factor_center = self.enc.mean_factor_center.data
-            mean_factor_log_width = self.enc.mean_factor_log_width.data
-            mean_weight = self.enc.mean_weight.data
+            mean_factor_center = self.enc.factor_centers_tower.mu.hyper.data
+            mean_factor_log_width = self.enc.factor_log_width_tower.mu.hyper.data
+            mean_weight = self.enc.weights_tower.mu.hyper.data
 
         mean_factor_center = mean_factor_center.numpy()
         mean_factor_log_width = mean_factor_log_width.numpy()
