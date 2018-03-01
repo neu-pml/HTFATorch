@@ -95,10 +95,10 @@ class TopographicalFactorAnalysis:
         self.enc = tfa_models.TFAGuide(hyper_means, self.num_times,
                                        num_factors=self.num_factors)
 
-        self.dec = tfa_models.TFADecoder(self.brain_center,
-                                         self.brain_center_std_dev,
-                                         self.num_times, self.num_voxels,
-                                         num_factors=self.num_factors)
+        self.dec = tfa_models.TFAModel(self.brain_center,
+                                       self.brain_center_std_dev,
+                                       self.num_times, self.voxel_locations,
+                                       num_factors=self.num_factors)
 
         if CUDA:
             self.enc = torch.nn.DataParallel(self.enc)
@@ -159,7 +159,6 @@ class TopographicalFactorAnalysis:
             batch_size=batch_size,
             num_workers=2
         )
-        locations_var = Variable(self.voxel_locations)
         optimizer = torch.optim.Adam(list(self.enc.parameters()), lr=learning_rate)
 
         self.enc.train()
@@ -177,15 +176,14 @@ class TopographicalFactorAnalysis:
                 activations = Variable(activations)
                 if CUDA:
                     activations.cuda()
-                    locations_var.cuda()
                 trs = (batch*batch_size, None)
                 trs = (trs[0], trs[0] + activations.shape[0])
 
                 optimizer.zero_grad()
                 q = probtorch.Trace()
                 self.enc(q, times=trs, num_samples=num_samples)
-                p = self.dec(activations=activations, locations=locations_var,
-                             q=q, times=trs)
+                p = probtorch.Trace()
+                self.dec(p, times=trs, guide=q, observations={'Y': activations})
 
                 epoch_free_energies[batch] = free_energy(q, p)
                 epoch_lls[batch] = log_likelihood(q, p)
