@@ -120,6 +120,30 @@ class TFAGuideHyperPrior(HyperPrior):
             }
         }
 
+class TFAGuidePrior(GuidePrior):
+    def forward(self, trace, params, times=None, num_samples=NUM_SAMPLES):
+        if times is None:
+            times = (0, params['weights']['mu'].shape[0])
+
+        for (k, val) in params['weights'].items():
+            params['weights'][k] = val[times[0]:times[1], :]
+
+        for (k, vs) in params.items():
+            for (var, val) in vs.items():
+                vs[var] = val.clone().unsqueeze(0)
+
+        weights = trace.normal(params['weights']['mu'],
+                               params['weights']['sigma'],
+                               name='Weights')
+
+        centers = trace.normal(params['factor_centers']['mu'],
+                               params['factor_centers']['sigma'],
+                               name='FactorCenters')
+        log_widths = trace.normal(params['factor_log_widths']['mu'],
+                                  params['factor_log_widths']['sigma'],
+                                  name='FactorLogWidths')
+        return weights, centers, log_widths
+
 class TFAGuide(nn.Module):
     """Variational guide for topographic factor analysis"""
     def __init__(self, num_times, num_factors=NUM_FACTORS, hyper_means=None):
