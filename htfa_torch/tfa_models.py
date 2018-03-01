@@ -25,11 +25,10 @@ VOXEL_NOISE = 0.1
 # locations: V x 3
 # centers: S x K x 3
 # log_widths: S x K
-def radial_basis(locations, centers, log_widths, num_voxels,
-                 num_samples=NUM_SAMPLES):
+def radial_basis(locations, centers, log_widths):
     """The radial basis function used as the shape for the factors"""
-    # V x 3 -> S x 1 x V x 3
-    locations = locations.expand(num_samples, num_voxels, 3).unsqueeze(1)
+    # V x 3 -> 1 x 1 x V x 3
+    locations = locations.unsqueeze(0).unsqueeze(0)
     # S x K x 3 -> S x K x 1 x 3
     centers = centers.unsqueeze(2)
     # S x K x V x 3
@@ -231,8 +230,7 @@ class TFAGenerativeLikelihood(GenerativeLikelihood):
 
     def forward(self, trace, weights, centers, log_widths,
                 observations=collections.defaultdict()):
-        factors = radial_basis(self.voxel_locations, centers, log_widths,
-                               num_voxels=self.voxel_locations.shape[0])
+        factors = radial_basis(self.voxel_locations, centers, log_widths)
         activations = trace.normal(torch.matmul(weights, factors),
                                    self._voxel_noise, value=observations['Y'],
                                    name='Y')
