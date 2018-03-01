@@ -156,6 +156,88 @@ class TFAGuide(nn.Module):
         params = self.hyperprior()
         return self._prior(trace, params, times=times, num_samples=num_samples)
 
+class TFAGenerativeHyperprior(HyperPrior):
+    def __init__(self, brain_center, brain_center_std_dev, num_times,
+                 num_factors=NUM_FACTORS):
+        self._num_times = num_times
+        self._num_factors = num_factors
+
+        params = flatdict.FlatDict(delimiter='_')
+        params['weights'] = {
+            'mu': torch.zeros((self._num_times, self._num_factors)),
+            'sigma': SOURCE_WEIGHT_STD_DEV *\
+                torch.ones((self._num_times, self._num_factors))
+        }
+        params['factor_centers'] = {
+            'mu': brain_center.expand(self._num_factors, 3) *\
+                torch.ones((self._num_factors, 3)),
+            'sigma': brain_center_std_dev.expand(self._num_factors, 3) *\
+                torch.ones((self._num_factors, 3))
+        }
+        params['factor_log_widths'] = {
+            'mu': torch.ones((self._num_factors)),
+            'sigma': SOURCE_LOG_WIDTH_STD_DEV * torch.ones((self._num_factors))
+        }
+        super(self.__class__, self).__init__(params, guide=False)
+
+    def forward(self):
+        state_dict = super(self.__class__, self).forward()
+
+        return {
+            'weights': {
+                'mu': state_dict['weights_mu'],
+                'sigma': state_dict['weights_sigma']
+            },
+            'factor_centers': {
+                'mu': state_dict['factor_centers_mu'],
+                'sigma': state_dict['factor_centers_sigma']
+            },
+            'factor_log_widths': {
+                'mu': state_dict['factor_log_widths_mu'],
+                'sigma': state_dict['factor_log_widths_sigma']
+            }
+        }
+
+class TFAGenerativePrior(GenerativePrior):
+    def forward(self, trace, params, times=None, guide=probtorch.Trace()):
+        if times is None:
+            times = (0, params['weights']['mu'].shape[0])
+
+        for (k, val) in params['weights'].items():
+            params['weights'][k] = val[times[0]:times[1], :]
+
+        weights = trace.normal(params['weights']['mu'],
+                               params['weights']['sigma'],
+                               value=guide['Weights'],
+                               name='Weights')
+
+        factor_centers = trace.normal(params['factor_centers']['mu'],
+                                      params['factor_centers']['sigma'],
+                                      value=guide['FactorCenters'],
+                                      name='FactorCenters')
+        factor_log_widths = trace.normal(params['factor_log_widths']['mu'],
+                                         params['factor_log_widths']['sigma'],
+                                         value=guide['FactorLogWidths'],
+                                         name='FactorLogWidths')
+
+        return weights, factor_centers, factor_log_widths
+
+class TFAGenerativeLikelihood(GenerativeLikelihood):
+    def __init__(self, locations, voxel_noise=VOXEL_NOISE):
+        super(self.__class__, self).__init__()
+
+        self.register_buffer('voxel_locations', Variable(locations))
+        self._voxel_noise = voxel_noise
+
+    def forward(self, trace, weights, centers, log_widths,
+                observations=collections.defaultdict()):
+        factors = radial_basis(self.voxel_locations, centers, log_widths,
+                               num_voxels=self.voxel_locations.shape[0])
+        activations = trace.normal(torch.matmul(weights, factors),
+                                   self._voxel_noise, value=observations['Y'],
+                                   name='Y')
+        return activations
+
 class TFADecoder(nn.Module):
     """Generative model for topographic factor analysis"""
     def __init__(self, brain_center, brain_center_std_dev, num_times,
