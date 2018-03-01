@@ -238,6 +238,31 @@ class TFAGenerativeLikelihood(GenerativeLikelihood):
                                    name='Y')
         return activations
 
+class TFAModel(nn.Module):
+    """Generative model for topographic factor analysis"""
+    def __init__(self, brain_center, brain_center_std_dev, num_times,
+                 locations, num_factors=NUM_FACTORS, voxel_noise=VOXEL_NOISE):
+        super(self.__class__, self).__init__()
+
+        self._num_times = num_times
+        self._num_factors = num_factors
+        self._locations = locations
+
+        self._hyperprior = TFAGenerativeHyperprior(brain_center,
+                                                   brain_center_std_dev,
+                                                   self._num_times,
+                                                   self._num_factors)
+        self._prior = TFAGenerativePrior()
+        self._likelihood = TFAGenerativeLikelihood(self._locations, voxel_noise)
+
+    def forward(self, trace, times=None, guide=probtorch.Trace(),
+                observations=collections.defaultdict()):
+        params = self._hyperprior()
+        weights, centers, log_widths = self._prior(trace, params, times=times,
+                                                   guide=guide)
+        return self._likelihood(trace, weights, centers, log_widths,
+                                observations=observations)
+
 class TFADecoder(nn.Module):
     """Generative model for topographic factor analysis"""
     def __init__(self, brain_center, brain_center_std_dev, num_times,
