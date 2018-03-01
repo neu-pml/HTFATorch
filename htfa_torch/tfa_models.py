@@ -3,6 +3,8 @@
 __author__ = 'Eli Sennesh', 'Zulqarnain Khan'
 __email__ = 'e.sennesh@northeastern.edu', 'khan.zu@husky.neu.edu'
 
+import collections
+
 import numpy as np
 import torch
 import torch.distributions as dists
@@ -34,6 +36,48 @@ def radial_basis(locations, centers, log_widths, num_voxels,
     # S x K  -> S x K x 1
     log_widths = log_widths.unsqueeze(2)
     return torch.exp(-delta2s.sum(3) / torch.exp(log_widths))
+
+class Model(nn.Module):
+    def __init__(self):
+        super(self.__class__, self).__init__()
+
+    def forward(self, *args, trace=probtorch.Trace()):
+        pass
+
+class HyperPrior(Model):
+    def __init__(self, vs, guide=True):
+        super(Model, self).__init__()
+
+        self._guide = guide
+        for (k, v) in vs.items():
+            if self._guide:
+                self.register_parameter(k, Parameter(v))
+            else:
+                self.register_buffer(k, Variable(v))
+
+    def forward(self):
+        return self.state_dict(keep_vars=True)
+
+class GuidePrior(Model):
+    def __init__(self):
+        super(Model, self).__init__()
+
+    def forward(self, trace, *args, num_samples=NUM_SAMPLES):
+        pass
+
+class GenerativePrior(Model):
+    def __init__(self):
+        super(Model, self).__init__()
+
+    def forward(self, trace, *args, guide=probtorch.Trace()):
+        pass
+
+class GenerativeLikelihood(Model):
+    def __init__(self):
+        super(Model, self).__init__()
+
+    def forward(self, trace, *args, observations=collections.defaultdict()):
+        pass
 
 class TFAGuide(nn.Module):
     """Variational guide for topographic factor analysis"""
