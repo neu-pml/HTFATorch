@@ -283,8 +283,8 @@ class TopographicalFactorAnalysis:
 
         return hotspots
 
-    def train(self, num_steps=10, learning_rate=LEARNING_RATE, log_level=logging.WARNING,
-              batch_size=int(np.power(2, np.ceil(np.log2(NUM_SAMPLES)) + 1))):
+    def train(self, num_steps=10, learning_rate=LEARNING_RATE,
+              log_level=logging.WARNING, batch_size=64):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
