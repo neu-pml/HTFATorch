@@ -31,7 +31,7 @@ CUDA = torch.cuda.is_available()
 # placeholder values for hyperparameters
 LEARNING_RATE = 0.1
 NUM_FACTORS = 5
-NUM_SAMPLES = 100
+NUM_SAMPLES = 10
 SOURCE_WEIGHT_STD_DEV = np.sqrt(2.0)
 SOURCE_LOG_WIDTH_STD_DEV = np.sqrt(3.0)
 VOXEL_NOISE = 0.1
@@ -284,7 +284,8 @@ class TopographicalFactorAnalysis:
         return hotspots
 
     def train(self, num_steps=10, learning_rate=LEARNING_RATE,
-              log_level=logging.WARNING, batch_size=64):
+              log_level=logging.WARNING, batch_size=64,
+              num_samples=NUM_SAMPLES):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
@@ -321,7 +322,7 @@ class TopographicalFactorAnalysis:
                 trs = (trs[0], trs[0] + activations.shape[0])
 
                 optimizer.zero_grad()
-                q = self.enc(num_samples=NUM_SAMPLES, trs=trs)
+                q = self.enc(num_samples=num_samples, trs=trs)
                 p = self.dec(activations=activations, locations=locations_var,
                              q=q, trs=trs)
 
