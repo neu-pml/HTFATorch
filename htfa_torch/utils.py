@@ -4,6 +4,7 @@
 __author__ = 'Eli Sennesh'
 __email__ = 'e.sennesh@northeastern.edu'
 
+import flatdict
 import warnings
 
 try:
@@ -13,6 +14,9 @@ try:
 finally:
     import matplotlib.pyplot as plt
 import numpy as np
+from torch.autograd import Variable
+import torch.nn as nn
+from torch.nn import Parameter
 
 import nibabel as nib
 from nilearn.input_data import NiftiMasker
@@ -93,3 +97,17 @@ def cmu2nii(activations, locations, template):
             data[x, y, z, i] = activations[i, j]
 
     return nib.Nifti1Image(data[:, :, :, 0], affine=sform)
+
+def vardict(existing=None):
+    vdict = flatdict.FlatDict(delimiter='__')
+    if existing:
+        for (k, v) in existing.items():
+            vdict[k] = v
+    return vdict
+
+def register_vardict(vdict, module, parameter=True):
+    for (k, v) in vdict.iteritems():
+        if parameter:
+            module.register_parameter(k, Parameter(v))
+        else:
+            module.register_buffer(k, Variable(v))
