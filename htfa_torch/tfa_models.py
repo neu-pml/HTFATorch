@@ -5,16 +5,16 @@ __email__ = 'e.sennesh@northeastern.edu', 'khan.zu@husky.neu.edu'
 
 import collections
 
-import flatdict
 import numpy as np
 import torch
 import torch.distributions as dists
 from torch.autograd import Variable
 import torch.nn as nn
-from torch.nn import Parameter
 import torch.utils.data
 
 import probtorch
+
+from . import utils
 
 NUM_FACTORS = 5
 NUM_SAMPLES = 10
@@ -49,11 +49,7 @@ class HyperPrior(Model):
         super(Model, self).__init__()
 
         self._guide = guide
-        for (k, v) in vs.items():
-            if self._guide:
-                self.register_parameter(k, Parameter(v))
-            else:
-                self.register_buffer(k, Variable(v))
+        utils.register_vardict(vs, self, self._guide)
 
     def forward(self):
         return self.state_dict(keep_vars=True)
@@ -84,7 +80,7 @@ class TFAGuideHyperPrior(HyperPrior):
         self._num_times = num_times
         self._num_factors = num_factors
 
-        params = flatdict.FlatDict(delimiter='_')
+        params = utils.vardict()
         params['weights'] = {
             'mu': means['weights'],
             'sigma': torch.sqrt(torch.rand(
@@ -102,22 +98,7 @@ class TFAGuideHyperPrior(HyperPrior):
         super(self.__class__, self).__init__(params, guide=True)
 
     def forward(self):
-        state_dict = super(self.__class__, self).forward()
-
-        return {
-            'weights': {
-                'mu': state_dict['weights_mu'],
-                'sigma': state_dict['weights_sigma']
-            },
-            'factor_centers': {
-                'mu': state_dict['factor_centers_mu'],
-                'sigma': state_dict['factor_centers_sigma']
-            },
-            'factor_log_widths': {
-                'mu': state_dict['factor_log_widths_mu'],
-                'sigma': state_dict['factor_log_widths_sigma']
-            }
-        }
+        return utils.vardict(super(self.__class__, self).forward())
 
 class TFAGuidePrior(GuidePrior):
     def forward(self, trace, params, times=None, num_samples=NUM_SAMPLES):
@@ -127,9 +108,8 @@ class TFAGuidePrior(GuidePrior):
         for (k, val) in params['weights'].items():
             params['weights'][k] = val[times[0]:times[1], :]
 
-        for (k, vs) in params.items():
-            for (var, val) in vs.items():
-                vs[var] = val.clone().unsqueeze(0)
+        for (var, val) in params.iteritems():
+            params[var] = val.clone().unsqueeze(0)
 
         weights = trace.normal(params['weights']['mu'],
                                params['weights']['sigma'],
@@ -161,7 +141,7 @@ class TFAGenerativeHyperprior(HyperPrior):
         self._num_times = num_times
         self._num_factors = num_factors
 
-        params = flatdict.FlatDict(delimiter='_')
+        params = utils.vardict()
         params['weights'] = {
             'mu': torch.zeros((self._num_times, self._num_factors)),
             'sigma': SOURCE_WEIGHT_STD_DEV *\
@@ -180,22 +160,7 @@ class TFAGenerativeHyperprior(HyperPrior):
         super(self.__class__, self).__init__(params, guide=False)
 
     def forward(self):
-        state_dict = super(self.__class__, self).forward()
-
-        return {
-            'weights': {
-                'mu': state_dict['weights_mu'],
-                'sigma': state_dict['weights_sigma']
-            },
-            'factor_centers': {
-                'mu': state_dict['factor_centers_mu'],
-                'sigma': state_dict['factor_centers_sigma']
-            },
-            'factor_log_widths': {
-                'mu': state_dict['factor_log_widths_mu'],
-                'sigma': state_dict['factor_log_widths_sigma']
-            }
-        }
+        return utils.vardict(super(self.__class__, self).forward())
 
 class TFAGenerativePrior(GenerativePrior):
     def forward(self, trace, params, times=None, guide=probtorch.Trace()):
