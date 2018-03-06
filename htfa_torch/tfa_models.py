@@ -44,15 +44,15 @@ class Model(nn.Module):
     def forward(self, *args, trace=probtorch.Trace()):
         pass
 
-class HyperPrior(Model):
+class HyperParams(Model):
     def __init__(self, vs, guide=True):
         super(Model, self).__init__()
 
         self._guide = guide
         utils.register_vardict(vs, self, self._guide)
 
-    def forward(self):
-        return self.state_dict(keep_vars=True)
+    def state_vardict(self):
+        return utils.vardict(self.state_dict(keep_vars=True))
 
 class GuidePrior(Model):
     def __init__(self):
@@ -75,7 +75,7 @@ class GenerativeLikelihood(Model):
     def forward(self, trace, *args, observations=collections.defaultdict()):
         pass
 
-class TFAGuideHyperPrior(HyperPrior):
+class TFAGuideHyperParams(HyperParams):
     def __init__(self, means, num_times, num_factors=NUM_FACTORS):
         self._num_times = num_times
         self._num_factors = num_factors
@@ -128,14 +128,14 @@ class TFAGuide(nn.Module):
     def __init__(self, means, num_times, num_factors=NUM_FACTORS):
         super(self.__class__, self).__init__()
 
-        self.hyperprior = TFAGuideHyperPrior(means, num_times, num_factors)
+        self.hyperparams = TFAGuideHyperParams(means, num_times, num_factors)
         self._prior = TFAGuidePrior()
 
     def forward(self, trace, times=None, num_samples=NUM_SAMPLES):
-        params = self.hyperprior()
+        params = self.hyperparams.state_vardict()
         return self._prior(trace, params, times=times, num_samples=num_samples)
 
-class TFAGenerativeHyperprior(HyperPrior):
+class TFAGenerativeHyperParams(HyperParams):
     def __init__(self, brain_center, brain_center_std_dev, num_times,
                  num_factors=NUM_FACTORS):
         self._num_times = num_times
@@ -211,16 +211,16 @@ class TFAModel(nn.Module):
         self._num_factors = num_factors
         self._locations = locations
 
-        self._hyperprior = TFAGenerativeHyperprior(brain_center,
-                                                   brain_center_std_dev,
-                                                   self._num_times,
-                                                   self._num_factors)
+        self._hyperparams = TFAGenerativeHyperParams(brain_center,
+                                                     brain_center_std_dev,
+                                                     self._num_times,
+                                                     self._num_factors)
         self._prior = TFAGenerativePrior()
         self._likelihood = TFAGenerativeLikelihood(self._locations, voxel_noise)
 
     def forward(self, trace, times=None, guide=probtorch.Trace(),
                 observations=collections.defaultdict()):
-        params = self._hyperprior()
+        params = self._hyperparams.state_vardict()
         weights, centers, log_widths = self._prior(trace, params, times=times,
                                                    guide=guide)
         return self._likelihood(trace, weights, centers, log_widths,
