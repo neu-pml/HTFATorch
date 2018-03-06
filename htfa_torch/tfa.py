@@ -231,13 +231,13 @@ class TopographicalFactorAnalysis:
 
         if CUDA:
             self.enc.module.hyperprior.cpu()
-        params = dict(self.enc.module.hyperprior.named_parameters())
+        params = utils.vardict(dict(self.enc.module.hyperprior.named_parameters()))
         for k, v in params.items():
             params[k] = v.data
 
-        mean_factor_center = params['factor_centers_mu'].numpy()
-        mean_factor_log_width = params['factor_log_widths_mu'].numpy()
-        mean_weight = params['weights_mu'].numpy()
+        mean_factor_center = params['factor_centers']['mu'].numpy()
+        mean_factor_log_width = params['factor_log_widths']['mu'].numpy()
+        mean_weight = params['weights']['mu'].numpy()
         mean_factors = initial_radial_basis(self.voxel_locations.numpy(),
                                             mean_factor_center,
                                             np.exp(mean_factor_log_width[0]))
