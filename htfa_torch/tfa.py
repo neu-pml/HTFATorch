@@ -231,7 +231,7 @@ class TopographicalFactorAnalysis:
 
         if CUDA:
             self.enc.module.hyperparams.cpu()
-        params = utils.vardict(dict(self.enc.module.hyperparams.named_parameters()))
+        params = self.enc.module.hyperparams.state_vardict()
         for k, v in params.items():
             params[k] = v.data
 

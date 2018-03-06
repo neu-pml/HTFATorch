@@ -51,8 +51,8 @@ class HyperParams(Model):
         self._guide = guide
         utils.register_vardict(vs, self, self._guide)
 
-    def forward(self):
-        return self.state_dict(keep_vars=True)
+    def state_vardict(self):
+        return utils.vardict(self.state_dict(keep_vars=True))
 
 class GuidePrior(Model):
     def __init__(self):
@@ -132,7 +132,7 @@ class TFAGuide(nn.Module):
         self._prior = TFAGuidePrior()
 
     def forward(self, trace, times=None, num_samples=NUM_SAMPLES):
-        params = self.hyperparams()
+        params = self.hyperparams.state_vardict()
         return self._prior(trace, params, times=times, num_samples=num_samples)
 
 class TFAGenerativeHyperParams(HyperParams):
@@ -220,7 +220,7 @@ class TFAModel(nn.Module):
 
     def forward(self, trace, times=None, guide=probtorch.Trace(),
                 observations=collections.defaultdict()):
-        params = self._hyperparams()
+        params = self._hyperparams.state_vardict()
         weights, centers, log_widths = self._prior(trace, params, times=times,
                                                    guide=guide)
         return self._likelihood(trace, weights, centers, log_widths,
