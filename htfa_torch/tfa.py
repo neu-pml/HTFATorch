@@ -230,8 +230,8 @@ class TopographicalFactorAnalysis:
                             level=log_level)
 
         if CUDA:
-            self.enc.module.hyperprior.cpu()
-        params = utils.vardict(dict(self.enc.module.hyperprior.named_parameters()))
+            self.enc.module.hyperparams.cpu()
+        params = self.enc.module.hyperparams.state_vardict()
         for k, v in params.items():
             params[k] = v.data
 
