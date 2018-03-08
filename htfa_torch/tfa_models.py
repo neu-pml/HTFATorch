@@ -136,16 +136,14 @@ class TFAGuide(nn.Module):
         return self._prior(trace, params, times=times, num_samples=num_samples)
 
 class TFAGenerativeHyperParams(HyperParams):
-    def __init__(self, brain_center, brain_center_std_dev, num_times,
+    def __init__(self, brain_center, brain_center_std_dev,
                  num_factors=NUM_FACTORS):
-        self._num_times = num_times
         self._num_factors = num_factors
 
         params = utils.vardict()
         params['weights'] = {
-            'mu': torch.zeros((self._num_times, self._num_factors)),
-            'sigma': SOURCE_WEIGHT_STD_DEV *\
-                torch.ones((self._num_times, self._num_factors))
+            'mu': torch.zeros((self._num_factors)),
+            'sigma': SOURCE_WEIGHT_STD_DEV * torch.ones((self._num_factors))
         }
         params['factor_centers'] = {
             'mu': brain_center.expand(self._num_factors, 3) *\
@@ -163,12 +161,17 @@ class TFAGenerativeHyperParams(HyperParams):
         return utils.vardict(super(self.__class__, self).forward())
 
 class TFAGenerativePrior(GenerativePrior):
+    def __init__(self, num_times):
+        super(self.__class__, self).__init__()
+        self._num_times = num_times
+
     def forward(self, trace, params, times=None, guide=probtorch.Trace()):
         if times is None:
-            times = (0, params['weights']['mu'].shape[0])
+            times = (0, self._num_times)
 
-        for (k, val) in params['weights'].items():
-            params['weights'][k] = val[times[0]:times[1], :]
+        params['weights'] = utils.unsqueeze_and_expand_vardict(
+            params['weights'], 0, times[1] - times[0], True
+        )
 
         weights = trace.normal(params['weights']['mu'],
                                params['weights']['sigma'],
@@ -187,14 +190,17 @@ class TFAGenerativePrior(GenerativePrior):
         return weights, factor_centers, factor_log_widths
 
 class TFAGenerativeLikelihood(GenerativeLikelihood):
-    def __init__(self, locations, voxel_noise=VOXEL_NOISE):
+    def __init__(self, locations, num_times, voxel_noise=VOXEL_NOISE):
         super(self.__class__, self).__init__()
 
         self.register_buffer('voxel_locations', Variable(locations))
+        self._num_times = num_times
         self._voxel_noise = voxel_noise
 
-    def forward(self, trace, weights, centers, log_widths,
+    def forward(self, trace, weights, centers, log_widths, times=None,
                 observations=collections.defaultdict()):
+        if times is None:
+            times = (0, self._num_times)
         factors = radial_basis(self.voxel_locations, centers, log_widths)
         activations = trace.normal(torch.matmul(weights, factors),
                                    self._voxel_noise, value=observations['Y'],
@@ -213,10 +219,11 @@ class TFAModel(nn.Module):
 
         self._hyperparams = TFAGenerativeHyperParams(brain_center,
                                                      brain_center_std_dev,
-                                                     self._num_times,
                                                      self._num_factors)
-        self._prior = TFAGenerativePrior()
-        self._likelihood = TFAGenerativeLikelihood(self._locations, voxel_noise)
+        self._prior = TFAGenerativePrior(self._num_times)
+        self._likelihood = TFAGenerativeLikelihood(self._locations,
+                                                   self._num_times,
+                                                   voxel_noise)
 
     def forward(self, trace, times=None, guide=probtorch.Trace(),
                 observations=collections.defaultdict()):
@@ -224,4 +231,4 @@ class TFAModel(nn.Module):
         weights, centers, log_widths = self._prior(trace, params, times=times,
                                                    guide=guide)
         return self._likelihood(trace, weights, centers, log_widths,
-                                observations=observations)
+                                times=times, observations=observations)
