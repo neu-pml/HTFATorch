@@ -46,13 +46,17 @@ def initial_radial_basis(location, center, widths):
     widths = np.expand_dims(widths, 1)
     return np.exp(-delta2s.sum(2) / (widths))
 
-def free_energy(q, p):
+def free_energy(q, p, num_samples=tfa_models.NUM_SAMPLES):
     """Calculate the free-energy (negative of the evidence lower bound)"""
-    return -probtorch.objectives.montecarlo.elbo(q, p)
+    if num_samples and num_samples > 0:
+        sample_dim = 0
+    return -probtorch.objectives.montecarlo.elbo(q, p, sample_dim=sample_dim)
 
-def log_likelihood(q, p):
+def log_likelihood(q, p, num_samples=tfa_models.NUM_SAMPLES):
     """The expected log-likelihood of observed data under the proposal distribution"""
-    return probtorch.objectives.montecarlo.log_like(q, p, sample_dim=0)
+    if num_samples and num_samples > 0:
+        sample_dim = 0
+    return probtorch.objectives.montecarlo.log_like(q, p, sample_dim=sample_dim)
 
 class TopographicalFactorAnalysis:
     """Overall container for a run of TFA"""
