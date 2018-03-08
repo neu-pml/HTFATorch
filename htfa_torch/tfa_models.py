@@ -216,9 +216,11 @@ class TFAGenerativeLikelihood(GenerativeLikelihood):
         self.subject = subject
 
     def forward(self, trace, weights, centers, log_widths, times=None,
-                observations=collections.defaultdict()):
+                observations=collections.defaultdict(), voxel_noise=None):
         if times is None:
             times = (0, self._num_times)
+        if voxel_noise is None:
+            voxel_noise = self._voxel_noise
         factors = radial_basis(self.voxel_locations, centers, log_widths)
         activations = trace.normal(torch.matmul(weights, factors),
                                    self._voxel_noise, value=observations['Y'],
