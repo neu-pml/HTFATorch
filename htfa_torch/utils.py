@@ -96,7 +96,7 @@ def cmu2nii(activations, locations, template):
             x, y, z = coords[j, 0], coords[j, 1], coords[j, 2]
             data[x, y, z, i] = activations[i, j]
 
-    return nib.Nifti1Image(data[:, :, :, 0], affine=sform)
+    return nib.Nifti1Image(data, affine=sform)
 
 def vardict(existing=None):
     vdict = flatdict.FlatDict(delimiter='__')

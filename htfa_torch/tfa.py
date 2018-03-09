@@ -10,6 +10,7 @@ import pickle
 import time
 
 import hypertools as hyp
+import nilearn.image
 import nilearn.plotting as niplot
 import numpy as np
 import scipy.io as sio
@@ -300,11 +301,13 @@ class TopographicalFactorAnalysis:
 
         return plot
 
-    def plot_original_brain(self, filename=None, show=True, plot_abs=False):
+    def plot_original_brain(self, filename=None, show=True, plot_abs=False,
+                            time=0):
         original_image = utils.cmu2nii(self.voxel_activations.numpy(),
                                        self.voxel_locations.numpy(),
                                        self._template)
-        plot = niplot.plot_glass_brain(original_image, plot_abs=plot_abs)
+        image = nilearn.image.index_img(original_image, time)
+        plot = niplot.plot_glass_brain(image, plot_abs=plot_abs)
 
         if filename is not None:
             plot.savefig(filename)
@@ -314,7 +317,7 @@ class TopographicalFactorAnalysis:
         return plot
 
     def plot_reconstruction(self, filename=None, show=True, plot_abs=False,
-                            log_level=logging.WARNING):
+                            log_level=logging.WARNING, time=0):
         results = self.results()
         weights = results['weights']
         factors = results['factors']
@@ -323,7 +326,8 @@ class TopographicalFactorAnalysis:
         image = utils.cmu2nii(reconstruction,
                               self.voxel_locations.numpy(),
                               self._template)
-        plot = niplot.plot_glass_brain(image, plot_abs=plot_abs)
+        image_slice = nilearn.image.index_img(image, time)
+        plot = niplot.plot_glass_brain(image_slice, plot_abs=plot_abs)
 
         if filename is not None:
             plot.savefig(filename)
