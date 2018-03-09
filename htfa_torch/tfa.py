@@ -61,7 +61,7 @@ class TopographicalFactorAnalysis:
 
         name, ext = os.path.splitext(data_file)
         if ext == '.nii':
-            dataset = utils.nii2cmu(data_file)
+            dataset, self._image = utils.nii2cmu(data_file)
             self._template = data_file
         else:
             dataset = sio.loadmat(data_file)
@@ -303,10 +303,7 @@ class TopographicalFactorAnalysis:
 
     def plot_original_brain(self, filename=None, show=True, plot_abs=False,
                             time=0):
-        original_image = utils.cmu2nii(self.voxel_activations.numpy(),
-                                       self.voxel_locations.numpy(),
-                                       self._template)
-        image = nilearn.image.index_img(original_image, time)
+        image = nilearn.image.index_img(self._image, time)
         plot = niplot.plot_glass_brain(image, plot_abs=plot_abs)
 
         if filename is not None:

@@ -79,7 +79,7 @@ def nii2cmu(nifti_file, mask_file=None):
     voxel_coordinates = full_fact(image.shape[0:3])[vmask, ::-1] - 1
     voxel_locations = np.array(np.dot(voxel_coordinates, sform[0:3, 0:3])) + sform[:3, 3]
 
-    return {'data': voxel_activations, 'R': voxel_locations}
+    return {'data': voxel_activations, 'R': voxel_locations}, image
 
 def cmu2nii(activations, locations, template):
     image = nib.load(template)
