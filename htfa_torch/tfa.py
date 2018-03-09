@@ -225,6 +225,10 @@ class TopographicalFactorAnalysis:
                                        factor_centers,
                                        np.exp(factor_log_widths))
 
+        logging.info('Reconstruction Error (Frobenius Norm): %.8e',
+                     np.linalg.norm(weights @ factors -\
+                                    self.voxel_activations.numpy()))
+
         result = {
             'weights': weights.numpy(),
             'factors': factors,
