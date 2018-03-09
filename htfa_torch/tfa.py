@@ -208,19 +208,27 @@ class TopographicalFactorAnalysis:
         q = probtorch.Trace()
         self.enc(q, num_samples=tfa_models.NUM_SAMPLES)
 
-        weights = q['Weights'].value.data
-        factor_centers = q['FactorCenters'].value.data
-        factor_log_widths = q['FactorLogWidths'].value.data
+        weights = q['Weights'].value.data.mean(0)
+        factor_centers = q['FactorCenters'].value.data.mean(0)
+        factor_log_widths = q['FactorLogWidths'].value.data.mean(0)
 
         if CUDA:
             weights = weights.cpu()
             factor_centers = factor_centers.cpu()
             factor_log_widths = factor_log_widths.cpu()
 
+        factor_centers = factor_centers.numpy()
+        factor_log_widths = factor_log_widths.numpy()
+
+        factors = initial_radial_basis(self.voxel_locations.numpy(),
+                                       factor_centers,
+                                       np.exp(factor_log_widths))
+
         result = {
             'weights': weights.numpy(),
-            'factor_centers': factor_centers.numpy(),
-            'factor_log_widths': factor_log_widths.numpy(),
+            'factors': factors,
+            'factor_centers': factor_centers,
+            'factor_log_widths': factor_log_widths,
         }
         return result
 
