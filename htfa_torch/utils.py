@@ -111,3 +111,18 @@ def register_vardict(vdict, module, parameter=True):
             module.register_parameter(k, Parameter(v))
         else:
             module.register_buffer(k, Variable(v))
+
+def unsqueeze_and_expand(tensor, dim, size, clone=False):
+    if clone:
+        tensor = tensor.clone()
+
+    shape = [size] + list(tensor.shape)
+    return tensor.unsqueeze(dim).expand(*shape)
+
+def unsqueeze_and_expand_vardict(vdict, dim, size, clone=False):
+    result = vardict(vdict)
+
+    for (k, v) in result.iteritems():
+        result[k] = unsqueeze_and_expand(v, dim, size, clone)
+
+    return result
