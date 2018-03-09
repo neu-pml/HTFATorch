@@ -315,9 +315,11 @@ class TopographicalFactorAnalysis:
 
     def plot_reconstruction(self, filename=None, show=True, plot_abs=False,
                             log_level=logging.WARNING):
-        means = self.mean_parameters(log_level=log_level)
+        results = self.results()
+        weights = results['weights']
+        factors = results['factors']
 
-        reconstruction = means['mean_weight'] @ means['mean_factors']
+        reconstruction = weights @ factors
         image = utils.cmu2nii(reconstruction,
                               self.voxel_locations.numpy(),
                               self._template)
