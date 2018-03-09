@@ -10,6 +10,7 @@ import pickle
 import time
 
 import hypertools as hyp
+import nilearn.image
 import nilearn.plotting as niplot
 import numpy as np
 import scipy.io as sio
@@ -45,13 +46,17 @@ def initial_radial_basis(location, center, widths):
     widths = np.expand_dims(widths, 1)
     return np.exp(-delta2s.sum(2) / (widths))
 
-def free_energy(q, p):
+def free_energy(q, p, num_samples=tfa_models.NUM_SAMPLES):
     """Calculate the free-energy (negative of the evidence lower bound)"""
-    return -probtorch.objectives.montecarlo.elbo(q, p)
+    if num_samples and num_samples > 0:
+        sample_dim = 0
+    return -probtorch.objectives.montecarlo.elbo(q, p, sample_dim=sample_dim)
 
-def log_likelihood(q, p):
+def log_likelihood(q, p, num_samples=tfa_models.NUM_SAMPLES):
     """The expected log-likelihood of observed data under the proposal distribution"""
-    return probtorch.objectives.montecarlo.log_like(q, p, sample_dim=0)
+    if num_samples and num_samples > 0:
+        sample_dim = 0
+    return probtorch.objectives.montecarlo.log_like(q, p, sample_dim=sample_dim)
 
 class TopographicalFactorAnalysis:
     """Overall container for a run of TFA"""
@@ -60,7 +65,7 @@ class TopographicalFactorAnalysis:
 
         name, ext = os.path.splitext(data_file)
         if ext == '.nii':
-            dataset = utils.nii2cmu(data_file)
+            dataset, self._image = utils.nii2cmu(data_file)
             self._template = data_file
         else:
             dataset = sio.loadmat(data_file)
@@ -208,19 +213,31 @@ class TopographicalFactorAnalysis:
         q = probtorch.Trace()
         self.enc(q, num_samples=tfa_models.NUM_SAMPLES)
 
-        weights = q['Weights'].value.data
-        factor_centers = q['FactorCenters'].value.data
-        factor_log_widths = q['FactorLogWidths'].value.data
+        weights = q['Weights'].value.data.mean(0)
+        factor_centers = q['FactorCenters'].value.data.mean(0)
+        factor_log_widths = q['FactorLogWidths'].value.data.mean(0)
 
         if CUDA:
             weights = weights.cpu()
             factor_centers = factor_centers.cpu()
             factor_log_widths = factor_log_widths.cpu()
 
+        factor_centers = factor_centers.numpy()
+        factor_log_widths = factor_log_widths.numpy()
+
+        factors = initial_radial_basis(self.voxel_locations.numpy(),
+                                       factor_centers,
+                                       np.exp(factor_log_widths))
+
+        logging.info('Reconstruction Error (Frobenius Norm): %.8e',
+                     np.linalg.norm(weights @ factors -\
+                                    self.voxel_activations.numpy()))
+
         result = {
             'weights': weights.numpy(),
-            'factor_centers': factor_centers.numpy(),
-            'factor_log_widths': factor_log_widths.numpy(),
+            'factors': factors,
+            'factor_centers': factor_centers,
+            'factor_log_widths': factor_log_widths,
         }
         return result
 
@@ -275,13 +292,12 @@ class TopographicalFactorAnalysis:
     def plot_voxels(self):
         hyp.plot(self.voxel_locations.numpy(), 'k.')
 
-    def plot_factor_centers(self, filename=None, show=True,
-                            log_level=logging.WARNING):
-        means = self.mean_parameters(log_level=log_level)
+    def plot_factor_centers(self, filename=None, show=True):
+        results = self.results()
 
         plot = niplot.plot_connectome(
             np.eye(self.num_factors),
-            means['mean_factor_center'],
+            results['factor_centers'],
             node_color='k'
         )
 
@@ -292,11 +308,10 @@ class TopographicalFactorAnalysis:
 
         return plot
 
-    def plot_original_brain(self, filename=None, show=True, plot_abs=False):
-        original_image = utils.cmu2nii(self.voxel_activations.numpy(),
-                                       self.voxel_locations.numpy(),
-                                       self._template)
-        plot = niplot.plot_glass_brain(original_image, plot_abs=plot_abs)
+    def plot_original_brain(self, filename=None, show=True, plot_abs=False,
+                            time=0):
+        image = nilearn.image.index_img(self._image, time)
+        plot = niplot.plot_glass_brain(image, plot_abs=plot_abs)
 
         if filename is not None:
             plot.savefig(filename)
@@ -306,14 +321,17 @@ class TopographicalFactorAnalysis:
         return plot
 
     def plot_reconstruction(self, filename=None, show=True, plot_abs=False,
-                            log_level=logging.WARNING):
-        means = self.mean_parameters(log_level=log_level)
+                            log_level=logging.WARNING, time=0):
+        results = self.results()
+        weights = results['weights']
+        factors = results['factors']
 
-        reconstruction = means['mean_weight'] @ means['mean_factors']
+        reconstruction = weights @ factors
         image = utils.cmu2nii(reconstruction,
                               self.voxel_locations.numpy(),
                               self._template)
-        plot = niplot.plot_glass_brain(image, plot_abs=plot_abs)
+        image_slice = nilearn.image.index_img(image, time)
+        plot = niplot.plot_glass_brain(image_slice, plot_abs=plot_abs)
 
         if filename is not None:
             plot.savefig(filename)
