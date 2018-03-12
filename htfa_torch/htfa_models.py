@@ -3,6 +3,7 @@
 __author__ = 'Eli Sennesh', 'Zulqarnain Khan'
 __email__ = 'e.sennesh@northeastern.edu', 'khan.zu@husky.neu.edu'
 
+import collections
 import numpy as np
 import torch
 import probtorch
@@ -141,3 +142,45 @@ class HTFAGenerativeSubjectPrior(tfa_models.GenerativePrior):
             factor_log_widths += [flw]
 
         return weights, factor_centers, factor_log_widths, voxel_noise
+
+class HTFAModel(nn.Module):
+    """Generative model for hierarchical topographic factor analysis"""
+    def __init__(self, locations, num_subjects, num_times,
+                 num_factors=tfa_models.NUM_FACTORS):
+        super(self.__class__, self).__init__()
+
+        self._locations = locations
+        self._num_factors = num_factors
+        self._num_subjects = num_subjects
+        self._num_times = num_times
+
+        s = np.random.choice(self._num_subjects, 1)[0]
+        center, center_sigma = utils.brain_centroid(self._locations[s])
+
+        self._hyperparams = HTFAGenerativeHyperParams(center, center_sigma,
+                                                      self._num_subjects,
+                                                      self._num_factors)
+        self._template_prior = HTFAGenerativeTemplatePrior()
+        self._subject_prior = HTFAGenerativeSubjectPrior(
+            self._num_subjects, self._num_times
+        )
+        self._likelihoods = [tfa_models.TFAGenerativeLikelihood(
+            self._locations[s], self._num_times[s], tfa_models.VOXEL_NOISE,
+            subject=s
+        ) for s in range(self._num_subjects)]
+        for s, subject_likelihood in enumerate(self._likelihoods):
+            self.add_module('_likelihood' + str(s), subject_likelihood)
+
+    def forward(self, trace, times=None, guide=probtorch.Trace(),
+                observations=[]):
+        params = self._hyperparams.state_vardict()
+
+        template = self._template_prior(trace, params, guide)
+        weights, centers, log_widths, voxel_noise = self._subject_prior(
+            trace, params, template, times=times, guide=guide
+        )
+
+        return [self._likelihoods[s](trace, weights[s], centers[s], log_widths[s],
+                                     times=times, observations=observations[s],
+                                     voxel_noise=voxel_noise)
+                for s in range(self._num_subjects)]
