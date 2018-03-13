@@ -76,10 +76,8 @@ class TopographicalFactorAnalysis:
         self.num_voxels = self.voxel_activations.shape[1]
 
         # Estimate further hyperparameters from the dataset
-        self.brain_center = torch.mean(self.voxel_locations, 0).unsqueeze(0)
-        self.brain_center_std_dev = torch.sqrt(
-            10 * torch.var(self.voxel_locations, 0).unsqueeze(0)
-        )
+        self.brain_center, self.brain_center_std_dev =\
+            utils.brain_centroid(self.voxel_locations)
 
         mean_centers_init, mean_widths_init, mean_weights_init = \
             self.get_initialization(self.voxel_activations.t().numpy(),
