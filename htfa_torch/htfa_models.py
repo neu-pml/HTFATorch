@@ -44,6 +44,58 @@ TEMPLATE_SHAPE['factor_log_widths'] = {
     }
 }
 
+class HTFAGuideHyperParams(tfa_models.HyperParams):
+    def __init__(self, hyper_means, num_times, num_subjects,
+                 num_factors=tfa_models.NUM_FACTORS):
+        self._num_times = num_times
+        self._num_subjects = num_subjects
+        self._num_factors = num_factors
+
+        params = utils.vardict()
+        params['template'] = utils.vardict(TEMPLATE_SHAPE.copy())
+        params['template']['weights'] = utils.populate_vardict(
+            params['template']['weights'],
+            utils.gaussian_populator,
+            self._num_factors,
+        )
+        params['template']['weights']['mu']['mu']['mu'] =\
+            hyper_means['weights'].mean(0)
+        params['template']['factor_centers'] = utils.populate_vardict(
+            params['template']['factor_centers'],
+            utils.gaussian_populator,
+            self._num_factors, 3,
+        )
+        params['template']['factor_centers']['mu']['mu']['mu'] =\
+            hyper_means['factor_centers']
+        params['template']['factor_log_widths'] = utils.populate_vardict(
+            params['template']['factor_log_widths'],
+            utils.gaussian_populator,
+            self._num_factors,
+        )
+        params['template']['factor_log_widths']['mu']['mu']['mu'] *=\
+            hyper_means['factor_log_widths']
+
+        params['subject'] = {
+            'voxel_noise': {
+                'mu': torch.zeros(self._num_subjects),
+                'sigma': torch.ones(self._num_subjects),
+            },
+            'weights': {
+                'mu': torch.zeros(self._num_subjects, self._num_times, self._num_factors),
+                'sigma': torch.ones(self._num_subjects, self._num_times, self._num_factors),
+            },
+            'factor_centers': {
+                'mu': torch.zeros(self._num_subjects, self._num_factors, 3),
+                'sigma': torch.ones(self._num_subjects, self._num_factors, 3),
+            },
+            'factor_log_widths': {
+                'mu': torch.zeros(self._num_subjects, self._num_factors),
+                'sigma': torch.ones(self._num_subjects, self._num_factors),
+            }
+        }
+
+        super(self.__class__, self).__init__(params, guide=True)
+
 class HTFAGenerativeHyperParams(tfa_models.HyperParams):
     def __init__(self, brain_center, brain_center_std_dev, num_subjects,
                  num_factors=tfa_models.NUM_FACTORS):
