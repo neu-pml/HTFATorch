@@ -111,6 +111,39 @@ class HTFAGuideTemplatePrior(tfa_models.GuidePrior):
 
         return template
 
+class HTFAGuideSubjectPrior(tfa_models.GuidePrior):
+    def __init__(self, num_subjects):
+        super(self.__class__, self).__init__()
+        self._num_subjects = num_subjects
+        self._tfa_priors = [tfa_models.TFAGuidePrior(subject=s)\
+                            for s in range(self._num_subjects)]
+
+    def forward(self, trace, params, times=None,
+                num_particles=tfa_models.NUM_PARTICLES):
+        subject_params = params['subject']
+        if num_particles and num_particles > 0:
+            subject_params = utils.unsqueeze_and_expand_vardict(
+                subject_params, 0, num_particles, True
+            )
+        voxel_noise = trace.normal(subject_params['voxel_noise']['mu'],
+                                   subject_params['voxel_noise']['sigma'],
+                                   name='voxel_noise')
+
+        weights = []
+        factor_centers = []
+        factor_log_widths = []
+        for s in range(self._num_subjects):
+            sparams = utils.vardict(params['subject'])
+            for k, v in sparams.iteritems():
+                sparams[k] = v[s]
+            w, fc, flw = self._tfa_priors[s](trace, sparams, times=times,
+                                             num_particles=num_particles)
+            weights += [w]
+            factor_centers += [fc]
+            factor_log_widths += [flw]
+
+        return weights, factor_centers, factor_log_widths, voxel_noise
+
 class HTFAGenerativeHyperParams(tfa_models.HyperParams):
     def __init__(self, brain_center, brain_center_std_dev, num_subjects,
                  num_factors=tfa_models.NUM_FACTORS):
