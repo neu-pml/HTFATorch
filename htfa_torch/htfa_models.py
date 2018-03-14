@@ -96,6 +96,21 @@ class HTFAGuideHyperParams(tfa_models.HyperParams):
 
         super(self.__class__, self).__init__(params, guide=True)
 
+class HTFAGuideTemplatePrior(tfa_models.GuidePrior):
+    def forward(self, trace, params, num_particles=tfa_models.NUM_PARTICLES):
+        template_params = params['template']
+        if num_particles and num_particles > 0:
+            template_params = utils.unsqueeze_and_expand_vardict(
+                template_params, 0, num_particles, True
+            )
+        template = TEMPLATE_SHAPE.copy()
+        for (k, _) in template.iteritems():
+            template[k] = trace.normal(template_params[k]['mu'],
+                                       template_params[k]['sigma'],
+                                       name='template_' + k)
+
+        return template
+
 class HTFAGenerativeHyperParams(tfa_models.HyperParams):
     def __init__(self, brain_center, brain_center_std_dev, num_subjects,
                  num_factors=tfa_models.NUM_FACTORS):
