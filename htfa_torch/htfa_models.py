@@ -144,6 +144,35 @@ class HTFAGuideSubjectPrior(tfa_models.GuidePrior):
 
         return weights, factor_centers, factor_log_widths, voxel_noise
 
+class HTFAGuide(nn.Module):
+    """Variational guide for hierarchical topographic factor analysis"""
+    def __init__(self, activations, locations,
+                 num_factors=tfa_models.NUM_FACTORS):
+        super(self.__class__, self).__init__()
+        self._num_subjects = len(activations)
+        self._num_times = activations[0].shape[0]
+
+        s = np.random.choice(self._num_subjects, 1)[0]
+        centers, widths, weights = utils.initial_hypermeans(activations[s].numpy().T,
+                                                            locations[s].numpy(),
+                                                            num_factors)
+        hyper_means = {
+            'weights': torch.Tensor(weights),
+            'factor_centers': torch.Tensor(centers),
+            'factor_log_widths': widths,
+        }
+        self.hyperparams = HTFAGuideHyperParams(hyper_means, self._num_times,
+                                                self._num_subjects, num_factors)
+        self._template_prior = HTFAGuideTemplatePrior()
+        self._subject_prior = HTFAGuideSubjectPrior(self._num_subjects)
+
+    def forward(self, trace, times=None,
+                num_particles=tfa_models.NUM_PARTICLES):
+        params = self.hyperparams.state_vardict()
+        self._template_prior(trace, params, num_particles=num_particles)
+        return self._subject_prior(trace, params, times=times,
+                                   num_particles=num_particles)
+
 class HTFAGenerativeHyperParams(tfa_models.HyperParams):
     def __init__(self, brain_center, brain_center_std_dev, num_subjects,
                  num_factors=tfa_models.NUM_FACTORS):
