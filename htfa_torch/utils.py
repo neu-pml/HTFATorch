@@ -5,6 +5,7 @@ __author__ = 'Eli Sennesh'
 __email__ = 'e.sennesh@northeastern.edu'
 
 import flatdict
+import os
 import warnings
 
 try:
@@ -14,6 +15,8 @@ try:
 finally:
     import matplotlib.pyplot as plt
 import numpy as np
+import scipy.io as sio
+import torch
 from torch.autograd import Variable
 import torch.nn as nn
 from torch.nn import Parameter
@@ -97,6 +100,22 @@ def cmu2nii(activations, locations, template):
             data[x, y, z, i] = activations[i, j]
 
     return nib.Nifti1Image(data, affine=sform)
+
+def load_dataset(data_file):
+    name, ext = os.path.splitext(data_file)
+    if ext == '.nii':
+        dataset, image = nii2cmu(data_file)
+        template = data_file
+    else:
+        dataset = sio.loadmat(data_file)
+    _, name = os.path.split(name)
+    # pull out the voxel activations and locations
+    activations = torch.Tensor(dataset['data']).t()
+    locations = torch.Tensor(dataset['R'])
+
+    del dataset
+
+    return activations, image, locations, name, template
 
 def vardict(existing=None):
     vdict = flatdict.FlatDict(delimiter='__')
