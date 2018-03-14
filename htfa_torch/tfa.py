@@ -5,7 +5,6 @@ __email__ = 'e.sennesh@northeastern.edu', 'khan.zu@husky.neu.edu'
 
 import logging
 import math
-import os
 import pickle
 import time
 
@@ -63,21 +62,8 @@ class TopographicalFactorAnalysis:
     def __init__(self, data_file, num_factors=tfa_models.NUM_FACTORS):
         self.num_factors = num_factors
 
-        name, ext = os.path.splitext(data_file)
-        if ext == '.nii':
-            dataset, self._image = utils.nii2cmu(data_file)
-            self._template = data_file
-        else:
-            dataset = sio.loadmat(data_file)
-        _, self._name = os.path.split(name)
-        # pull out the voxel activations and locations
-        data = dataset['data']
-        R = dataset['R']
-        self.voxel_activations = torch.Tensor(data).transpose(0, 1)
-        self.voxel_locations = torch.Tensor(R)
-
-        # This could be a huge file.  Close it
-        del dataset
+        self.voxel_activations, self._image, self.voxel_locations, self._name,\
+            self._template = utils.load_dataset(data_file)
 
         # Pull out relevant dimensions: the number of times-of-recording, and
         # the number of voxels in each timewise "slice"
@@ -91,7 +77,8 @@ class TopographicalFactorAnalysis:
         )
 
         mean_centers_init, mean_widths_init, mean_weights_init = \
-            self.get_initialization(data, R)
+            self.get_initialization(self.voxel_activations.t().numpy(),
+                                    self.voxel_locations.numpy())
         hyper_means = {
             'factor_centers': torch.Tensor(mean_centers_init),
             'factor_log_widths': mean_widths_init,
