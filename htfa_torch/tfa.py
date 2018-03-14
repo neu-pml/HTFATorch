@@ -13,6 +13,7 @@ import nilearn.image
 import nilearn.plotting as niplot
 import numpy as np
 import scipy.io as sio
+import scipy.spatial.distance as sd
 from sklearn.cluster import KMeans
 import torch
 import torch.distributions as dists
@@ -319,6 +320,20 @@ class TopographicalFactorAnalysis:
                               self._template)
         image_slice = nilearn.image.index_img(image, time)
         plot = niplot.plot_glass_brain(image_slice, plot_abs=plot_abs)
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
+
+    def plot_connectome(self, filename=None, show=True):
+        results = self.results()
+        connectome = 1 - sd.squareform(sd.pdist(results['weights'].T),
+                                       'correlation')
+        plot = niplot.plot_connectome(connectome, results['factor_centers'],
+                                      node_color='k', edge_threshold='75%')
 
         if filename is not None:
             plot.savefig(filename)
