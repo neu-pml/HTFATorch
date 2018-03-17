@@ -16,6 +16,7 @@ finally:
     import matplotlib.pyplot as plt
 import numpy as np
 import scipy.io as sio
+import scipy.stats as stats
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
@@ -111,7 +112,8 @@ def load_dataset(data_file):
         image = template = None
     _, name = os.path.split(name)
     # pull out the voxel activations and locations
-    activations = torch.Tensor(dataset['data']).t()
+    zscored_data = stats.zscore(dataset['data'], axis=1, ddof=1)
+    activations = torch.Tensor(zscored_data).t()
     locations = torch.Tensor(dataset['R'])
 
     del dataset
