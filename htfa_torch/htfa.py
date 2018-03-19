@@ -23,6 +23,7 @@ import torch.utils.data
 import probtorch
 
 from . import htfa_models
+from . import tfa
 from . import tfa_models
 from . import utils
 
@@ -52,13 +53,59 @@ class HierarchicalTopographicFactorAnalysis:
             self.enc = torch.nn.DataParallel(self.enc)
             self.dec = torch.nn.DataParallel(self.dec)
 
-    def train(self, num_steps=10, learning_rate=LEARNING_RATE,
-              log_level=logging.WARNING, batch_size=64,
-              num_samples=tfa_models.NUM_SAMPLES):
+    def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
+              log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
                             level=log_level)
+
+        activations = [{'Y': Variable(self.voxel_activations[s])}
+                       for s in range(self.num_subjects)]
+        optimizer = torch.optim.Adam(list(self.enc.parameters()),
+                                     lr=learning_rate)
+        if tfa.CUDA:
+            self.enc.cuda()
+            self.dec.cuda()
+            for acts in activations:
+                acts['Y'] = acts['Y'].cuda()
+
+        self.enc.train()
+        self.dec.train()
+
+        free_energies = list(range(num_steps))
+        lls = list(range(num_steps))
+
+        for epoch in range(num_steps):
+            start = time.time()
+
+            optimizer.zero_grad()
+            q = probtorch.Trace()
+            self.enc(q, num_particles=num_particles)
+            p = probtorch.Trace()
+            self.dec(p, guide=q, observations=activations)
+
+            free_energies[epoch] = tfa.free_energy(q, p, num_particles=num_particles)
+            lls[epoch] = tfa.log_likelihood(q, p, num_particles=num_particles)
+
+            free_energies[epoch].backward()
+            optimizer.step()
+
+            if tfa.CUDA:
+                free_energies[epoch] = free_energies[epoch].cpu().data.numpy().sum(0)
+                lls[epoch] = lls[epoch].cpu().data.numpy().sum(0)
+
+            end = time.time()
+            msg = tfa.EPOCH_MSG % (epoch + 1, (end - start) * 1000, free_energies[epoch])
+            logging.info(msg)
+
+        if tfa.CUDA:
+            for acts in activations:
+                acts['Y'].cpu()
+            self.dec.cpu()
+            self.enc.cpu()
+
+        return np.vstack([free_energies, lls])
 
     def results(self):
         """Return the inferred parameters"""
