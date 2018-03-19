@@ -119,6 +119,7 @@ dependencies:
     - deepdish==0.3.6
     - flatdict==2.0.1
     - future==0.16.0
+    - htfatorch==0.0.0
     - hypertools==0.4.2
     - nibabel==2.2.1
     - nilearn==0.4.0
