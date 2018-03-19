@@ -108,6 +108,7 @@ def load_dataset(data_file):
         template = data_file
     else:
         dataset = sio.loadmat(data_file)
+        image = template = None
     _, name = os.path.split(name)
     # pull out the voxel activations and locations
     activations = torch.Tensor(dataset['data']).t()
