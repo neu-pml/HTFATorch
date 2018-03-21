@@ -4,7 +4,6 @@ __author__ = 'Eli Sennesh', 'Zulqarnain Khan'
 __email__ = 'e.sennesh@northeastern.edu', 'khan.zu@husky.neu.edu'
 
 import logging
-import math
 import pickle
 import time
 
@@ -14,7 +13,6 @@ import nilearn.plotting as niplot
 import numpy as np
 import scipy.io as sio
 import scipy.spatial.distance as sd
-from sklearn.cluster import KMeans
 import torch
 import torch.distributions as dists
 from torch.autograd import Variable
@@ -34,17 +32,6 @@ CUDA = torch.cuda.is_available()
 LEARNING_RATE = 0.1
 
 EPOCH_MSG = '[Epoch %d] (%dms) Posterior free-energy %.8e'
-
-def initial_radial_basis(location, center, widths):
-    """The radial basis function used as the shape for the factors"""
-    # V x 3 -> 1 x V x 3
-    location = np.expand_dims(location, 0)
-    # K x 3 -> K x 1 x 3
-    center = np.expand_dims(center, 1)
-    #
-    delta2s = (location - center) ** 2
-    widths = np.expand_dims(widths, 1)
-    return np.exp(-delta2s.sum(2) / (widths))
 
 def free_energy(q, p, num_particles=tfa_models.NUM_PARTICLES):
     """Calculate the free-energy (negative of the evidence lower bound)"""
@@ -76,14 +63,13 @@ class TopographicalFactorAnalysis:
         self.num_voxels = self.voxel_activations.shape[1]
 
         # Estimate further hyperparameters from the dataset
-        self.brain_center = torch.mean(self.voxel_locations, 0).unsqueeze(0)
-        self.brain_center_std_dev = torch.sqrt(
-            10 * torch.var(self.voxel_locations, 0).unsqueeze(0)
-        )
+        self.brain_center, self.brain_center_std_dev =\
+            utils.brain_centroid(self.voxel_locations)
 
         mean_centers_init, mean_widths_init, mean_weights_init = \
-            self.get_initialization(self.voxel_activations.t().numpy(),
-                                    self.voxel_locations.numpy())
+            utils.initial_hypermeans(self.voxel_activations.t().numpy(),
+                                     self.voxel_locations.numpy(),
+                                     self.num_factors)
         hyper_means = {
             'factor_centers': torch.Tensor(mean_centers_init),
             'factor_log_widths': mean_widths_init,
@@ -102,43 +88,6 @@ class TopographicalFactorAnalysis:
             self.dec = torch.nn.DataParallel(self.dec)
             self.enc.cuda()
             self.dec.cuda()
-
-    def get_initialization(self, data, R):
-        """Initialize our center, width, and weight parameters via K-means"""
-        kmeans = KMeans(init='k-means++',
-                        n_clusters=self.num_factors,
-                        n_init=10,
-                        random_state=100)
-        kmeans.fit(R)
-        initial_centers = kmeans.cluster_centers_
-        initial_widths = 2.0 * math.pow(np.nanmax(np.std(R, axis=0)), 2)
-        F = initial_radial_basis(R, initial_centers, initial_widths)
-        F = F.T
-
-        # beta = np.var(voxel_activations)
-        trans_F = F.T.copy()
-        initial_weights = np.linalg.solve(trans_F.dot(F), trans_F.dot(data))
-
-        return initial_centers, np.log(initial_widths), initial_weights.T
-
-    def hotspot_initialization(self):
-        """Calculate mean image, center it, and fold it.
-           Use the top K peaks as initial centers for q."""
-
-        mean_image = torch.mean(self.voxel_activations, 0)
-        mean_activation = torch.mean(mean_image)
-        mean_image = mean_image - mean_activation
-        mean_image = torch.abs(mean_image)
-
-        factor_centers = []
-        for _ in range(self.num_factors):
-            _, i = mean_image.max(0)
-            mean_image[i] = 0
-            factor_centers.append(self.voxel_locations[i])
-
-        hotspots = torch.cat(factor_centers) #Kx3 tensor
-
-        return hotspots
 
     def train(self, num_steps=10, learning_rate=LEARNING_RATE,
               log_level=logging.WARNING, batch_size=64,
@@ -217,9 +166,9 @@ class TopographicalFactorAnalysis:
         factor_centers = factor_centers.numpy()
         factor_log_widths = factor_log_widths.numpy()
 
-        factors = initial_radial_basis(self.voxel_locations.numpy(),
-                                       factor_centers,
-                                       np.exp(factor_log_widths))
+        factors = utils.initial_radial_basis(self.voxel_locations.numpy(),
+                                             factor_centers,
+                                             np.exp(factor_log_widths))
 
         logging.info('Reconstruction Error (Frobenius Norm): %.8e',
                      np.linalg.norm(weights @ factors -\
@@ -247,9 +196,10 @@ class TopographicalFactorAnalysis:
         mean_factor_center = params['factor_centers']['mu'].numpy()
         mean_factor_log_width = params['factor_log_widths']['mu'].numpy()
         mean_weight = params['weights']['mu'].numpy()
-        mean_factors = initial_radial_basis(self.voxel_locations.numpy(),
-                                            mean_factor_center,
-                                            np.exp(mean_factor_log_width[0]))
+        mean_factors = utils.initial_radial_basis(
+            self.voxel_locations.numpy(), mean_factor_center,
+            np.exp(mean_factor_log_width[0])
+        )
 
         logging.info("Mean Factor Centers: %s", str(mean_factor_center))
         logging.info("Mean Factor Log Widths: %s", str(mean_factor_log_width))

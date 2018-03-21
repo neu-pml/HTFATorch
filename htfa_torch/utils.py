@@ -5,6 +5,7 @@ __author__ = 'Eli Sennesh'
 __email__ = 'e.sennesh@northeastern.edu'
 
 import flatdict
+import math
 import os
 import warnings
 
@@ -17,6 +18,7 @@ finally:
 import numpy as np
 import scipy.io as sio
 import scipy.stats as stats
+from sklearn.cluster import KMeans
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
@@ -24,6 +26,42 @@ from torch.nn import Parameter
 
 import nibabel as nib
 from nilearn.input_data import NiftiMasker
+
+def brain_centroid(locations):
+    brain_center = torch.mean(locations, 0).unsqueeze(0)
+    brain_center_std_dev = torch.sqrt(
+        10 * torch.var(locations, 0).unsqueeze(0)
+    )
+    return brain_center, brain_center_std_dev
+
+def initial_radial_basis(location, center, widths):
+    """The radial basis function used as the shape for the factors"""
+    # V x 3 -> 1 x V x 3
+    location = np.expand_dims(location, 0)
+    # K x 3 -> K x 1 x 3
+    center = np.expand_dims(center, 1)
+    #
+    delta2s = (location - center) ** 2
+    widths = np.expand_dims(widths, 1)
+    return np.exp(-delta2s.sum(2) / (widths))
+
+def initial_hypermeans(activations, locations, num_factors):
+    """Initialize our center, width, and weight parameters via K-means"""
+    kmeans = KMeans(init='k-means++',
+                    n_clusters=num_factors,
+                    n_init=10,
+                    random_state=100)
+    kmeans.fit(locations)
+    initial_centers = kmeans.cluster_centers_
+    initial_widths = 2.0 * math.pow(np.nanmax(np.std(locations, axis=0)), 2)
+    F = initial_radial_basis(locations, initial_centers, initial_widths)
+    F = F.T
+
+    # beta = np.var(voxel_activations)
+    trans_F = F.T.copy()
+    initial_weights = np.linalg.solve(trans_F.dot(F), trans_F.dot(activations))
+
+    return initial_centers, np.log(initial_widths), initial_weights.T
 
 def plot_losses(losses):
     epochs = range(losses.shape[1])
@@ -149,3 +187,15 @@ def unsqueeze_and_expand_vardict(vdict, dim, size, clone=False):
         result[k] = unsqueeze_and_expand(v, dim, size, clone)
 
     return result
+
+def populate_vardict(vdict, populator, *dims):
+    for k in vdict.iterkeys():
+        vdict[k] = populator(k, dims)
+    return vdict
+
+def gaussian_populator(k, *dims):
+    return {
+        'mu': torch.sqrt(torch.rand(*dims)) if 'sigma' in k\
+              else torch.zeros(*dims),
+        'sigma': torch.sqrt(torch.rand(*dims))
+    }

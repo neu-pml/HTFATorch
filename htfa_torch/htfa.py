@@ -1,141 +1,123 @@
+"""Perform hierarchical topographic factor analysis on a given fMRI data file."""
+
+__author__ = 'Eli Sennesh', 'Zulqarnain Khan'
+__email__ = 'e.sennesh@northeastern.edu', 'khan.zu@husky.neu.edu'
+
+import logging
+import os
+import pickle
+import time
+
+import hypertools as hyp
+import nilearn.image
+import nilearn.plotting as niplot
 import numpy as np
+import scipy.io as sio
 import torch
-import probtorch
+import torch.distributions as dists
+from torch.autograd import Variable
 import torch.nn as nn
+from torch.nn import Parameter
+import torch.utils.data
 
-class HTFAEnconder(nn.module):
-    """variational guide for HTFA"""
-    def __init__(self,num_factors,num_subjects):
-        self.mean_mean_weight = Parameter(torch.zeros(num_factors,))
-        self.std_mean_weight = Parameter(torch.rand(num_factors,))
-        self.mean_std_weight = Parameter(torch.zeros(num_factors,))
-        self.std_std_weight = Parameter(torch.rand(num_factors,))
-        
-        self.mean_mean_factor = Parameter(torch.zeros(num_factors,3))
-        self.std_mean_factor = Parameter(torch.rand(num_factors,3))
-        self.mean_width_factor = Parameter(torch.zeros(num_factors,3))
-        self.std_width_factor = Parameter(torch.rand(num_factors,3))
-        
-        self.mean_weight = Parameter(torch.zeros(num_factors,num_subjects))
-        self.std_weight = Parameter(torch.rand(num_factors,num_subjects))
-        
-        
-        
-        
-    def forward(self):
-        q = probtorch.Trace()
-        mean_weight = self.mean_weight
-        std_weight =  self.std_weight
-        mean_mean_factor = self.mean_mean_factor
-        std_mean_factor = self.std_mean_factor
-        mean_width_factor = self.mean_width_factor
-        std_width_factor = self.std_width_factor
-        
-        q.normal(mean_weight.expand(num_times,num_factors,num_subjects),
-                         std_weight.expand(num_times,num_factors,num_subjects),
-                         name='weights')
-        q.normal(mean_mean_factor.expand(num_factors,3,num_subjects),
-                              std_mean_factor.expand(num_factors,3,num_subjects),
-                              name='mean_factor')
-        q.normal(mean_width_factor.expand(num_factors,3,num_subjects),
-                               std_width_factor.expand(num_factors,3,num_subjects),
-                               name='width_factor')
-        
-        return q
+import probtorch
 
+from . import htfa_models
+from . import tfa
+from . import tfa_models
+from . import utils
 
-class HTFADecoder(nn.Module):
-    """Generative Model for HTFA"""
-    def __init__(self,num_subjects,num_times,num_voxels,num_factors = NUM_FACTORS):
-        self._num_subjects = num_subjects
-        self._num_factors = num_factors
-        self._num_voxels = num_voxels
-        
-        ## outermost layer of hyperparameters, values are placeholders, dimensions should be correct
-        ## dimensions K,
-        self.register_buffer('hyper_mean_mean_mean_weight',Variable(torch.zeros(self._num_factors,)))
-        self.register_buffer('hyper_std_mean_mean_weight',Variable(0.5 * torch.ones(self._num_factors,)))
-        self.register_buffer('hyper_mean_std_mean_weight',Variable(torch.zeros(self._num_factors,)))
-        self.register_buffer('hyper_std_std_mean_weight',Variable(0.5 * torch.ones(self._num_factors,)))
-        
-        self.register_buffer('hyper_mean_mean_std_weight',Variable(torch.zeros(self._num_factors,)))
-        self.register_buffer('hyper_std_mean_std_weight',Variable(0.5 * torch.ones(self._num_factors,)))
-        self.register_buffer('hyper_mean_std_std_weight',Variable(torch.zeros(self._num_factors,)))
-        self.register_buffer('hyper_std_std_std_weight',Variable(0.5 * torch.ones(self._num_factors,)))
-        
-        ## dimensions K,3
-        self.register_buffer('hyper_mean_mean_mean_factor',Variable(brain_center.expand
-                                                                      (self._num_factors,3)))
-        self.register_buffer('hyper_std_mean_mean_factor',Variable(0.5 * torch.ones
-                                                                     (self._num_factors,3)))
-        self.register_buffer('hyper_mean_std_mean_factor',Variable(brain_center_std_dev.expand
-                                                                     (self._num_factors,3)))
-        self.register_buffer('hyper_std_std_mean_factor',Variable(0.5 * torch.ones
-                                                                    (self._num_factors,3)))
-        
-        ## dimensions K,3        
-        self.register_buffer('hyper_mean_mean_width_factor',Variable(brain_center.expand
-                                                                      (self._num_factors,3)))
-        self.register_buffer('hyper_std_mean_width_factor',Variable(0.5 * torch.ones
-                                                                     (self._num_factors,3)))
-        self.register_buffer('hyper_mean_std_width_factor',Variable(brain_center_std_dev.expand
-                                                                     (self._num_factors,3)))
-        self.register_buffer('hyper_std_std_width_factor',Variable(0.5 * torch.ones
-                                                                    (self._num_factors,3)))
-        
-        
-        
-    def forward(self):
-        
-        p = probtorch.Trace()
-        
-        #second from outermost layer
-        mean_mean_weight = p.normal(self.hyper_mean_mean_mean_weight,
-                                    self.hyper_std_mean_mean_weight)
-        std_mean_weight = p.normal(self.hyper_mean_std_mean_weight,
-                                   self.hyper_std_std_mean_weight)
-        mean_std_weight = p.normal(self.hyper_mean_mean_std_weight,
-                                  self.hyper_std_mean_std_weight)
-        std_std_weight = p.normal(self.hyper_mean_std_std_weight,
-                                 self.hyper_std_std_std_weight)
-        
-        mean_mean_factor = p.normal(self.hyper_mean_mean_mean_factor,
-                                   self.hyper_std_mean_mean_factor)
-        std_mean_factor = p.normal(self.hyper_mean_std_mean_factor,
-                                  self.hyper_std_std_mean_factor)
-        mean_width_factor = p.normal(self.hyper_mean_mean_width_factor,
-                                  self.hyper_std_mean_width_factor)
-        std_width_factor = p.normal(self.hyper_mean_std_width_factor,
-                                 self.hyper_std_std_width_factor)
-        #third from outermost layer
-        ## dimensions K,S
-        mean_weight = p.normal(mean_mean_weight.expand(num_factors,num_subjects),
-                               std_mean_weight(num_factors,num_subjects))
-        std_weight = p.normal(mean_std_weight.expand(num_factors,num_subjects),
-                             std_std_weight.expand(num_factors,num_subjects))
-        ## dimensions K,3,S
-        mean_factor = p.normal(mean_mean_factor.expand(num_factors,3,num_subjects),
-                              std_mean_factor.expand(num_factors,3,num_subjects),
-                              value=q['mean_factor'],
-                              name='mean_factor')
-        width_factor = p.normal(mean_width_factor.expand(num_factors,3,num_subjects),
-                               std_width_factor.expand(num_factors,3,num_subjects),
-                               value=q['width_factor'],
-                               name='width_factor')
-        
-        #fourth from outermost layer
-        ##dimensions N,K,S
-        weights = p.normal(mean_weight.expand(num_times,num_factors,num_subjects),
-                         std_weight.expand(num_times,num_factors,num_subjects),
-                         value=q['weights'],
-                         name='weights')
-        ##dimensions K,V,S
-        factors = radial_basis(locations,mean_factors,mean_widths,num_voxels)
-        
-        #joint
-        ##dimensions N,V
-        p.normal(torch.matmul(weights,factors), self._voxel_noise,
-                value=activations, name='Y')
-        
-        return p
-        
+class HierarchicalTopographicFactorAnalysis:
+    """Overall container for a run of TFA"""
+    def __init__(self, data_files, num_factors=tfa_models.NUM_FACTORS):
+        self.num_factors = num_factors
+        self.num_subjects = len(data_files)
+        datasets = [utils.load_dataset(data_file) for data_file in data_files]
+        self.voxel_activations = [dataset[0] for dataset in datasets]
+        self._images = [dataset[1] for dataset in datasets]
+        self.voxel_locations = [dataset[2] for dataset in datasets]
+        self._names = [dataset[3] for dataset in datasets]
+        self._templates = [dataset[4] for dataset in datasets]
+
+        # Pull out relevant dimensions: the number of time instants and the
+        # number of voxels in each timewise "slice"
+        self.num_times = [acts.shape[0] for acts in self.voxel_activations]
+        self.num_voxels = [acts.shape[1] for acts in self.voxel_activations]
+
+        self.enc = htfa_models.HTFAGuide(self.voxel_activations,
+                                         self.voxel_locations,
+                                         self.num_factors)
+        self.dec = htfa_models.HTFAModel(self.voxel_locations, self.num_subjects,
+                                         self.num_times, self.num_factors)
+        if tfa.CUDA:
+            self.enc = torch.nn.DataParallel(self.enc)
+            self.dec = torch.nn.DataParallel(self.dec)
+
+    def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
+              log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES):
+        """Optimize the variational guide to reflect the data for `num_steps`"""
+        logging.basicConfig(format='%(asctime)s %(message)s',
+                            datefmt='%m/%d/%Y %H:%M:%S',
+                            level=log_level)
+
+        activations = [{'Y': Variable(self.voxel_activations[s])}
+                       for s in range(self.num_subjects)]
+        optimizer = torch.optim.Adam(list(self.enc.parameters()),
+                                     lr=learning_rate)
+        if tfa.CUDA:
+            self.enc.cuda()
+            self.dec.cuda()
+            for acts in activations:
+                acts['Y'] = acts['Y'].cuda()
+
+        self.enc.train()
+        self.dec.train()
+
+        free_energies = list(range(num_steps))
+        lls = list(range(num_steps))
+
+        for epoch in range(num_steps):
+            start = time.time()
+
+            optimizer.zero_grad()
+            q = probtorch.Trace()
+            self.enc(q, num_particles=num_particles)
+            p = probtorch.Trace()
+            self.dec(p, guide=q, observations=activations)
+
+            free_energies[epoch] = tfa.free_energy(q, p, num_particles=num_particles)
+            lls[epoch] = tfa.log_likelihood(q, p, num_particles=num_particles)
+
+            free_energies[epoch].backward()
+            optimizer.step()
+
+            if tfa.CUDA:
+                free_energies[epoch] = free_energies[epoch].cpu().data.numpy().sum(0)
+                lls[epoch] = lls[epoch].cpu().data.numpy().sum(0)
+
+            end = time.time()
+            msg = tfa.EPOCH_MSG % (epoch + 1, (end - start) * 1000, free_energies[epoch])
+            logging.info(msg)
+
+        if tfa.CUDA:
+            for acts in activations:
+                acts['Y'].cpu()
+            self.dec.cpu()
+            self.enc.cpu()
+
+        return np.vstack([free_energies, lls])
+
+    def results(self):
+        """Return the inferred parameters"""
+        pass
+
+    def save(self, out_dir='.'):
+        '''Save a HierarchicalTopographicFactorAnalysis'''
+        with open(out_dir + '/' + self._name + '.htfa', 'wb') as file:
+            pickle.dump(self, file)
+
+    @classmethod
+    def load(cls, filename):
+        '''Load a saved HierarchicalTopographicFactorAnalysis from a file'''
+        with open(filename, 'rb') as file:
+            return pickle.load(file)
