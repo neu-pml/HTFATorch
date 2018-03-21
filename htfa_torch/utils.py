@@ -187,3 +187,15 @@ def unsqueeze_and_expand_vardict(vdict, dim, size, clone=False):
         result[k] = unsqueeze_and_expand(v, dim, size, clone)
 
     return result
+
+def populate_vardict(vdict, populator, *dims):
+    for k in vdict.iterkeys():
+        vdict[k] = populator(k, dims)
+    return vdict
+
+def gaussian_populator(k, *dims):
+    return {
+        'mu': torch.sqrt(torch.rand(*dims)) if 'sigma' in k\
+              else torch.zeros(*dims),
+        'sigma': torch.sqrt(torch.rand(*dims))
+    }
