@@ -112,15 +112,21 @@ class TFAGuidePrior(GuidePrior):
         if times is None:
             times = (0, params['weights']['mu'].shape[0])
 
-        for (k, val) in params['weights'].items():
-            params['weights'][k] = val[times[0]:times[1], :]
+        weight_params = {
+            'mu': params['weights']['mu'][times[0]:times[1], :],
+            'sigma': params['weights']['sigma'][times[0]:times[1], :]
+        }
 
         if num_particles and num_particles > 0:
             params = utils.unsqueeze_and_expand_vardict(params, 0, num_particles,
                                                         True)
+            weight_params = utils.unsqueeze_and_expand_vardict(weight_params,
+                                                               0,
+                                                               num_particles,
+                                                               True)
 
-        weights = trace.normal(params['weights']['mu'],
-                               params['weights']['sigma'],
+        weights = trace.normal(weight_params['mu'],
+                               weight_params['sigma'],
                                name='Weights' + str(self.subject))
 
         centers = trace.normal(params['factor_centers']['mu'],
@@ -179,12 +185,13 @@ class TFAGenerativePrior(GenerativePrior):
         if times is None:
             times = (0, self._num_times)
 
-        params['weights'] = utils.unsqueeze_and_expand_vardict(
-            params['weights'], 0, times[1] - times[0], True
+        weight_params = utils.unsqueeze_and_expand_vardict(
+            params['weights'], len(params['weights']['mu'].shape) - 1,
+            times[1] - times[0], True
         )
 
-        weights = trace.normal(params['weights']['mu'],
-                               params['weights']['sigma'],
+        weights = trace.normal(weight_params['mu'],
+                               weight_params['sigma'],
                                value=guide['Weights' + str(self.subject)],
                                name='Weights' + str(self.subject))
 
