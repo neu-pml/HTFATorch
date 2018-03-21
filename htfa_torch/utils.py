@@ -165,6 +165,10 @@ def vardict(existing=None):
             vdict[k] = v
     return vdict
 
+def vardict_keys(vdict):
+    first_level = [k.rsplit('__', 1)[0] for k in vdict.keys()]
+    return list(set(first_level))
+
 def register_vardict(vdict, module, parameter=True):
     for (k, v) in vdict.iteritems():
         if parameter:

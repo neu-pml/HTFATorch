@@ -24,24 +24,12 @@ TEMPLATE_SHAPE['weights'] = {
     }
 }
 TEMPLATE_SHAPE['factor_centers'] = {
-    'mu': {
-        'mu': None,
-        'sigma': None,
-    },
-    'sigma': {
-        'mu': None,
-        'sigma': None,
-    }
+    'mu': None,
+    'sigma': None,
 }
 TEMPLATE_SHAPE['factor_log_widths'] = {
-    'mu': {
-        'mu': None,
-        'sigma': None,
-    },
-    'sigma': {
-        'mu': None,
-        'sigma': None,
-    }
+    'mu': None,
+    'sigma': None,
 }
 
 class HTFAGuideHyperParams(tfa_models.HyperParams):
@@ -65,14 +53,14 @@ class HTFAGuideHyperParams(tfa_models.HyperParams):
             utils.gaussian_populator,
             self._num_factors, 3,
         )
-        params['template']['factor_centers']['mu']['mu']['mu'] =\
+        params['template']['factor_centers']['mu']['mu'] =\
             hyper_means['factor_centers']
         params['template']['factor_log_widths'] = utils.populate_vardict(
             params['template']['factor_log_widths'],
             utils.gaussian_populator,
             self._num_factors,
         )
-        params['template']['factor_log_widths']['mu']['mu']['mu'] *=\
+        params['template']['factor_log_widths']['mu']['mu'] *=\
             hyper_means['factor_log_widths']
 
         params['subject'] = {
@@ -193,12 +181,12 @@ class HTFAGenerativeHyperParams(tfa_models.HyperParams):
 
         params['template']['weights']['sigma']['mu']['mu'] *=\
             tfa_models.SOURCE_WEIGHT_STD_DEV
-        params['template']['factor_log_widths']['sigma']['mu']['mu'] *=\
+        params['template']['factor_log_widths']['sigma']['mu'] *=\
             tfa_models.SOURCE_LOG_WIDTH_STD_DEV
 
-        params['template']['factor_centers']['mu']['mu']['mu'] =\
+        params['template']['factor_centers']['mu']['mu'] =\
             brain_center.expand(self._num_factors, 3)
-        params['template']['factor_centers']['sigma']['mu']['mu'] =\
+        params['template']['factor_centers']['sigma']['mu'] =\
             brain_center_std_dev.expand(self._num_factors, 3)
 
         params['voxel_noise'] = {
@@ -209,7 +197,7 @@ class HTFAGenerativeHyperParams(tfa_models.HyperParams):
 
 class HTFAGenerativeTemplatePrior(tfa_models.GenerativePrior):
     def forward(self, trace, params, guide=probtorch.Trace()):
-        template = TEMPLATE_SHAPE.copy()
+        template = utils.vardict(TEMPLATE_SHAPE.copy())
         for (k, _) in template.iteritems():
             template[k] = trace.normal(params['template'][k]['mu'],
                                        params['template'][k]['sigma'],
@@ -234,36 +222,28 @@ class HTFAGenerativeSubjectPrior(tfa_models.GenerativePrior):
                                    value=guide['voxel_noise'],
                                    name='voxel_noise')
 
-        subject_template = utils.unsqueeze_and_expand_vardict(
-            template, 0, self._num_subjects, True
+        subject_weights_template = utils.unsqueeze_and_expand_vardict(
+            template['weights'], 0, self._num_subjects, True
         )
-        subject_params = utils.vardict({
-            'weights': {
-                'mu': None,
-                'sigma': None,
-            },
-            'factor_centers': {
-                'mu': None,
-                'sigma': None,
-            },
-            'factor_log_widths': {
-                'mu': None,
-                'sigma': None,
-            },
+        subject_weight_params = utils.vardict({
+            'mu': None,
+            'sigma': None,
         })
-        for (k, _) in subject_params.iteritems():
-            subject_params[k] = trace.normal(subject_template[k]['mu'],
-                                             subject_template[k]['sigma'],
-                                             value=guide['subject_params_' + k],
-                                             name='subject_params_' + k)
+        for k in subject_weight_params.iterkeys():
+            subject_weight_params[k] = trace.normal(
+                subject_weights_template[k]['mu'],
+                subject_weights_template[k]['sigma'],
+                value=guide['subject_params_' + k], name='subject_params_' + k
+            )
 
         weights = []
         factor_centers = []
         factor_log_widths = []
         for s in range(self._num_subjects):
-            sparams = utils.vardict(subject_params)
-            for k, v in sparams.iteritems():
-                sparams[k] = v[s]
+            sparams = utils.vardict()
+            sparams['weights'] = {k: v[s] for k, v in subject_weight_params.iteritems()}
+            sparams['factor_centers'] = template['factor_centers']
+            sparams['factor_log_widths'] = template['factor_log_widths']
             w, fc, flw = self._tfa_priors[s](trace, sparams, times=times,
                                              guide=guide)
             weights += [w]
