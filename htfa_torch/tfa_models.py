@@ -101,6 +101,10 @@ class TFAGuideHyperParams(HyperParams):
         return utils.vardict(super(self.__class__, self).forward())
 
 class TFAGuidePrior(GuidePrior):
+    def __init__(self, subject=0):
+        super(TFAGuidePrior, self).__init__()
+        self.subject = subject
+
     def forward(self, trace, params, times=None, num_samples=NUM_SAMPLES):
         if times is None:
             times = (0, params['weights']['mu'].shape[0])
@@ -113,23 +117,24 @@ class TFAGuidePrior(GuidePrior):
 
         weights = trace.normal(params['weights']['mu'],
                                params['weights']['sigma'],
-                               name='Weights')
+                               name='Weights' + str(self.subject))
 
         centers = trace.normal(params['factor_centers']['mu'],
                                params['factor_centers']['sigma'],
-                               name='FactorCenters')
+                               name='FactorCenters' + str(self.subject))
         log_widths = trace.normal(params['factor_log_widths']['mu'],
                                   params['factor_log_widths']['sigma'],
-                                  name='FactorLogWidths')
+                                  name='FactorLogWidths' + str(self.subject))
         return weights, centers, log_widths
 
 class TFAGuide(nn.Module):
     """Variational guide for topographic factor analysis"""
-    def __init__(self, means, num_times, num_factors=NUM_FACTORS):
+    def __init__(self, means, num_times, num_factors=NUM_FACTORS, subject=0):
         super(self.__class__, self).__init__()
+        self.subject = subject
 
         self.hyperparams = TFAGuideHyperParams(means, num_times, num_factors)
-        self._prior = TFAGuidePrior()
+        self._prior = TFAGuidePrior(subject=subject)
 
     def forward(self, trace, times=None, num_samples=NUM_SAMPLES):
         params = self.hyperparams.state_vardict()
@@ -161,9 +166,10 @@ class TFAGenerativeHyperParams(HyperParams):
         return utils.vardict(super(self.__class__, self).forward())
 
 class TFAGenerativePrior(GenerativePrior):
-    def __init__(self, num_times):
+    def __init__(self, num_times, subject=0):
         super(self.__class__, self).__init__()
         self._num_times = num_times
+        self.subject = subject
 
     def forward(self, trace, params, times=None, guide=probtorch.Trace()):
         if times is None:
@@ -175,27 +181,28 @@ class TFAGenerativePrior(GenerativePrior):
 
         weights = trace.normal(params['weights']['mu'],
                                params['weights']['sigma'],
-                               value=guide['Weights'],
-                               name='Weights')
+                               value=guide['Weights' + str(self.subject)],
+                               name='Weights' + str(self.subject))
 
         factor_centers = trace.normal(params['factor_centers']['mu'],
                                       params['factor_centers']['sigma'],
-                                      value=guide['FactorCenters'],
-                                      name='FactorCenters')
+                                      value=guide['FactorCenters' + str(self.subject)],
+                                      name='FactorCenters' + str(self.subject))
         factor_log_widths = trace.normal(params['factor_log_widths']['mu'],
                                          params['factor_log_widths']['sigma'],
-                                         value=guide['FactorLogWidths'],
-                                         name='FactorLogWidths')
+                                         value=guide['FactorLogWidths' + str(self.subject)],
+                                         name='FactorLogWidths' + str(self.subject))
 
         return weights, factor_centers, factor_log_widths
 
 class TFAGenerativeLikelihood(GenerativeLikelihood):
-    def __init__(self, locations, num_times, voxel_noise=VOXEL_NOISE):
+    def __init__(self, locations, num_times, voxel_noise=VOXEL_NOISE, subject=0):
         super(self.__class__, self).__init__()
 
         self.register_buffer('voxel_locations', Variable(locations))
         self._num_times = num_times
         self._voxel_noise = voxel_noise
+        self.subject = subject
 
     def forward(self, trace, weights, centers, log_widths, times=None,
                 observations=collections.defaultdict()):
@@ -204,26 +211,29 @@ class TFAGenerativeLikelihood(GenerativeLikelihood):
         factors = radial_basis(self.voxel_locations, centers, log_widths)
         activations = trace.normal(torch.matmul(weights, factors),
                                    self._voxel_noise, value=observations['Y'],
-                                   name='Y')
+                                   name='Y' + str(self.subject))
         return activations
 
 class TFAModel(nn.Module):
     """Generative model for topographic factor analysis"""
     def __init__(self, brain_center, brain_center_std_dev, num_times,
-                 locations, num_factors=NUM_FACTORS, voxel_noise=VOXEL_NOISE):
+                 locations, num_factors=NUM_FACTORS, voxel_noise=VOXEL_NOISE,
+                 subject=0):
         super(self.__class__, self).__init__()
 
         self._num_times = num_times
         self._num_factors = num_factors
         self._locations = locations
+        self.subject = subject
 
         self._hyperparams = TFAGenerativeHyperParams(brain_center,
                                                      brain_center_std_dev,
                                                      self._num_factors)
-        self._prior = TFAGenerativePrior(self._num_times)
+        self._prior = TFAGenerativePrior(self._num_times, subject=self.subject)
         self._likelihood = TFAGenerativeLikelihood(self._locations,
                                                    self._num_times,
-                                                   voxel_noise)
+                                                   voxel_noise,
+                                                   subject=self.subject)
 
     def forward(self, trace, times=None, guide=probtorch.Trace(),
                 observations=collections.defaultdict()):
