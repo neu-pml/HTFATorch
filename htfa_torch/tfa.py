@@ -46,17 +46,17 @@ def initial_radial_basis(location, center, widths):
     widths = np.expand_dims(widths, 1)
     return np.exp(-delta2s.sum(2) / (widths))
 
-def free_energy(q, p, num_samples=tfa_models.NUM_SAMPLES):
+def free_energy(q, p, num_particles=tfa_models.NUM_PARTICLES):
     """Calculate the free-energy (negative of the evidence lower bound)"""
-    if num_samples and num_samples > 0:
+    if num_particles and num_particles > 0:
         sample_dim = 0
     else:
         sample_dim = None
     return -probtorch.objectives.montecarlo.elbo(q, p, sample_dim=sample_dim)
 
-def log_likelihood(q, p, num_samples=tfa_models.NUM_SAMPLES):
+def log_likelihood(q, p, num_particles=tfa_models.NUM_PARTICLES):
     """The expected log-likelihood of observed data under the proposal distribution"""
-    if num_samples and num_samples > 0:
+    if num_particles and num_particles > 0:
         sample_dim = 0
     else:
         sample_dim = None
@@ -142,7 +142,7 @@ class TopographicalFactorAnalysis:
 
     def train(self, num_steps=10, learning_rate=LEARNING_RATE,
               log_level=logging.WARNING, batch_size=64,
-              num_samples=tfa_models.NUM_SAMPLES):
+              num_particles=tfa_models.NUM_PARTICLES):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
@@ -178,12 +178,12 @@ class TopographicalFactorAnalysis:
 
                 optimizer.zero_grad()
                 q = probtorch.Trace()
-                self.enc(q, times=trs, num_samples=num_samples)
+                self.enc(q, times=trs, num_particles=num_particles)
                 p = probtorch.Trace()
                 self.dec(p, times=trs, guide=q, observations={'Y': activations})
 
-                epoch_free_energies[batch] = free_energy(q, p)
-                epoch_lls[batch] = log_likelihood(q, p)
+                epoch_free_energies[batch] = free_energy(q, p, num_particles=num_particles)
+                epoch_lls[batch] = log_likelihood(q, p, num_particles=num_particles)
                 epoch_free_energies[batch].backward()
                 optimizer.step()
 
@@ -203,7 +203,7 @@ class TopographicalFactorAnalysis:
     def results(self):
         """Return the inferred parameters"""
         q = probtorch.Trace()
-        self.enc(q, num_samples=tfa_models.NUM_SAMPLES)
+        self.enc(q, num_particles=tfa_models.NUM_PARTICLES)
 
         weights = q['Weights' + str(self.enc.module.subject)].value.data.mean(0)
         factor_centers = q['FactorCenters' + str(self.enc.module.subject)].value.data.mean(0)

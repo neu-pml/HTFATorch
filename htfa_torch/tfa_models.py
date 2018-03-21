@@ -17,7 +17,7 @@ import probtorch
 from . import utils
 
 NUM_FACTORS = 5
-NUM_SAMPLES = 10
+NUM_PARTICLES = 10
 SOURCE_WEIGHT_STD_DEV = np.sqrt(2.0)
 SOURCE_LOG_WIDTH_STD_DEV = np.sqrt(3.0)
 VOXEL_NOISE = 0.1
@@ -27,15 +27,18 @@ VOXEL_NOISE = 0.1
 # log_widths: S x K
 def radial_basis(locations, centers, log_widths):
     """The radial basis function used as the shape for the factors"""
-    # V x 3 -> 1 x 1 x V x 3
-    locations = locations.unsqueeze(0).unsqueeze(0)
+    # V x 3 -> 1 x V x 3
+    locations = locations.unsqueeze(0)
+    if len(centers.shape) > 3:
+        # 1 x V x 3 -> 1 x 1 x V x 3
+        locations = locations.unsqueeze(0)
     # S x K x 3 -> S x K x 1 x 3
-    centers = centers.unsqueeze(2)
+    centers = centers.unsqueeze(len(centers.shape) - 1)
     # S x K x V x 3
     delta2s = (locations - centers)**2
     # S x K  -> S x K x 1
-    log_widths = log_widths.unsqueeze(2)
-    return torch.exp(-delta2s.sum(3) / torch.exp(log_widths))
+    log_widths = log_widths.unsqueeze(len(log_widths.shape))
+    return torch.exp(-delta2s.sum(len(delta2s.shape) - 1) / torch.exp(log_widths))
 
 class Model(nn.Module):
     def __init__(self):
@@ -58,7 +61,7 @@ class GuidePrior(Model):
     def __init__(self):
         super(Model, self).__init__()
 
-    def forward(self, trace, *args, num_samples=NUM_SAMPLES):
+    def forward(self, trace, *args, num_particles=NUM_PARTICLES):
         pass
 
 class GenerativePrior(Model):
@@ -105,15 +108,16 @@ class TFAGuidePrior(GuidePrior):
         super(TFAGuidePrior, self).__init__()
         self.subject = subject
 
-    def forward(self, trace, params, times=None, num_samples=NUM_SAMPLES):
+    def forward(self, trace, params, times=None, num_particles=NUM_PARTICLES):
         if times is None:
             times = (0, params['weights']['mu'].shape[0])
 
         for (k, val) in params['weights'].items():
             params['weights'][k] = val[times[0]:times[1], :]
 
-        for (var, val) in params.iteritems():
-            params[var] = val.clone().unsqueeze(0)
+        if num_particles and num_particles > 0:
+            params = utils.unsqueeze_and_expand_vardict(params, 0, num_particles,
+                                                        True)
 
         weights = trace.normal(params['weights']['mu'],
                                params['weights']['sigma'],
@@ -136,9 +140,9 @@ class TFAGuide(nn.Module):
         self.hyperparams = TFAGuideHyperParams(means, num_times, num_factors)
         self._prior = TFAGuidePrior(subject=subject)
 
-    def forward(self, trace, times=None, num_samples=NUM_SAMPLES):
+    def forward(self, trace, times=None, num_particles=NUM_PARTICLES):
         params = self.hyperparams.state_vardict()
-        return self._prior(trace, params, times=times, num_samples=num_samples)
+        return self._prior(trace, params, times=times, num_particles=num_particles)
 
 class TFAGenerativeHyperParams(HyperParams):
     def __init__(self, brain_center, brain_center_std_dev,
