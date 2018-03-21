@@ -182,8 +182,8 @@ class TopographicalFactorAnalysis:
                 p = probtorch.Trace()
                 self.dec(p, times=trs, guide=q, observations={'Y': activations})
 
-                epoch_free_energies[batch] = free_energy(q, p)
-                epoch_lls[batch] = log_likelihood(q, p)
+                epoch_free_energies[batch] = free_energy(q, p, num_samples=num_samples)
+                epoch_lls[batch] = log_likelihood(q, p, num_samples=num_samples)
                 epoch_free_energies[batch].backward()
                 optimizer.step()
 
