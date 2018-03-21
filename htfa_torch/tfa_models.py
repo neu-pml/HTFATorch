@@ -115,8 +115,9 @@ class TFAGuidePrior(GuidePrior):
         for (k, val) in params['weights'].items():
             params['weights'][k] = val[times[0]:times[1], :]
 
-        for (var, val) in params.iteritems():
-            params[var] = val.clone().unsqueeze(0)
+        if num_samples and num_samples > 0:
+            params = utils.unsqueeze_and_expand_vardict(params, 0, num_samples,
+                                                        True)
 
         weights = trace.normal(params['weights']['mu'],
                                params['weights']['sigma'],
