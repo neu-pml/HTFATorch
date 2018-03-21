@@ -121,3 +121,37 @@ class HierarchicalTopographicFactorAnalysis:
         '''Load a saved HierarchicalTopographicFactorAnalysis from a file'''
         with open(filename, 'rb') as file:
             return pickle.load(file)
+
+    def results(self):
+        """Return the inferred variational parameters"""
+        return self.enc.module.hyperparams.state_vardict()
+
+    def plot_voxels(self, subject=None):
+        if subject:
+            hyp.plot(self.voxel_locations[subject].numpy(), 'k.')
+        else:
+            for s in range(self.num_subjects):
+                hyp.plot(self.voxel_locations[s].numpy(), 'k.')
+
+    def plot_factor_centers(self, subject=None, filename=None, show=True):
+        hyperparams = self.results()
+
+        if subject is not None:
+            factor_centers =\
+                hyperparams['subject']['factor_centers']['mu'][subject]
+        else:
+            factor_centers =\
+                hyperparams['template']['factor_centers']['mu']['mu']
+
+        plot = niplot.plot_connectome(
+            np.eye(self.num_factors),
+            factor_centers.data.numpy(),
+            node_color='k'
+        )
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
