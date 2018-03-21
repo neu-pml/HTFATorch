@@ -50,12 +50,16 @@ def free_energy(q, p, num_samples=tfa_models.NUM_SAMPLES):
     """Calculate the free-energy (negative of the evidence lower bound)"""
     if num_samples and num_samples > 0:
         sample_dim = 0
+    else:
+        sample_dim = None
     return -probtorch.objectives.montecarlo.elbo(q, p, sample_dim=sample_dim)
 
 def log_likelihood(q, p, num_samples=tfa_models.NUM_SAMPLES):
     """The expected log-likelihood of observed data under the proposal distribution"""
     if num_samples and num_samples > 0:
         sample_dim = 0
+    else:
+        sample_dim = None
     return probtorch.objectives.montecarlo.log_like(q, p, sample_dim=sample_dim)
 
 class TopographicalFactorAnalysis:
