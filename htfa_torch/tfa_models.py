@@ -27,15 +27,18 @@ VOXEL_NOISE = 0.1
 # log_widths: S x K
 def radial_basis(locations, centers, log_widths):
     """The radial basis function used as the shape for the factors"""
-    # V x 3 -> 1 x 1 x V x 3
-    locations = locations.unsqueeze(0).unsqueeze(0)
+    # V x 3 -> 1 x V x 3
+    locations = locations.unsqueeze(0)
+    if len(centers.shape) > 3:
+        # 1 x V x 3 -> 1 x 1 x V x 3
+        locations = locations.unsqueeze(0)
     # S x K x 3 -> S x K x 1 x 3
-    centers = centers.unsqueeze(2)
+    centers = centers.unsqueeze(len(centers.shape) - 1)
     # S x K x V x 3
     delta2s = (locations - centers)**2
     # S x K  -> S x K x 1
-    log_widths = log_widths.unsqueeze(2)
-    return torch.exp(-delta2s.sum(3) / torch.exp(log_widths))
+    log_widths = log_widths.unsqueeze(len(log_widths.shape))
+    return torch.exp(-delta2s.sum(len(delta2s.shape) - 1) / torch.exp(log_widths))
 
 class Model(nn.Module):
     def __init__(self):
