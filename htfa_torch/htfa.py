@@ -107,10 +107,6 @@ class HierarchicalTopographicFactorAnalysis:
 
         return np.vstack([free_energies, lls])
 
-    def results(self):
-        """Return the inferred parameters"""
-        pass
-
     def save(self, out_dir='.'):
         '''Save a HierarchicalTopographicFactorAnalysis'''
         with open(out_dir + '/' + self._name + '.htfa', 'wb') as file:
