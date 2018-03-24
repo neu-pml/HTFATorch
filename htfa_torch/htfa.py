@@ -49,9 +49,6 @@ class HierarchicalTopographicFactorAnalysis:
                                          self.num_factors)
         self.dec = htfa_models.HTFAModel(self.voxel_locations, self.num_subjects,
                                          self.num_times, self.num_factors)
-        if tfa.CUDA:
-            self.enc = torch.nn.DataParallel(self.enc)
-            self.dec = torch.nn.DataParallel(self.dec)
 
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
               log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES):
@@ -65,13 +62,15 @@ class HierarchicalTopographicFactorAnalysis:
         optimizer = torch.optim.Adam(list(self.enc.parameters()),
                                      lr=learning_rate)
         if tfa.CUDA:
-            self.enc.cuda()
-            self.dec.cuda()
+            enc = torch.nn.DataParallel(self.enc)
+            dec = torch.nn.DataParallel(self.dec)
+            enc.cuda()
+            dec.cuda()
             for acts in activations:
                 acts['Y'] = acts['Y'].cuda()
 
-        self.enc.train()
-        self.dec.train()
+        enc.train()
+        dec.train()
 
         free_energies = list(range(num_steps))
         lls = list(range(num_steps))
@@ -81,9 +80,9 @@ class HierarchicalTopographicFactorAnalysis:
 
             optimizer.zero_grad()
             q = probtorch.Trace()
-            self.enc(q, num_particles=num_particles)
+            enc(q, num_particles=num_particles)
             p = probtorch.Trace()
-            self.dec(p, guide=q, observations=activations)
+            dec(p, guide=q, observations=activations)
 
             free_energies[epoch] = tfa.free_energy(q, p, num_particles=num_particles)
             lls[epoch] = tfa.log_likelihood(q, p, num_particles=num_particles)
@@ -100,10 +99,8 @@ class HierarchicalTopographicFactorAnalysis:
             logging.info(msg)
 
         if tfa.CUDA:
-            for acts in activations:
-                acts['Y'].cpu()
-            self.dec.cpu()
-            self.enc.cpu()
+            dec.cpu()
+            enc.cpu()
 
         return np.vstack([free_energies, lls])
 
@@ -120,7 +117,7 @@ class HierarchicalTopographicFactorAnalysis:
 
     def results(self):
         """Return the inferred variational parameters"""
-        return self.enc.module.hyperparams.state_vardict()
+        return self.enc.hyperparams.state_vardict()
 
     def plot_voxels(self, subject=None):
         if subject:
