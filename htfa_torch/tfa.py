@@ -295,3 +295,11 @@ class TopographicalFactorAnalysis:
             niplot.show()
 
         return plot
+
+    def sample(self, times=None, posterior_predictive=False):
+        q = probtorch.Trace()
+        if posterior_predictive:
+            self.enc(q, times=times, num_particles=1)
+        p = probtorch.Trace()
+        self.dec(p, times=times, guide=q, observations=q)
+        return p
