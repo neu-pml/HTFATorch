@@ -126,15 +126,24 @@ class HierarchicalTopographicFactorAnalysis:
             for s in range(self.num_subjects):
                 hyp.plot(self.voxel_locations[s].numpy(), 'k.')
 
-    def plot_factor_centers(self, subject=None, filename=None, show=True):
-        hyperparams = self.results()
-
-        if subject is not None:
-            factor_centers =\
-                hyperparams['subject']['factor_centers']['mu'][subject]
+    def plot_factor_centers(self, subject=None, filename=None, show=True,
+                            trace=None):
+        if trace:
+            if subject is not None:
+                factor_centers = trace['FactorCenters%d' % subject].value
+            else:
+                factor_centers = trace['template_factor_centers__mu'].value
+            if len(factor_centers.shape) > 2:
+                factor_centers = factor_centers.mean(0)
         else:
-            factor_centers =\
-                hyperparams['template']['factor_centers']['mu']['mu']
+            hyperparams = self.results()
+
+            if subject is not None:
+                factor_centers =\
+                    hyperparams['subject']['factor_centers']['mu'][subject]
+            else:
+                factor_centers =\
+                    hyperparams['template']['factor_centers']['mu']['mu']
 
         plot = niplot.plot_connectome(
             np.eye(self.num_factors),
