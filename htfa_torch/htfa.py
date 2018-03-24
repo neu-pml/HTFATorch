@@ -51,7 +51,8 @@ class HierarchicalTopographicFactorAnalysis:
                                          self.num_times, self.num_factors)
 
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
-              log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES):
+              log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES,
+              use_cuda=True):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
@@ -61,13 +62,16 @@ class HierarchicalTopographicFactorAnalysis:
                        for s in range(self.num_subjects)]
         optimizer = torch.optim.Adam(list(self.enc.parameters()),
                                      lr=learning_rate)
-        if tfa.CUDA:
+        if tfa.CUDA and use_cuda:
             enc = torch.nn.DataParallel(self.enc)
             dec = torch.nn.DataParallel(self.dec)
             enc.cuda()
             dec.cuda()
             for acts in activations:
                 acts['Y'] = acts['Y'].cuda()
+        else:
+            enc = self.enc
+            dec = self.dec
 
         enc.train()
         dec.train()
@@ -90,15 +94,17 @@ class HierarchicalTopographicFactorAnalysis:
             free_energies[epoch].backward()
             optimizer.step()
 
-            if tfa.CUDA:
-                free_energies[epoch] = free_energies[epoch].cpu().data.numpy().sum(0)
-                lls[epoch] = lls[epoch].cpu().data.numpy().sum(0)
+            if tfa.CUDA and use_cuda:
+                free_energies[epoch] = free_energies[epoch].cpu()
+                lls[epoch] = lls[epoch].cpu()
+            free_energies[epoch] = free_energies[epoch].data.numpy().sum(0)
+            lls[epoch] = lls[epoch].data.numpy().sum(0)
 
             end = time.time()
             msg = tfa.EPOCH_MSG % (epoch + 1, (end - start) * 1000, free_energies[epoch])
             logging.info(msg)
 
-        if tfa.CUDA:
+        if tfa.CUDA and use_cuda:
             dec.cpu()
             enc.cpu()
 
