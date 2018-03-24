@@ -199,7 +199,6 @@ def populate_vardict(vdict, populator, *dims):
 
 def gaussian_populator(k, *dims):
     return {
-        'mu': torch.sqrt(torch.rand(*dims)) if 'sigma' in k\
-              else torch.zeros(*dims),
-        'sigma': torch.sqrt(torch.rand(*dims))
+        'mu': torch.ones(*dims) if 'sigma' in k else torch.zeros(*dims),
+        'sigma': torch.ones(*dims)
     }
