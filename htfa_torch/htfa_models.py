@@ -68,6 +68,16 @@ class HTFAGuideHyperParams(tfa_models.HyperParams):
                 'mu': torch.zeros(self._num_subjects),
                 'sigma': torch.ones(self._num_subjects),
             },
+            'weight_dists': {
+                'mu': {
+                    'mu': torch.zeros(self._num_subjects, self._num_factors),
+                    'sigma': torch.ones(self._num_subjects, self._num_factors),
+                },
+                'sigma': {
+                    'mu': torch.ones(self._num_subjects, self._num_factors),
+                    'sigma': torch.ones(self._num_subjects, self._num_factors),
+                }
+            },
             'weights': {
                 'mu': torch.zeros(self._num_subjects, self._num_times, self._num_factors),
                 'sigma': torch.ones(self._num_subjects, self._num_times, self._num_factors),
@@ -108,7 +118,13 @@ class HTFAGuideSubjectPrior(tfa_models.GuidePrior):
 
     def forward(self, trace, params, times=None,
                 num_particles=tfa_models.NUM_PARTICLES):
-        subject_params = params['subject']
+        # We only expand the parameters for which we're actually going to sample
+        # values in this very method, and thus want to expand to get multiple
+        # particles.
+        subject_params = utils.vardict({
+            'voxel_noise': params['subject']['voxel_noise'],
+            'weight_dists': params['subject']['weight_dists']
+        })
         if num_particles and num_particles > 0:
             subject_params = utils.unsqueeze_and_expand_vardict(
                 subject_params, 0, num_particles, True
@@ -117,10 +133,19 @@ class HTFAGuideSubjectPrior(tfa_models.GuidePrior):
                                    subject_params['voxel_noise']['sigma'],
                                    name='voxel_noise')
 
+        for k in params['subject']['weights'].keys():
+            trace.normal(
+                subject_params['weight_dists'][k]['mu'],
+                subject_params['weight_dists'][k]['sigma'],
+                name='subject_weights_' + k
+            )
+
         weights = []
         factor_centers = []
         factor_log_widths = []
         for s in range(self._num_subjects):
+            # The TFA prior is going to expand out particles all on its own, so
+            # we never actually have to expand the rest.
             sparams = utils.vardict(params['subject'])
             for k, v in sparams.iteritems():
                 sparams[k] = v[s]
@@ -223,7 +248,8 @@ class HTFAGenerativeSubjectPrior(tfa_models.GenerativePrior):
                                    name='voxel_noise')
 
         subject_weights_template = utils.unsqueeze_and_expand_vardict(
-            template['weights'], 0, self._num_subjects, True
+            template['weights'], len(template['weights']['mu']['mu'].shape) - 1,
+            self._num_subjects, True
         )
         subject_weight_params = utils.vardict({
             'mu': None,
@@ -233,15 +259,20 @@ class HTFAGenerativeSubjectPrior(tfa_models.GenerativePrior):
             subject_weight_params[k] = trace.normal(
                 subject_weights_template[k]['mu'],
                 subject_weights_template[k]['sigma'],
-                value=guide['subject_params_' + k], name='subject_params_' + k
+                value=guide['subject_weights_' + k], name='subject_weights_' + k
             )
+            if len(subject_weight_params[k].shape) >\
+               len(params['template']['weights'][k]['mu']['mu'].shape) + 1:
+                select_dim = 1
+            else:
+                select_dim = 0
 
         weights = []
         factor_centers = []
         factor_log_widths = []
         for s in range(self._num_subjects):
             sparams = utils.vardict()
-            sparams['weights'] = {k: v[s] for k, v in subject_weight_params.iteritems()}
+            sparams['weights'] = {k: v.select(select_dim, s) for k, v in subject_weight_params.iteritems()}
             sparams['factor_centers'] = template['factor_centers']
             sparams['factor_log_widths'] = template['factor_log_widths']
             w, fc, flw = self._tfa_priors[s](trace, sparams, times=times,
