@@ -60,8 +60,6 @@ class HierarchicalTopographicFactorAnalysis:
 
         activations = [{'Y': Variable(self.voxel_activations[s])}
                        for s in range(self.num_subjects)]
-        optimizer = torch.optim.Adam(list(self.enc.parameters()),
-                                     lr=learning_rate)
         if tfa.CUDA and use_cuda:
             enc = torch.nn.DataParallel(self.enc)
             dec = torch.nn.DataParallel(self.dec)
@@ -73,6 +71,8 @@ class HierarchicalTopographicFactorAnalysis:
             enc = self.enc
             dec = self.dec
 
+        optimizer = torch.optim.Adam(list(self.enc.parameters()),
+                                     lr=learning_rate)
         enc.train()
         dec.train()
 
@@ -171,4 +171,4 @@ class HierarchicalTopographicFactorAnalysis:
         p = probtorch.Trace()
         self.dec(p, times=times, guide=q,
                  observations=[q for s in range(self.num_subjects)])
-        return p
+        return p, q
