@@ -121,7 +121,7 @@ class TopographicalFactorAnalysis:
             for (batch, (activations, _)) in enumerate(activations_loader):
                 activations = Variable(activations)
                 if CUDA:
-                    activations.cuda()
+                    activations = activations.cuda()
                 trs = (batch*batch_size, None)
                 trs = (trs[0], trs[0] + activations.shape[0])
 
