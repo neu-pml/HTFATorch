@@ -11,8 +11,6 @@ import torch.nn as nn
 
 from . import tfa_models
 from . import utils
-from . import hotspot_initialization
-# from suggested_initialization import *
 
 TEMPLATE_SHAPE = utils.vardict()
 TEMPLATE_SHAPE['weights'] = {
@@ -62,7 +60,7 @@ class HTFAGuideHyperParams(tfa_models.HyperParams):
             utils.gaussian_populator,
             self._num_factors,
         )
-        params['template']['factor_log_widths']['mu']['mu'] +=\
+        params['template']['factor_log_widths']['mu']['mu'] *=\
             hyper_means['factor_log_widths']
 
         params['subject'] = {
@@ -85,23 +83,12 @@ class HTFAGuideHyperParams(tfa_models.HyperParams):
                 'sigma': torch.ones(self._num_subjects, self._num_times, self._num_factors),
             },
             'factor_centers': {
-                'mu': hyper_means['subject_factor_centers'],
+                'mu': torch.zeros(self._num_subjects, self._num_factors, 3),
                 'sigma': torch.ones(self._num_subjects, self._num_factors, 3),
             },
             'factor_log_widths': {
-                'mu': hyper_means['subject_factor_log_widths'],
+                'mu': torch.zeros(self._num_subjects, self._num_factors),
                 'sigma': torch.ones(self._num_subjects, self._num_factors),
-            # 'weights': {
-            #     'mu': torch.zeros(self._num_subjects, self._num_times, self._num_factors),
-            #     'sigma': torch.ones(self._num_subjects, self._num_times, self._num_factors),
-            # },
-            # 'factor_centers': {
-            #     'mu': torch.zeros(self._num_subjects, self._num_factors, 3),
-            #     'sigma': torch.ones(self._num_subjects, self._num_factors, 3),
-            # },
-            # 'factor_log_widths': {
-            #     'mu': torch.zeros(self._num_subjects, self._num_factors),
-            #     'sigma': torch.ones(self._num_subjects, self._num_factors),
             }
         }
 
@@ -179,21 +166,13 @@ class HTFAGuide(nn.Module):
         self._num_times = activations[0].shape[0]
 
         s = np.random.choice(self._num_subjects, 1)[0]
-        # centers, widths, weights = utils.initial_hypermeans(activations[s].numpy().T,
-        #                                                     locations[s].numpy(),
-        #                                                     num_factors)
-        centers,widths,weights,\
-        s_centers,s_widths,s_weights = hotspot_initialization.initialize_centers_widths_weights(
-                                                            activations,
-                                                            locations,
+        centers, widths, weights = utils.initial_hypermeans(activations[s].numpy().T,
+                                                            locations[s].numpy(),
                                                             num_factors)
         hyper_means = {
             'weights': torch.Tensor(weights),
             'factor_centers': torch.Tensor(centers),
-            'factor_log_widths': torch.Tensor(widths),
-            'subject_weights' : torch.Tensor(s_weights),
-            'subject_factor_centers' : torch.Tensor(s_centers),
-            'subject_factor_log_widths' : torch.Tensor(s_widths)
+            'factor_log_widths': widths,
         }
         self.hyperparams = HTFAGuideHyperParams(hyper_means, self._num_times,
                                                 self._num_subjects, num_factors)
