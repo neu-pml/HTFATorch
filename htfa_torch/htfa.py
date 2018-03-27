@@ -26,7 +26,7 @@ from . import htfa_models
 from . import tfa
 from . import tfa_models
 from . import utils
-
+# from . import suggested_initialization import *
 class HierarchicalTopographicFactorAnalysis:
     """Overall container for a run of TFA"""
     def __init__(self, data_files, num_factors=tfa_models.NUM_FACTORS):
@@ -64,7 +64,7 @@ class HierarchicalTopographicFactorAnalysis:
             enc = torch.nn.DataParallel(self.enc)
             dec = torch.nn.DataParallel(self.dec)
             enc.cuda()
-            dec.cuda()
+            dec.cuda(0)
             for acts in activations:
                 acts['Y'] = acts['Y'].cuda()
         else:
