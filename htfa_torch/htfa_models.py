@@ -227,6 +227,8 @@ class HTFAGenerativeHyperParams(tfa_models.HyperParams):
 
         params['template']['weights']['sigma']['mu']['mu'] *=\
             tfa_models.SOURCE_WEIGHT_STD_DEV
+        params['template']['factor_log_widths']['mu']['mu'] =\
+            torch.ones(self._num_factors)
         params['template']['factor_log_widths']['sigma']['mu'] *=\
             tfa_models.SOURCE_LOG_WIDTH_STD_DEV
 
