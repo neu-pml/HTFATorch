@@ -60,7 +60,7 @@ class HTFAGuideHyperParams(tfa_models.HyperParams):
             utils.gaussian_populator,
             self._num_factors,
         )
-        params['template']['factor_log_widths']['mu']['mu'] *=\
+        params['template']['factor_log_widths']['mu']['mu'] +=\
             hyper_means['factor_log_widths']
 
         params['subject'] = {
@@ -83,11 +83,12 @@ class HTFAGuideHyperParams(tfa_models.HyperParams):
                 'sigma': torch.ones(self._num_subjects, self._num_times, self._num_factors),
             },
             'factor_centers': {
-                'mu': torch.zeros(self._num_subjects, self._num_factors, 3),
+                'mu': hyper_means['factor_centers'].repeat(self._num_subjects, 1, 1),
                 'sigma': torch.ones(self._num_subjects, self._num_factors, 3),
             },
             'factor_log_widths': {
-                'mu': torch.zeros(self._num_subjects, self._num_factors),
+                'mu': torch.zeros(self._num_subjects, self._num_factors) *\
+                      hyper_means['factor_log_widths'],
                 'sigma': torch.ones(self._num_subjects, self._num_factors),
             }
         }
