@@ -237,10 +237,18 @@ class TopographicalFactorAnalysis:
     def plot_factor_centers(self, filename=None, show=True):
         results = self.results()
 
+        if CUDA:
+            self.enc.module.hyperparams.cpu()
+        params = self.enc.module.hyperparams.state_vardict()
+        for k, v in params.items():
+            params[k] = v.data
+        uncertainties = params['factor_centers']['sigma']
+
         plot = niplot.plot_connectome(
             np.eye(self.num_factors),
             results['factor_centers'],
-            node_color='k'
+            node_color=utils.uncertainty_palette(uncertainties),
+            node_size=np.exp(results['factor_log_widths'] - np.log(2))
         )
 
         if filename is not None:
@@ -284,10 +292,21 @@ class TopographicalFactorAnalysis:
 
     def plot_connectome(self, filename=None, show=True):
         results = self.results()
+        if CUDA:
+            self.enc.module.hyperparams.cpu()
+        params = self.enc.module.hyperparams.state_vardict()
+        for k, v in params.items():
+            params[k] = v.data
+        uncertainties = params['factor_centers']['sigma']
+
         connectome = 1 - sd.squareform(sd.pdist(results['weights'].T),
                                        'correlation')
-        plot = niplot.plot_connectome(connectome, results['factor_centers'],
-                                      node_color='k', edge_threshold='75%')
+        plot = niplot.plot_connectome(
+            connectome,
+            results['factor_centers'],
+            node_color=utils.uncertainty_palette(uncertainties),
+            edge_threshold='75%'
+        )
 
         if filename is not None:
             plot.savefig(filename)
