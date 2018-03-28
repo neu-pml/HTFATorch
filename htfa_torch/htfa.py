@@ -134,27 +134,43 @@ class HierarchicalTopographicFactorAnalysis:
 
     def plot_factor_centers(self, subject=None, filename=None, show=True,
                             trace=None):
+        hyperparams = self.results()
+
         if trace:
             if subject is not None:
                 factor_centers = trace['FactorCenters%d' % subject].value
+                factor_log_widths = trace['FactorLogWidths%d' % subject].value
+                factor_uncertainties = hyperparams['subject']['factor_centers']['sigma'][subject]
             else:
                 factor_centers = trace['template_factor_centers__mu'].value
+                factor_log_widths = trace['template_factor_log_widths__mu'].value
+                factor_uncertainties = trace['template_factor_centers__sigma'].value
             if len(factor_centers.shape) > 2:
                 factor_centers = factor_centers.mean(0)
+                factor_log_widths = factor_log_widths.mean(0)
+            if len(factor_uncertainties.shape) > 2:
+                factor_uncertainties = factor_uncertainties.mean(0)
         else:
-            hyperparams = self.results()
-
             if subject is not None:
                 factor_centers =\
                     hyperparams['subject']['factor_centers']['mu'][subject]
+                factor_log_widths =\
+                    hyperparams['subject']['factor_log_widths']['mu'][subject]
+                factor_uncertainties =\
+                    hyperparams['subject']['factor_centers']['sigma'][subject]
             else:
                 factor_centers =\
                     hyperparams['template']['factor_centers']['mu']['mu']
+                factor_log_widths =\
+                    hyperparams['template']['factor_log_widths']['mu']
+                factor_uncertainties =\
+                    hyperparams['template']['factor_centers']['sigma']
 
         plot = niplot.plot_connectome(
             np.eye(self.num_factors),
             factor_centers.data.numpy(),
-            node_color='k'
+            node_color=utils.uncertainty_palette(factor_uncertainties.data),
+            node_size=np.exp(factor_log_widths.data.numpy() - np.log(2))
         )
 
         if filename is not None:
