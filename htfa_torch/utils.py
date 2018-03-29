@@ -195,13 +195,13 @@ def unsqueeze_and_expand_vardict(vdict, dim, size, clone=False):
 
 def populate_vardict(vdict, populator, *dims):
     for k in vdict.iterkeys():
-        vdict[k] = populator(k, dims)
+        vdict[k] = populator(*dims)
     return vdict
 
-def gaussian_populator(k, *dims):
+def gaussian_populator(*dims):
     return {
-        'mu': torch.sqrt(torch.rand(*dims)) if 'sigma' in k else torch.zeros(*dims),
-        'sigma': torch.sqrt(torch.rand(*dims))
+        'mu': torch.zeros(*dims),
+        'sigma': torch.ones(*dims)
     }
 
 def uncertainty_palette(uncertainties):
