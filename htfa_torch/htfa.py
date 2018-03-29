@@ -142,9 +142,10 @@ class HierarchicalTopographicFactorAnalysis:
                 factor_log_widths = trace['FactorLogWidths%d' % subject].value
                 factor_uncertainties = hyperparams['subject']['factor_centers']['sigma'][subject]
             else:
-                factor_centers = trace['template_factor_centers__mu'].value
-                factor_log_widths = trace['template_factor_log_widths__mu'].value
-                factor_uncertainties = trace['template_factor_centers__sigma'].value
+                factor_centers = trace['template_factor_centers'].value
+                factor_log_widths = trace['template_factor_log_widths'].value
+                factor_uncertainties =\
+                    hyperparams['template']['factor_centers']['sigma']
             if len(factor_centers.shape) > 2:
                 factor_centers = factor_centers.mean(0)
                 factor_log_widths = factor_log_widths.mean(0)
