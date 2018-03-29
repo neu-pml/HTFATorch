@@ -49,12 +49,10 @@ class HierarchicalTopographicFactorAnalysis:
                                          self.num_factors)
         self.dec = htfa_models.HTFAModel(self.voxel_locations, self.num_subjects,
                                          self.num_times, self.num_factors)
-        if tfa.CUDA:
-            self.enc = torch.nn.DataParallel(self.enc)
-            self.dec = torch.nn.DataParallel(self.dec)
 
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
-              log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES):
+              log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES,
+              use_cuda=True):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
@@ -62,16 +60,21 @@ class HierarchicalTopographicFactorAnalysis:
 
         activations = [{'Y': Variable(self.voxel_activations[s])}
                        for s in range(self.num_subjects)]
-        optimizer = torch.optim.Adam(list(self.enc.parameters()),
-                                     lr=learning_rate)
-        if tfa.CUDA:
-            self.enc.cuda()
-            self.dec.cuda()
+        if tfa.CUDA and use_cuda:
+            enc = torch.nn.DataParallel(self.enc)
+            dec = torch.nn.DataParallel(self.dec)
+            enc.cuda()
+            dec.cuda()
             for acts in activations:
                 acts['Y'] = acts['Y'].cuda()
+        else:
+            enc = self.enc
+            dec = self.dec
 
-        self.enc.train()
-        self.dec.train()
+        optimizer = torch.optim.Adam(list(self.enc.parameters()),
+                                     lr=learning_rate)
+        enc.train()
+        dec.train()
 
         free_energies = list(range(num_steps))
         lls = list(range(num_steps))
@@ -81,9 +84,9 @@ class HierarchicalTopographicFactorAnalysis:
 
             optimizer.zero_grad()
             q = probtorch.Trace()
-            self.enc(q, num_particles=num_particles)
+            enc(q, num_particles=num_particles)
             p = probtorch.Trace()
-            self.dec(p, guide=q, observations=activations)
+            dec(p, guide=q, observations=activations)
 
             free_energies[epoch] = tfa.free_energy(q, p, num_particles=num_particles)
             lls[epoch] = tfa.log_likelihood(q, p, num_particles=num_particles)
@@ -91,25 +94,21 @@ class HierarchicalTopographicFactorAnalysis:
             free_energies[epoch].backward()
             optimizer.step()
 
-            if tfa.CUDA:
-                free_energies[epoch] = free_energies[epoch].cpu().data.numpy().sum(0)
-                lls[epoch] = lls[epoch].cpu().data.numpy().sum(0)
+            if tfa.CUDA and use_cuda:
+                free_energies[epoch] = free_energies[epoch].cpu()
+                lls[epoch] = lls[epoch].cpu()
+            free_energies[epoch] = free_energies[epoch].data.numpy().sum(0)
+            lls[epoch] = lls[epoch].data.numpy().sum(0)
 
             end = time.time()
             msg = tfa.EPOCH_MSG % (epoch + 1, (end - start) * 1000, free_energies[epoch])
             logging.info(msg)
 
-        if tfa.CUDA:
-            for acts in activations:
-                acts['Y'].cpu()
-            self.dec.cpu()
-            self.enc.cpu()
+        if tfa.CUDA and use_cuda:
+            dec.cpu()
+            enc.cpu()
 
         return np.vstack([free_energies, lls])
-
-    def results(self):
-        """Return the inferred parameters"""
-        pass
 
     def save(self, out_dir='.'):
         '''Save a HierarchicalTopographicFactorAnalysis'''
@@ -124,7 +123,7 @@ class HierarchicalTopographicFactorAnalysis:
 
     def results(self):
         """Return the inferred variational parameters"""
-        return self.enc.module.hyperparams.state_vardict()
+        return self.enc.hyperparams.state_vardict()
 
     def plot_voxels(self, subject=None):
         if subject:
@@ -133,20 +132,45 @@ class HierarchicalTopographicFactorAnalysis:
             for s in range(self.num_subjects):
                 hyp.plot(self.voxel_locations[s].numpy(), 'k.')
 
-    def plot_factor_centers(self, subject=None, filename=None, show=True):
+    def plot_factor_centers(self, subject=None, filename=None, show=True,
+                            trace=None):
         hyperparams = self.results()
 
-        if subject is not None:
-            factor_centers =\
-                hyperparams['subject']['factor_centers']['mu'][subject]
+        if trace:
+            if subject is not None:
+                factor_centers = trace['FactorCenters%d' % subject].value
+                factor_log_widths = trace['FactorLogWidths%d' % subject].value
+                factor_uncertainties = hyperparams['subject']['factor_centers']['sigma'][subject]
+            else:
+                factor_centers = trace['template_factor_centers__mu'].value
+                factor_log_widths = trace['template_factor_log_widths__mu'].value
+                factor_uncertainties = trace['template_factor_centers__sigma'].value
+            if len(factor_centers.shape) > 2:
+                factor_centers = factor_centers.mean(0)
+                factor_log_widths = factor_log_widths.mean(0)
+            if len(factor_uncertainties.shape) > 2:
+                factor_uncertainties = factor_uncertainties.mean(0)
         else:
-            factor_centers =\
-                hyperparams['template']['factor_centers']['mu']['mu']
+            if subject is not None:
+                factor_centers =\
+                    hyperparams['subject']['factor_centers']['mu'][subject]
+                factor_log_widths =\
+                    hyperparams['subject']['factor_log_widths']['mu'][subject]
+                factor_uncertainties =\
+                    hyperparams['subject']['factor_centers']['sigma'][subject]
+            else:
+                factor_centers =\
+                    hyperparams['template']['factor_centers']['mu']['mu']
+                factor_log_widths =\
+                    hyperparams['template']['factor_log_widths']['mu']
+                factor_uncertainties =\
+                    hyperparams['template']['factor_centers']['sigma']
 
         plot = niplot.plot_connectome(
             np.eye(self.num_factors),
             factor_centers.data.numpy(),
-            node_color='k'
+            node_color=utils.uncertainty_palette(factor_uncertainties.data),
+            node_size=np.exp(factor_log_widths.data.numpy() - np.log(2))
         )
 
         if filename is not None:
@@ -155,3 +179,12 @@ class HierarchicalTopographicFactorAnalysis:
             niplot.show()
 
         return plot
+
+    def sample(self, times=None, posterior_predictive=False):
+        q = probtorch.Trace()
+        if posterior_predictive:
+            self.enc(q, times=times, num_particles=1)
+        p = probtorch.Trace()
+        self.dec(p, times=times, guide=q,
+                 observations=[q for s in range(self.num_subjects)])
+        return p, q

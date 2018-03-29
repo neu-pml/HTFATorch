@@ -18,6 +18,7 @@ finally:
 import numpy as np
 import scipy.io as sio
 import scipy.stats as stats
+import seaborn as sns
 from sklearn.cluster import KMeans
 import torch
 from torch.autograd import Variable
@@ -199,7 +200,14 @@ def populate_vardict(vdict, populator, *dims):
 
 def gaussian_populator(k, *dims):
     return {
-        'mu': torch.sqrt(torch.rand(*dims)) if 'sigma' in k\
-              else torch.zeros(*dims),
+        'mu': torch.sqrt(torch.rand(*dims)) if 'sigma' in k else torch.zeros(*dims),
         'sigma': torch.sqrt(torch.rand(*dims))
     }
+
+def uncertainty_palette(uncertainties):
+    uncertainties = np.array([
+        [u] for u in np.linalg.norm((uncertainties**-2).numpy(), axis=1)
+    ])
+    uncertainties = uncertainties / (1.0 + uncertainties)
+    palette = np.array(sns.color_palette("RdBu", uncertainties.shape[0]))
+    return np.concatenate([palette, uncertainties], axis=1)
