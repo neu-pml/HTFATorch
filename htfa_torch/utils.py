@@ -31,7 +31,7 @@ from nilearn.input_data import NiftiMasker
 def brain_centroid(locations):
     brain_center = torch.mean(locations, 0).unsqueeze(0)
     brain_center_std_dev = torch.sqrt(
-        10 * torch.var(locations, 0).unsqueeze(0)
+        torch.var(locations, 0).unsqueeze(0)
     )
     return brain_center, brain_center_std_dev
 
