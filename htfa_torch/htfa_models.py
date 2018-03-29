@@ -6,31 +6,17 @@ __email__ = 'e.sennesh@northeastern.edu', 'khan.zu@husky.neu.edu'
 import collections
 import numpy as np
 import torch
+from torch.autograd import Variable
 import probtorch
 import torch.nn as nn
 
 from . import tfa_models
 from . import utils
 
-TEMPLATE_SHAPE = utils.vardict()
-TEMPLATE_SHAPE['weights'] = {
-    'mu': {
-        'mu': None,
-        'sigma': None,
-    },
-    'sigma': {
-        'mu': None,
-        'sigma': None,
-    }
-}
-TEMPLATE_SHAPE['factor_centers'] = {
-    'mu': None,
-    'sigma': None,
-}
-TEMPLATE_SHAPE['factor_log_widths'] = {
-    'mu': None,
-    'sigma': None,
-}
+TEMPLATE_SHAPE = utils.vardict({
+    'factor_centers': None,
+    'factor_log_widths': None,
+})
 
 class HTFAGuideHyperParams(tfa_models.HyperParams):
     def __init__(self, hyper_means, num_times, num_subjects,
@@ -40,58 +26,42 @@ class HTFAGuideHyperParams(tfa_models.HyperParams):
         self._num_factors = num_factors
 
         params = utils.vardict()
-        params['template'] = utils.vardict(TEMPLATE_SHAPE.copy())
-        params['template']['weights'] = utils.populate_vardict(
-            params['template']['weights'],
+        params['template'] = utils.populate_vardict(
+            utils.vardict(TEMPLATE_SHAPE.copy()),
             utils.gaussian_populator,
-            self._num_factors,
+            self._num_factors
         )
-        params['template']['weights']['mu']['mu']['mu'] =\
-            hyper_means['weights'].mean(0)
-        params['template']['factor_centers'] = utils.populate_vardict(
-            params['template']['factor_centers'],
-            utils.gaussian_populator,
-            self._num_factors, 3,
-        )
-        params['template']['factor_centers']['mu']['mu'] =\
+        params['template']['factor_centers'] =\
+            utils.gaussian_populator(self._num_factors, 3)
+        params['template']['factor_centers']['mu'] +=\
             hyper_means['factor_centers']
-        params['template']['factor_log_widths'] = utils.populate_vardict(
-            params['template']['factor_log_widths'],
-            utils.gaussian_populator,
-            self._num_factors,
-        )
-        params['template']['factor_log_widths']['mu']['mu'] +=\
-            hyper_means['factor_log_widths']
+        params['template']['factor_log_widths']['mu'] =\
+            hyper_means['factor_log_widths'] * torch.ones(self._num_factors)
+        params['template']['factor_log_widths']['sigma'] =\
+            torch.sqrt(torch.rand(self._num_factors))
 
-        params['subject'] = {
-            'voxel_noise': {
-                'mu': torch.zeros(self._num_subjects),
-                'sigma': torch.ones(self._num_subjects),
-            },
-            'weight_dists': {
-                'mu': {
-                    'mu': torch.zeros(self._num_subjects, self._num_factors),
-                    'sigma': torch.ones(self._num_subjects, self._num_factors),
-                },
-                'sigma': {
-                    'mu': torch.ones(self._num_subjects, self._num_factors),
-                    'sigma': torch.ones(self._num_subjects, self._num_factors),
-                }
-            },
-            'weights': {
-                'mu': torch.zeros(self._num_subjects, self._num_times, self._num_factors),
-                'sigma': torch.ones(self._num_subjects, self._num_times, self._num_factors),
-            },
+        params['subject'] = utils.vardict({
             'factor_centers': {
-                'mu': hyper_means['factor_centers'].repeat(self._num_subjects, 1, 1),
+                'mu': hyper_means['factor_centers'].\
+                        repeat(self._num_subjects, 1, 1),
                 'sigma': torch.ones(self._num_subjects, self._num_factors, 3),
             },
             'factor_log_widths': {
-                'mu': torch.zeros(self._num_subjects, self._num_factors) *\
+                'mu': torch.ones(self._num_subjects, self._num_factors) *\
                       hyper_means['factor_log_widths'],
-                'sigma': torch.ones(self._num_subjects, self._num_factors),
+                'sigma': torch.sqrt(torch.rand(self._num_subjects, self._num_factors)),
+            },
+            'weights': {
+                'mu': torch.randn(self._num_subjects, self._num_times,
+                                  self._num_factors),
+                'sigma': torch.ones(self._num_subjects, self._num_times,
+                                    self._num_factors),
+            },
+            'voxel_noise': {
+                'mu': torch.ones(self._num_subjects),
+                'sigma': torch.sqrt(torch.rand(self._num_subjects))
             }
-        }
+        })
 
         super(self.__class__, self).__init__(params, guide=True)
 
@@ -122,31 +92,21 @@ class HTFAGuideSubjectPrior(tfa_models.GuidePrior):
         # We only expand the parameters for which we're actually going to sample
         # values in this very method, and thus want to expand to get multiple
         # particles.
-        subject_params = utils.vardict({
-            'voxel_noise': params['subject']['voxel_noise'],
-            'weight_dists': params['subject']['weight_dists']
-        })
+        voxel_noise_params = params['subject']['voxel_noise']
         if num_particles and num_particles > 0:
-            subject_params = utils.unsqueeze_and_expand_vardict(
-                subject_params, 0, num_particles, True
+            voxel_noise_params = utils.unsqueeze_and_expand_vardict(
+                params['subject']['voxel_noise'], 0, num_particles, True
             )
-        voxel_noise = trace.normal(subject_params['voxel_noise']['mu'],
-                                   subject_params['voxel_noise']['sigma'],
+        voxel_noise = trace.normal(voxel_noise_params['mu'],
+                                   voxel_noise_params['sigma'],
                                    name='voxel_noise')
-
-        for k in params['subject']['weights'].keys():
-            trace.normal(
-                subject_params['weight_dists'][k]['mu'],
-                subject_params['weight_dists'][k]['sigma'],
-                name='subject_weights_' + k
-            )
 
         weights = []
         factor_centers = []
         factor_log_widths = []
         for s in range(self._num_subjects):
             # The TFA prior is going to expand out particles all on its own, so
-            # we never actually have to expand the rest.
+            # we never actually have to expand them.
             sparams = utils.vardict(params['subject'])
             for k, v in sparams.iteritems():
                 sparams[k] = v[s]
@@ -199,27 +159,26 @@ class HTFAGenerativeHyperParams(tfa_models.HyperParams):
             utils.gaussian_populator,
             self._num_factors
         )
-        params['template']['factor_centers'] = utils.populate_vardict(
-            utils.vardict(TEMPLATE_SHAPE.copy())['factor_centers'],
-            utils.gaussian_populator,
-            self._num_factors, 3
-        )
 
-        params['template']['weights']['sigma']['mu']['mu'] *=\
-            tfa_models.SOURCE_WEIGHT_STD_DEV
-        params['template']['factor_log_widths']['mu']['mu'] =\
-            torch.ones(self._num_factors)
-        params['template']['factor_log_widths']['sigma']['mu'] *=\
-            tfa_models.SOURCE_LOG_WIDTH_STD_DEV
-
-        params['template']['factor_centers']['mu']['mu'] =\
+        params['template']['factor_centers']['mu'] =\
             brain_center.expand(self._num_factors, 3)
-        params['template']['factor_centers']['sigma']['mu'] =\
+        params['template']['factor_centers']['sigma'] =\
             brain_center_std_dev.expand(self._num_factors, 3)
 
-        params['voxel_noise'] = {
-            'mu': torch.zeros(self._num_subjects),
-            'sigma': torch.ones(self._num_subjects),
+        params['template']['factor_log_widths']['mu'] =\
+            torch.ones(self._num_factors)
+        params['template']['factor_log_widths']['sigma'] =\
+            tfa_models.SOURCE_LOG_WIDTH_STD_DEV * torch.ones(self._num_factors)
+
+        params['subject'] = {
+            'factor_center_noise': torch.ones(self._num_subjects),
+            'factor_log_width_noise': torch.ones(self._num_subjects),
+            'weights': {
+                'mu': torch.rand(self._num_subjects, self._num_factors),
+                'sigma': tfa_models.SOURCE_WEIGHT_STD_DEV *\
+                         torch.ones(self._num_subjects, self._num_factors)
+            },
+            'voxel_noise': utils.gaussian_populator(self._num_subjects)
         }
         super(self.__class__, self).__init__(params, guide=False)
 
@@ -245,39 +204,29 @@ class HTFAGenerativeSubjectPrior(tfa_models.GenerativePrior):
 
     def forward(self, trace, params, template, times=None,
                 guide=probtorch.Trace()):
-        voxel_noise = trace.normal(params['voxel_noise']['mu'],
-                                   params['voxel_noise']['sigma'],
+        voxel_noise = trace.normal(params['subject']['voxel_noise']['mu'],
+                                   params['subject']['voxel_noise']['sigma'],
                                    value=guide['voxel_noise'],
                                    name='voxel_noise')
-
-        subject_weights_template = utils.unsqueeze_and_expand_vardict(
-            template['weights'], len(template['weights']['mu']['mu'].shape) - 1,
-            self._num_subjects, True
-        )
-        subject_weight_params = utils.vardict({
-            'mu': None,
-            'sigma': None,
-        })
-        for k in subject_weight_params.iterkeys():
-            subject_weight_params[k] = trace.normal(
-                subject_weights_template[k]['mu'],
-                subject_weights_template[k]['sigma'],
-                value=guide['subject_weights_' + k], name='subject_weights_' + k
-            )
-            if len(subject_weight_params[k].shape) >\
-               len(params['template']['weights'][k]['mu']['mu'].shape) + 1:
-                select_dim = 1
-            else:
-                select_dim = 0
 
         weights = []
         factor_centers = []
         factor_log_widths = []
         for s in range(self._num_subjects):
-            sparams = utils.vardict()
-            sparams['weights'] = {k: v.select(select_dim, s) for k, v in subject_weight_params.iteritems()}
-            sparams['factor_centers'] = template['factor_centers']
-            sparams['factor_log_widths'] = template['factor_log_widths']
+            sparams = utils.vardict({
+                'factor_centers': {
+                    'mu': template['factor_centers'],
+                    'sigma': params['subject']['factor_center_noise'][s],
+                },
+                'factor_log_widths': {
+                    'mu': template['factor_log_widths'],
+                    'sigma': params['subject']['factor_log_width_noise'][s],
+                },
+                'weights': {
+                    'mu': params['subject']['weights']['mu'][s],
+                    'sigma': params['subject']['weights']['sigma'][s],
+                }
+            })
             w, fc, flw = self._tfa_priors[s](trace, sparams, times=times,
                                              guide=guide)
             weights += [w]
