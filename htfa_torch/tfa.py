@@ -84,10 +84,10 @@ class TopographicalFactorAnalysis:
                                        num_factors=self.num_factors)
 
         if CUDA:
-            self.enc = torch.nn.DataParallel(self.enc)
-            self.dec = torch.nn.DataParallel(self.dec)
             self.enc.cuda()
             self.dec.cuda()
+            self.enc = torch.nn.DataParallel(self.enc)
+            self.dec = torch.nn.DataParallel(self.dec)
 
     def train(self, num_steps=10, learning_rate=LEARNING_RATE,
               log_level=logging.WARNING, batch_size=64,
