@@ -91,7 +91,8 @@ class TopographicalFactorAnalysis:
 
     def train(self, num_steps=10, learning_rate=LEARNING_RATE,
               log_level=logging.WARNING, batch_size=64,
-              num_particles=tfa_models.NUM_PARTICLES):
+              num_particles=tfa_models.NUM_PARTICLES,
+              use_cuda=True):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
@@ -105,10 +106,19 @@ class TopographicalFactorAnalysis:
             batch_size=batch_size,
             num_workers=2
         )
+        if CUDA and use_cuda:
+            enc = torch.nn.DataParallel(self.enc)
+            dec = torch.nn.DataParallel(self.dec)
+            enc.cuda()
+            dec.cuda()
+        else:
+            enc = self.enc
+            dec = self.dec
+
         optimizer = torch.optim.Adam(list(self.enc.parameters()), lr=learning_rate)
 
-        self.enc.train()
-        self.dec.train()
+        enc.train()
+        dec.train()
 
         free_energies = np.zeros(num_steps)
         lls = np.zeros(num_steps)
@@ -127,9 +137,9 @@ class TopographicalFactorAnalysis:
 
                 optimizer.zero_grad()
                 q = probtorch.Trace()
-                self.enc(q, times=trs, num_particles=num_particles)
+                enc(q, times=trs, num_particles=num_particles)
                 p = probtorch.Trace()
-                self.dec(p, times=trs, guide=q, observations={'Y': activations})
+                dec(p, times=trs, guide=q, observations={'Y': activations})
 
                 epoch_free_energies[batch] = free_energy(q, p, num_particles=num_particles)
                 epoch_lls[batch] = log_likelihood(q, p, num_particles=num_particles)
@@ -146,6 +156,10 @@ class TopographicalFactorAnalysis:
             end = time.time()
             msg = EPOCH_MSG % (epoch + 1, (end - start) * 1000, free_energies[epoch])
             logging.info(msg)
+
+        if CUDA and use_cuda:
+            dec.cpu()
+            enc.cpu()
 
         return np.vstack([free_energies, lls])
 
