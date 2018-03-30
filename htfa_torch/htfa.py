@@ -161,7 +161,7 @@ class HierarchicalTopographicFactorAnalysis:
                     hyperparams['subject']['factor_centers']['sigma'][subject]
             else:
                 factor_centers =\
-                    hyperparams['template']['factor_centers']['mu']['mu']
+                    hyperparams['template']['factor_centers']['mu']
                 factor_log_widths =\
                     hyperparams['template']['factor_log_widths']['mu']
                 factor_uncertainties =\
