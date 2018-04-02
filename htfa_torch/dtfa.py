@@ -17,25 +17,25 @@ import probtorch
 class DeepTFA(torch.nn.Module):
     def __init__(self, N=50, T=200, D=2, E=2, K=24):
         # generative model
-        self.p_z_w_mean = torch.zeros(D)
-        self.p_z_w_std = torch.ones(D)
+        self.p_z_w_mean = torch.zeros(E)
+        self.p_z_w_std = torch.ones(E)
         self.w = torch.nn.Sequential(
-                    torch.nn.Linear(D, K/2),
+                    torch.nn.Linear(E, K/2),
                     torch.nn.ReLU(),
                     torch.nn.Linear(K/2, K))
-        self.q_z_f_mean = torch.zeros(E)
-        self.q_z_f_std = torch.ones(E)
+        self.q_z_f_mean = torch.zeros(D)
+        self.q_z_f_std = torch.ones(D)
         self.h_f = torch.nn.Sequential(
-                        torch.nn.Linear(E, K/2),
+                        torch.nn.Linear(D, K/2),
                         torch.nn.ReLU())
         self.x_f = torch.nn.Linear(K/2, 3*K)
         self.log_rho_f = torch.nn.Linear(K/2, K)
         self.sigma_y = Parameter(1.0)
         # variational parameters
-        self.q_z_w_mean = Parameter(torch.zeros(N, D))
-        self.q_z_w_std = Parameter(torch.ones(N, D))
-        self.q_z_f_mean = Parameter(torch.zeros(N, T, E))
-        self.q_z_f_std = Parameter(torch.ones(N, T, E))
+        self.q_z_f_mean = Parameter(torch.zeros(N, D))
+        self.q_z_f_std = Parameter(torch.ones(N, D))
+        self.q_z_w_mean = Parameter(torch.zeros(N, T, E))
+        self.q_z_w_std = Parameter(torch.ones(N, T, E))
 
     def forward(self, x, y, n, t):
         p = probtorch.Trace()
@@ -45,10 +45,11 @@ class DeepTFA(torch.nn.Module):
                        name='z_w')
         z_w = p.normal(self.p_z_w_mean,
                        self.p_z_w_std,
+                       value=q['z_w'],
                        name='z_w')
         w = self.w(z_w)
-        z_f = q.normal(self.q_z_w_mean[n],
-                       self.q_z_w_std[n],
+        z_f = q.normal(self.q_z_f_mean[n],
+                       self.q_z_f_std[n],
                        name='z_f')
         z_f = p.normal(self.z_f_mean,
                        self.z_f_std,
