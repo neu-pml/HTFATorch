@@ -65,3 +65,41 @@ class DeepTFAEmbedding(tfa_models.Model):
         factor_log_widths = self.factor_log_widths_generator(factors_embedding)
 
         return weights, factor_centers, factor_log_widths
+
+class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
+    def __init__(self, num_times, embedding_dim=2):
+        self.num_times = num_times
+        self.embedding_dim = embedding_dim
+
+        params = utils.vardict()
+        params['embedding'] = {
+            'weights': {
+                'mu': torch.zeros(self.num_times, self.embedding_dim),
+                'sigma': torch.ones(self.num_times, self.embedding_dim),
+            },
+            'factors': {
+                'mu': torch.zeros(self.embedding_dim),
+                'sigma': torch.ones(self.embedding_dim),
+            },
+        }
+
+        super(self.__class__, self).__init__(params, guide=False)
+
+class DeepTFAGuideHyperparams(tfa_models.HyperParams):
+    def __init__(self, num_times, embedding_dim=2):
+        self.num_times = num_times
+        self.embedding_dim = embedding_dim
+
+        params = utils.vardict()
+        params['embedding'] = {
+            'weights': {
+                'mu': torch.zeros(self.num_times, self.embedding_dim),
+                'sigma': torch.ones(self.num_times, self.embedding_dim),
+            },
+            'factors': {
+                'mu': torch.zeros(self.embedding_dim),
+                'sigma': torch.ones(self.embedding_dim),
+            },
+        }
+
+        super(self.__class__, self).__init__(params, guide=True)
