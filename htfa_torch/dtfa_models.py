@@ -103,3 +103,71 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
         }
 
         super(self.__class__, self).__init__(params, guide=True)
+
+class DeepTFAGuide(nn.Module):
+    """Variational guide for deep topographic factor analysis"""
+    def __init__(self, num_subjects=1, num_times=[1], embedding_dim=2):
+        super(self.__class__, self).__init__()
+        self._num_subjects = num_subjects
+        self._num_times = num_times
+
+        self.hyperparams = [DeepTFAGuideHyperparams(
+            self._num_times[s], embedding_dim
+        ) for s in range(self._num_subjects)]
+        for s, subject_hyperparams in enumerate(self.hyperparams):
+            self.add_module('_hyperparams' + str(s), subject_hyperparams)
+
+    def forward(self, trace, embedding, num_particles=tfa_models.NUM_PARTICLES):
+        params = [self.hyperparams[s].state_vardict() for s in
+                  range(self._num_subjects)]
+        weights = [s for s in range(self._num_subjects)]
+        centers = [s for s in range(self._num_subjects)]
+        log_widths = [s for s in range(self._num_subjects)]
+        for s in range(self._num_subjects):
+            params[s] = utils.unsqueeze_and_expand_vardict(params[s], 0,
+                                                           num_particles,
+                                                           clone=True)
+            weights[s], centers[s], log_widths[s] =\
+                embedding(trace, params[s], subject=s)
+
+        return weights, centers, log_widths
+
+class DeepTFAModel(nn.Module):
+    """Generative model for deep topographic factor analysis"""
+    def __init__(self, locations, num_factors=tfa_models.NUM_FACTORS,
+                 num_subjects=1, num_times=[1], embedding_dim=2):
+        super(self.__class__, self).__init__()
+        self._locations = locations
+        self._num_factors = num_factors
+        self._num_subjects = num_subjects
+        self._num_times = num_times
+
+        self.embedding = DeepTFAEmbedding(self._num_factors, embedding_dim)
+
+        self.hyperparams = [
+            DeepTFAGenerativeHyperparams(self._num_times[s], embedding_dim)
+            for s in range(self._num_subjects)
+        ]
+        for s, subject_hyperparams in enumerate(self.hyperparams):
+            self.add_module('_hyperparams' + str(s), subject_hyperparams)
+
+        self.likelihoods = [tfa_models.TFAGenerativeLikelihood(
+            self._locations[s], self._num_times[s], tfa_models.VOXEL_NOISE,
+            subject=s
+        ) for s in range(self._num_subjects)]
+        for s, subject_likelihood in enumerate(self.likelihoods):
+            self.add_module('_likelihood' + str(s), subject_likelihood)
+
+    def forward(self, trace, guide=probtorch.Trace(), observations=[]):
+        params = [self.hyperparams[s].state_vardict() for s in
+                  range(self._num_subjects)]
+        activations = [s for s in range(self._num_subjects)]
+        for s in range(self._num_subjects):
+            weights, centers, log_widths = self.embedding(trace, params[s],
+                                                          guide=guide,
+                                                          subject=s)
+            activations[s] = self.likelihoods[s](trace, weights, centers,
+                                                 log_widths,
+                                                 observations=observations[s])
+
+        return activations
