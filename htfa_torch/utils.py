@@ -211,3 +211,10 @@ def uncertainty_palette(uncertainties):
     uncertainties = uncertainties / (1.0 + uncertainties)
     palette = np.array(sns.color_palette("RdBu", uncertainties.shape[0]))
     return np.concatenate([palette, uncertainties], axis=1)
+
+def isnan(tensor):
+    # Gross: https://github.com/pytorch/pytorch/issues/4767
+    return tensor != tensor
+
+def hasnan(tensor):
+    return isnan(tensor).any()
