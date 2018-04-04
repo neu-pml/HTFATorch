@@ -12,6 +12,7 @@ import os
 import pickle
 import time
 
+import nilearn.plotting as niplot
 import numpy as np
 import scipy.io as sio
 import torch
@@ -125,3 +126,53 @@ class DeepTFA:
             generative.cpu()
 
         return np.vstack([free_energies, lls])
+
+    def plot_factor_centers(self, subject, filename=None, show=True,
+                            trace=None):
+        hyperparams = self.variational.hyperparams[subject].state_vardict()
+        z_f_std_dev = hyperparams['embedding']['factors']['sigma']
+
+        if trace:
+            z_f = trace['z_f%d' % subject].value
+            if len(z_f.shape) > 1:
+                if z_f.shape[0] > 1:
+                    z_f_std_dev = z_f.std(0)
+                z_f = z_f.mean(0)
+        else:
+            z_f = hyperparams['embedding']['factors']['mu']
+
+        z_f_embedded = self.generative.embedding.embedder(z_f)
+
+        factor_centers = self.generative.embedding.factor_centers_generator(
+            z_f_embedded
+        )
+        centers_shape = (self.num_factors, 3)
+        if len(factor_centers.shape) > 1:
+            centers_shape = (-1,) + centers_shape
+        factor_centers = factor_centers.view(*centers_shape)
+        factor_uncertainties =\
+            self.generative.embedding.factor_centers_generator(
+                self.generative.embedding.embedder(z_f_std_dev)
+            )
+        factor_uncertainties = factor_uncertainties.view(*centers_shape)
+
+        factor_log_widths =\
+            self.generative.embedding.factor_log_widths_generator(
+                z_f_embedded
+            )
+        if len(factor_log_widths.shape) > 1:
+            factor_log_widths = factor_log_widths.view(-1, self.num_factors)
+
+        plot = niplot.plot_connectome(
+            np.eye(self.num_factors),
+            factor_centers.data.numpy(),
+            node_color=utils.uncertainty_palette(factor_uncertainties.data),
+            node_size=np.exp(factor_log_widths.data.numpy() - np.log(2))
+        )
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
