@@ -150,11 +150,7 @@ class DeepTFA:
         if len(factor_centers.shape) > 1:
             centers_shape = (-1,) + centers_shape
         factor_centers = factor_centers.view(*centers_shape)
-        factor_uncertainties =\
-            self.generative.embedding.factor_centers_generator(
-                self.generative.embedding.embedder(z_f_std_dev)
-            )
-        factor_uncertainties = factor_uncertainties.view(*centers_shape)
+        factor_uncertainties = z_f_std_dev.norm().expand(self.num_factors, 1)
 
         factor_log_widths =\
             self.generative.embedding.factor_log_widths_generator(
