@@ -205,9 +205,12 @@ def gaussian_populator(*dims):
     }
 
 def uncertainty_palette(uncertainties):
-    uncertainties = np.array([
-        [u] for u in np.linalg.norm((uncertainties**-2).numpy(), axis=1)
-    ])
+    if len(uncertainties.shape) > 1:
+        uncertainties = np.array([
+            [u] for u in np.linalg.norm((uncertainties**-2).numpy(), axis=1)
+        ])
+    else:
+        uncertainties = uncertainties.numpy()
     uncertainties = uncertainties / (1.0 + uncertainties)
     palette = np.array(sns.color_palette("RdBu", uncertainties.shape[0]))
     return np.concatenate([palette, uncertainties], axis=1)
