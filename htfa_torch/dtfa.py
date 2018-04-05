@@ -48,8 +48,8 @@ class DeepTFA:
         self.num_voxels = [acts.shape[1] for acts in self.voxel_activations]
 
         self.generative = dtfa_models.DeepTFAModel(
-            self.voxel_locations, self.num_factors, self.num_subjects,
-            self.num_times, embedding_dim
+            self.voxel_locations, self.voxel_activations, self.num_factors,
+            self.num_subjects, self.num_times, embedding_dim
         )
         self.variational = dtfa_models.DeepTFAGuide(self.num_subjects,
                                                     self.num_times,

@@ -22,7 +22,7 @@ from . import tfa_models
 from . import utils
 
 class DeepTFAEmbedding(tfa_models.Model):
-    def __init__(self, num_factors, embedding_dim=2):
+    def __init__(self, num_factors, hyper_means, embedding_dim=2):
         super(tfa_models.Model, self).__init__()
 
         self._num_factors = num_factors
@@ -39,9 +39,15 @@ class DeepTFAEmbedding(tfa_models.Model):
         self.factor_centers_generator = torch.nn.Linear(
             int(self._num_factors / 2), self._num_factors * 3
         )
+        self.factor_centers_generator.bias = torch.nn.Parameter(
+            hyper_means['factor_centers'].view(self._num_factors * 3)
+        )
         self.factor_log_widths_generator = torch.nn.Linear(
             int(self._num_factors / 2),
             self._num_factors
+        )
+        self.factor_log_widths_generator.bias = torch.nn.Parameter(
+            hyper_means['factor_log_widths']
         )
 
     def forward(self, trace, params, guide=probtorch.Trace(), subject=0):
@@ -134,15 +140,27 @@ class DeepTFAGuide(nn.Module):
 
 class DeepTFAModel(nn.Module):
     """Generative model for deep topographic factor analysis"""
-    def __init__(self, locations, num_factors=tfa_models.NUM_FACTORS,
-                 num_subjects=1, num_times=[1], embedding_dim=2):
+    def __init__(self, locations, activations,
+                 num_factors=tfa_models.NUM_FACTORS, num_subjects=1,
+                 num_times=[1], embedding_dim=2):
         super(self.__class__, self).__init__()
         self._locations = locations
         self._num_factors = num_factors
         self._num_subjects = num_subjects
         self._num_times = num_times
 
-        self.embedding = DeepTFAEmbedding(self._num_factors, embedding_dim)
+        s = np.random.choice(self._num_subjects, 1)[0]
+        centers, widths, weights = utils.initial_hypermeans(
+            activations[s].numpy().T, locations[s].numpy(), self._num_factors
+        )
+        hyper_means = {
+            'weights': torch.Tensor(weights),
+            'factor_centers': torch.Tensor(centers),
+            'factor_log_widths': widths * torch.ones(self._num_factors),
+        }
+
+        self.embedding = DeepTFAEmbedding(self._num_factors, hyper_means,
+                                          embedding_dim)
 
         self.hyperparams = [
             DeepTFAGenerativeHyperparams(self._num_times[s], embedding_dim)
