@@ -81,9 +81,10 @@ class HTFAGuideTemplatePrior(tfa_models.GuidePrior):
         return template
 
 class HTFAGuideSubjectPrior(tfa_models.GuidePrior):
-    def __init__(self, num_subjects):
+    def __init__(self, num_subjects, num_times):
         super(self.__class__, self).__init__()
         self._num_subjects = num_subjects
+        self._num_times = num_times
         self._tfa_priors = [tfa_models.TFAGuidePrior(subject=s)\
                             for s in range(self._num_subjects)]
 
@@ -104,7 +105,10 @@ class HTFAGuideSubjectPrior(tfa_models.GuidePrior):
         weights = []
         factor_centers = []
         factor_log_widths = []
+        scan_times = times is None
         for s in range(self._num_subjects):
+            if scan_times:
+                times = (0, self._num_times[s])
             # The TFA prior is going to expand out particles all on its own, so
             # we never actually have to expand them.
             sparams = utils.vardict(params['subject'])
@@ -124,7 +128,7 @@ class HTFAGuide(nn.Module):
                  num_factors=tfa_models.NUM_FACTORS):
         super(self.__class__, self).__init__()
         self._num_subjects = len(activations)
-        self._num_times = activations[0].shape[0]
+        self._num_times = [acts.shape[0] for acts in activations]
 
         s = np.random.choice(self._num_subjects, 1)[0]
         centers, widths, weights = utils.initial_hypermeans(activations[s].numpy().T,
@@ -135,10 +139,12 @@ class HTFAGuide(nn.Module):
             'factor_centers': torch.Tensor(centers),
             'factor_log_widths': widths,
         }
-        self.hyperparams = HTFAGuideHyperParams(hyper_means, self._num_times,
+        self.hyperparams = HTFAGuideHyperParams(hyper_means,
+                                                max(self._num_times),
                                                 self._num_subjects, num_factors)
         self._template_prior = HTFAGuideTemplatePrior()
-        self._subject_prior = HTFAGuideSubjectPrior(self._num_subjects)
+        self._subject_prior = HTFAGuideSubjectPrior(self._num_subjects,
+                                                    self._num_times)
 
     def forward(self, trace, times=None,
                 num_particles=tfa_models.NUM_PARTICLES):
