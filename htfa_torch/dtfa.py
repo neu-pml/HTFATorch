@@ -12,6 +12,7 @@ import os
 import pickle
 import time
 
+import nilearn.image
 import nilearn.plotting as niplot
 import numpy as np
 import scipy.io as sio
@@ -187,6 +188,49 @@ class DeepTFA:
             factor_centers.data.numpy(),
             node_color=utils.uncertainty_palette(factor_uncertainties.data),
             node_size=np.exp(factor_log_widths.data.numpy() - np.log(2))
+        )
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
+
+    def plot_original_brain(self, subject=None, filename=None, show=True,
+                            plot_abs=False, t=0):
+        if subject is None:
+            subject = np.random.choice(self.num_subjects, 1)[0]
+        image = nilearn.image.index_img(self._images[subject], t)
+        plot = niplot.plot_glass_brain(image, plot_abs=plot_abs)
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
+
+    def plot_reconstruction(self, subject=None, filename=None, show=True,
+                            plot_abs=False, t=0):
+        if subject is None:
+            subject = np.random.choice(self.num_subjects, 1)[0]
+
+        results = self.results(subject)
+
+        reconstruction = results['weights'].data @ results['factors']
+
+        image = utils.cmu2nii(reconstruction.numpy(),
+                              self.voxel_locations[subject].numpy(),
+                              self._templates[subject])
+        image_slice = nilearn.image.index_img(image, t)
+        plot = niplot.plot_glass_brain(image_slice, plot_abs=plot_abs)
+
+        logging.info(
+            'Reconstruction Error (Frobenius Norm): %.8e',
+            np.linalg.norm(
+                (reconstruction - self.voxel_activations[subject]).numpy()
+            )
         )
 
         if filename is not None:
