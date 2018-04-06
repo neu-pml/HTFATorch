@@ -129,9 +129,9 @@ class DeepTFA:
         return np.vstack([free_energies, lls])
 
     def results(self, subject):
-        hyperparams = self.variational.hyperparams[subject].state_vardict()
+        hyperparams = self.variational.hyperparams.state_vardict()
 
-        z_f = hyperparams['embedding']['factors']['mu']
+        z_f = hyperparams['embedding']['factors']['mu'][subject]
         z_f_embedded = self.generative.embedding.embedder(z_f)
 
         factors = self.generative.embedding.factors_generator(z_f_embedded)
@@ -146,10 +146,11 @@ class DeepTFA:
             centers = factors[:, 0:3]
             log_widths = factors[:, 3]
 
-        z_w = hyperparams['embedding']['weights']['mu']
+        z_w = hyperparams['embedding']['weights']['mu'][subject]
+        weights = self.generative.embedding.weights_generator(z_w)
 
         return {
-            'weights': self.generative.embedding.weights_generator(z_w),
+            'weights': weights[0:self.voxel_activations[subject].shape[0], :],
             'factors': tfa_models.radial_basis(self.voxel_locations[subject],
                                                centers.data, log_widths.data),
             'factor_centers': centers.data,
@@ -158,8 +159,8 @@ class DeepTFA:
 
     def plot_factor_centers(self, subject, filename=None, show=True,
                             trace=None):
-        hyperparams = self.variational.hyperparams[subject].state_vardict()
-        z_f_std_dev = hyperparams['embedding']['factors']['sigma']
+        hyperparams = self.variational.hyperparams.state_vardict()
+        z_f_std_dev = hyperparams['embedding']['factors']['sigma'][subject]
 
         if trace:
             z_f = trace['z_f%d' % subject].value
@@ -168,7 +169,7 @@ class DeepTFA:
                     z_f_std_dev = z_f.std(0)
                 z_f = z_f.mean(0)
         else:
-            z_f = hyperparams['embedding']['factors']['mu']
+            z_f = hyperparams['embedding']['factors']['mu'][subject]
 
         z_f_embedded = self.generative.embedding.embedder(z_f)
 

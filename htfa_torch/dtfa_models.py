@@ -76,38 +76,44 @@ class DeepTFAEmbedding(tfa_models.Model):
         return weights, factor_centers, factor_log_widths
 
 class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
-    def __init__(self, num_times, embedding_dim=2):
-        self.num_times = num_times
+    def __init__(self, num_subjects, num_times, embedding_dim=2):
+        self.num_subjects = num_subjects
+        self.num_times = max(num_times)
         self.embedding_dim = embedding_dim
 
         params = utils.vardict()
         params['embedding'] = {
             'weights': {
-                'mu': torch.zeros(self.num_times, self.embedding_dim),
-                'sigma': torch.ones(self.num_times, self.embedding_dim),
+                'mu': torch.zeros(self.num_subjects, self.num_times,
+                                  self.embedding_dim),
+                'sigma': torch.ones(self.num_subjects, self.num_times,
+                                    self.embedding_dim),
             },
             'factors': {
-                'mu': torch.zeros(self.embedding_dim),
-                'sigma': torch.ones(self.embedding_dim),
+                'mu': torch.zeros(self.num_subjects, self.embedding_dim),
+                'sigma': torch.ones(self.num_subjects, self.embedding_dim),
             },
         }
 
         super(self.__class__, self).__init__(params, guide=False)
 
 class DeepTFAGuideHyperparams(tfa_models.HyperParams):
-    def __init__(self, num_times, embedding_dim=2):
-        self.num_times = num_times
+    def __init__(self, num_subjects, num_times, embedding_dim=2):
+        self.num_subjects = num_subjects
+        self.num_times = max(num_times)
         self.embedding_dim = embedding_dim
 
         params = utils.vardict()
         params['embedding'] = {
             'weights': {
-                'mu': torch.zeros(self.num_times, self.embedding_dim),
-                'sigma': torch.ones(self.num_times, self.embedding_dim),
+                'mu': torch.zeros(self.num_subjects, self.num_times,
+                                  self.embedding_dim),
+                'sigma': torch.ones(self.num_subjects, self.num_times,
+                                    self.embedding_dim),
             },
             'factors': {
-                'mu': torch.zeros(self.embedding_dim),
-                'sigma': torch.ones(self.embedding_dim),
+                'mu': torch.zeros(self.num_subjects, self.embedding_dim),
+                'sigma': torch.ones(self.num_subjects, self.embedding_dim),
             },
         }
 
@@ -120,24 +126,23 @@ class DeepTFAGuide(nn.Module):
         self._num_subjects = num_subjects
         self._num_times = num_times
 
-        self.hyperparams = [DeepTFAGuideHyperparams(
-            self._num_times[s], embedding_dim
-        ) for s in range(self._num_subjects)]
-        for s, subject_hyperparams in enumerate(self.hyperparams):
-            self.add_module('_hyperparams' + str(s), subject_hyperparams)
+        self.hyperparams = DeepTFAGuideHyperparams(self._num_subjects,
+                                                   self._num_times,
+                                                   embedding_dim)
 
     def forward(self, trace, embedding, num_particles=tfa_models.NUM_PARTICLES):
-        params = [self.hyperparams[s].state_vardict() for s in
-                  range(self._num_subjects)]
+        params = self.hyperparams.state_vardict()
         weights = [s for s in range(self._num_subjects)]
         centers = [s for s in range(self._num_subjects)]
         log_widths = [s for s in range(self._num_subjects)]
         for s in range(self._num_subjects):
-            params[s] = utils.unsqueeze_and_expand_vardict(params[s], 0,
-                                                           num_particles,
-                                                           clone=True)
+            subject_params = utils.vardict()
+            for k, v in params.iteritems():
+                subject_params[k] = utils.unsqueeze_and_expand(v[s], 0,
+                                                               num_particles,
+                                                               clone=True)
             weights[s], centers[s], log_widths[s] =\
-                embedding(trace, params[s], subject=s)
+                embedding(trace, subject_params, subject=s)
 
         return weights, centers, log_widths
 
@@ -165,12 +170,9 @@ class DeepTFAModel(nn.Module):
         self.embedding = DeepTFAEmbedding(self._num_factors, hyper_means,
                                           embedding_dim)
 
-        self.hyperparams = [
-            DeepTFAGenerativeHyperparams(self._num_times[s], embedding_dim)
-            for s in range(self._num_subjects)
-        ]
-        for s, subject_hyperparams in enumerate(self.hyperparams):
-            self.add_module('_hyperparams' + str(s), subject_hyperparams)
+        self.hyperparams = DeepTFAGenerativeHyperparams(self._num_subjects,
+                                                        self._num_times,
+                                                        embedding_dim)
 
         self.likelihoods = [tfa_models.TFAGenerativeLikelihood(
             self._locations[s], self._num_times[s], tfa_models.VOXEL_NOISE,
@@ -180,11 +182,13 @@ class DeepTFAModel(nn.Module):
             self.add_module('_likelihood' + str(s), subject_likelihood)
 
     def forward(self, trace, guide=probtorch.Trace(), observations=[]):
-        params = [self.hyperparams[s].state_vardict() for s in
-                  range(self._num_subjects)]
+        params = self.hyperparams.state_vardict()
         activations = [s for s in range(self._num_subjects)]
         for s in range(self._num_subjects):
-            weights, centers, log_widths = self.embedding(trace, params[s],
+            subject_params = utils.vardict()
+            for k, v in params.iteritems():
+                subject_params[k] = v[s]
+            weights, centers, log_widths = self.embedding(trace, subject_params,
                                                           guide=guide,
                                                           subject=s)
             activations[s] = self.likelihoods[s](trace, weights, centers,
