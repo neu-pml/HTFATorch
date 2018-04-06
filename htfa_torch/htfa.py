@@ -224,7 +224,8 @@ class HierarchicalTopographicFactorAnalysis:
             self.voxel_locations[subject], factor_centers.data,
             factor_log_widths.data
         )
-        reconstruction = weights.data @ factors
+        times = (0, self.voxel_activations[subject].shape[0])
+        reconstruction = weights[times[0]:times[1], :].data @ factors
 
         image = utils.cmu2nii(reconstruction.numpy(),
                               self.voxel_locations[subject].numpy(),
