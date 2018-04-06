@@ -127,6 +127,29 @@ class DeepTFA:
 
         return np.vstack([free_energies, lls])
 
+    def results(self, subject):
+        hyperparams = self.variational.hyperparams[subject].state_vardict()
+
+        z_f = hyperparams['embedding']['factors']['mu']
+        z_f_embedded = self.generative.embedding.embedder(z_f)
+        centers = self.generative.embedding.factor_centers_generator(
+            z_f_embedded
+        ).view(self.num_factors, 3)
+        log_widths =\
+            self.generative.embedding.factor_log_widths_generator(
+                z_f_embedded
+            )
+
+        z_w = hyperparams['embedding']['weights']['mu']
+
+        return {
+            'weights': self.generative.embedding.weights_generator(z_w),
+            'factors': tfa_models.radial_basis(self.voxel_locations[subject],
+                                               centers.data, log_widths.data),
+            'factor_centers': centers,
+            'factor_log_widths': log_widths,
+        }
+
     def plot_factor_centers(self, subject, filename=None, show=True,
                             trace=None):
         hyperparams = self.variational.hyperparams[subject].state_vardict()
