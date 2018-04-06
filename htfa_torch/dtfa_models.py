@@ -36,6 +36,9 @@ class DeepTFAEmbedding(tfa_models.Model):
             torch.nn.Sigmoid(),
             torch.nn.Linear(int(self._num_factors / 2), self._num_factors)
         )
+        self.weights_generator[2].bias = torch.nn.Parameter(
+            hyper_means['weights'].mean(0)
+        )
         self.factor_centers_generator = torch.nn.Linear(
             int(self._num_factors / 2), self._num_factors * 3
         )
