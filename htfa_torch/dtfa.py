@@ -157,6 +157,14 @@ class DeepTFA:
             'factor_log_widths': log_widths.data,
         }
 
+    def embeddings(self):
+        hyperparams = self.variational.hyperparams.state_vardict()
+
+        return {
+            'factors': hyperparams['embedding']['factors']['mu'],
+            'weights': hyperparams['embedding']['weights']['mu'],
+        }
+
     def plot_factor_centers(self, subject, filename=None, show=True,
                             trace=None):
         hyperparams = self.variational.hyperparams.state_vardict()
