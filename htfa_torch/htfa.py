@@ -189,3 +189,59 @@ class HierarchicalTopographicFactorAnalysis:
         self.dec(p, times=times, guide=q,
                  observations=[q for s in range(self.num_subjects)])
         return p, q
+
+    def plot_original_brain(self, subject=None, filename=None, show=True,
+                            plot_abs=False, t=0):
+        if subject is None:
+            subject = np.random.choice(self.num_subjects, 1)[0]
+        image = nilearn.image.index_img(self._images[subject], t)
+        plot = niplot.plot_glass_brain(image, plot_abs=plot_abs)
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
+
+    def plot_reconstruction(self, subject=None, filename=None, show=True,
+                            plot_abs=False, t=0):
+        results = self.results()
+
+        if subject is not None:
+            weights = results['subject']['weights']['mu'][subject]
+            factor_centers = results['subject']['factor_centers']['mu'][subject]
+            factor_log_widths =\
+                results['subject']['factor_log_widths']['mu'][subject]
+        else:
+            factor_centers = results['template']['factor_centers']['mu']
+            factor_log_widths =\
+                results['template']['factor_log_widths']['mu']
+            subject = np.random.choice(self.num_subjects, 1)[0]
+            weights = results['subject']['weights']['mu'][subject]
+
+        factors = tfa_models.radial_basis(
+            self.voxel_locations[subject], factor_centers.data,
+            factor_log_widths.data
+        )
+        reconstruction = weights.data @ factors
+
+        image = utils.cmu2nii(reconstruction.numpy(),
+                              self.voxel_locations[subject].numpy(),
+                              self._templates[subject])
+        image_slice = nilearn.image.index_img(image, t)
+        plot = niplot.plot_glass_brain(image_slice, plot_abs=plot_abs)
+
+        logging.info(
+            'Reconstruction Error (Frobenius Norm): %.8e',
+            np.linalg.norm(
+                (reconstruction - self.voxel_activations[subject]).numpy()
+            )
+        )
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
