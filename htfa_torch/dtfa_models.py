@@ -39,18 +39,12 @@ class DeepTFAEmbedding(tfa_models.Model):
         self.weights_generator[2].bias = torch.nn.Parameter(
             hyper_means['weights'].mean(0)
         )
-        self.factor_centers_generator = torch.nn.Linear(
-            int(self._num_factors / 2), self._num_factors * 3
-        )
-        self.factor_centers_generator.bias = torch.nn.Parameter(
-            hyper_means['factor_centers'].view(self._num_factors * 3)
-        )
-        self.factor_log_widths_generator = torch.nn.Linear(
-            int(self._num_factors / 2),
-            self._num_factors
-        )
-        self.factor_log_widths_generator.bias = torch.nn.Parameter(
-            hyper_means['factor_log_widths']
+        self.factors_generator = torch.nn.Linear(int(self._num_factors / 2),
+                                                 self._num_factors * 4)
+        self.factors_generator.bias = torch.nn.Parameter(
+            torch.cat((hyper_means['factor_centers'],
+                       hyper_means['factor_log_widths'].unsqueeze(1)),
+                      1).view(self._num_factors * 4)
         )
 
     def forward(self, trace, params, guide=probtorch.Trace(), subject=0):
@@ -66,12 +60,18 @@ class DeepTFAEmbedding(tfa_models.Model):
             value=guide['z_f' + str(subject)],
             name='z_f' + str(subject)
         ))
-        factor_centers = self.factor_centers_generator(factors_embedding)
-        centers_shape = (self._num_factors, 3)
-        if len(factor_centers.shape) > 1:
-            centers_shape = (-1,) + centers_shape
-        factor_centers = factor_centers.view(*centers_shape)
-        factor_log_widths = self.factor_log_widths_generator(factors_embedding)
+        factors = self.factors_generator(factors_embedding)
+        factors_shape = (self._num_factors, 4)
+        if len(factors.shape) > 1:
+            factors_shape = (-1,) + factors_shape
+        factors = factors.view(*factors_shape)
+
+        if len(factors.shape) > 2:
+            factor_centers = factors[:, :, 0:3]
+            factor_log_widths = factors[:, :, 3]
+        else:
+            factor_centers = factors[:, 0:3]
+            factor_log_widths = factors[:, 3]
 
         return weights, factor_centers, factor_log_widths
 

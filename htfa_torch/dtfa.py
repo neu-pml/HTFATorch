@@ -133,13 +133,18 @@ class DeepTFA:
 
         z_f = hyperparams['embedding']['factors']['mu']
         z_f_embedded = self.generative.embedding.embedder(z_f)
-        centers = self.generative.embedding.factor_centers_generator(
-            z_f_embedded
-        ).view(self.num_factors, 3)
-        log_widths =\
-            self.generative.embedding.factor_log_widths_generator(
-                z_f_embedded
-            )
+
+        factors = self.generative.embedding.factors_generator(z_f_embedded)
+        factors_shape = (self.num_factors, 4)
+        if len(factors.shape) > 1:
+            factors_shape = (-1,) + factors_shape
+        factors = factors.view(*factors_shape)
+        if len(factors.shape) > 2:
+            centers = factors[:, :, 0:3]
+            log_widths = factors[:, :, 3]
+        else:
+            centers = factors[:, 0:3]
+            log_widths = factors[:, 3]
 
         z_w = hyperparams['embedding']['weights']['mu']
 
@@ -147,8 +152,8 @@ class DeepTFA:
             'weights': self.generative.embedding.weights_generator(z_w),
             'factors': tfa_models.radial_basis(self.voxel_locations[subject],
                                                centers.data, log_widths.data),
-            'factor_centers': centers,
-            'factor_log_widths': log_widths,
+            'factor_centers': centers.data,
+            'factor_log_widths': log_widths.data,
         }
 
     def plot_factor_centers(self, subject, filename=None, show=True,
@@ -167,21 +172,19 @@ class DeepTFA:
 
         z_f_embedded = self.generative.embedding.embedder(z_f)
 
-        factor_centers = self.generative.embedding.factor_centers_generator(
-            z_f_embedded
-        )
-        centers_shape = (self.num_factors, 3)
-        if len(factor_centers.shape) > 1:
-            centers_shape = (-1,) + centers_shape
-        factor_centers = factor_centers.view(*centers_shape)
-        factor_uncertainties = z_f_std_dev.norm().expand(self.num_factors, 1)
+        factors = self.generative.embedding.factors_generator(z_f_embedded)
+        factors_shape = (self.num_factors, 4)
+        if len(factors.shape) > 1:
+            factors_shape = (-1,) + factors_shape
+        factors = factors.view(*factors_shape)
+        if len(factors.shape) > 2:
+            factor_centers = factors[:, :, 0:3]
+            factor_log_widths = factors[:, :, 3]
+        else:
+            factor_centers = factors[:, 0:3]
+            factor_log_widths = factors[:, 3]
 
-        factor_log_widths =\
-            self.generative.embedding.factor_log_widths_generator(
-                z_f_embedded
-            )
-        if len(factor_log_widths.shape) > 1:
-            factor_log_widths = factor_log_widths.view(-1, self.num_factors)
+        factor_uncertainties = z_f_std_dev.norm().expand(self.num_factors, 1)
 
         plot = niplot.plot_connectome(
             np.eye(self.num_factors),
