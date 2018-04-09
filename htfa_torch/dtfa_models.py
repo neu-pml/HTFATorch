@@ -22,19 +22,21 @@ from . import tfa_models
 from . import utils
 
 class DeepTFAEmbedding(tfa_models.Model):
-    def __init__(self, num_factors, hyper_means, embedding_dim=2):
+    def __init__(self, num_factors, num_times, hyper_means, embedding_dim=2):
         super(tfa_models.Model, self).__init__()
 
         self._num_factors = num_factors
+        self._num_times = max(num_times)
         self._embedding_dim = embedding_dim
         self.embedder = torch.nn.Sequential(
             torch.nn.Linear(self._embedding_dim, int(self._num_factors / 2)),
             torch.nn.Sigmoid()
         )
         self.weights_generator = torch.nn.Sequential(
-            torch.nn.Linear(self._embedding_dim, int(self._num_factors / 2)),
+            torch.nn.Linear(self._embedding_dim + 1,
+                            int(self._num_factors / 2) + 1),
             torch.nn.Sigmoid(),
-            torch.nn.Linear(int(self._num_factors / 2), self._num_factors)
+            torch.nn.Linear(int(self._num_factors / 2) + 1, self._num_factors)
         )
         self.weights_generator[2].bias = torch.nn.Parameter(
             hyper_means['weights'].mean(0)
@@ -52,6 +54,16 @@ class DeepTFAEmbedding(tfa_models.Model):
                                          params['embedding']['weights']['sigma'],
                                          value=guide['z_w' + str(subject)],
                                          name='z_w' + str(subject))
+        times_range = torch.arange(self._num_times).unsqueeze(1)
+        if len(weights_embedding.shape) > 2:
+            times_range = times_range.expand(weights_embedding.shape[0],
+                                             *times_range.shape)
+        if weights_embedding.is_cuda:
+            times_range = times_range.cuda()
+        weights_embedding = torch.cat(
+            (weights_embedding, Variable(times_range)),
+            dim=len(weights_embedding.shape) - 1
+        )
         weights = self.weights_generator(weights_embedding)
 
         factors_embedding = self.embedder(trace.normal(
@@ -167,8 +179,8 @@ class DeepTFAModel(nn.Module):
             'factor_log_widths': widths * torch.ones(self._num_factors),
         }
 
-        self.embedding = DeepTFAEmbedding(self._num_factors, hyper_means,
-                                          embedding_dim)
+        self.embedding = DeepTFAEmbedding(self._num_factors, self._num_times,
+                                          hyper_means, embedding_dim)
 
         self.hyperparams = DeepTFAGenerativeHyperparams(self._num_subjects,
                                                         self._num_times,
