@@ -141,10 +141,10 @@ def cmu2nii(activations, locations, template):
 
     return nib.Nifti1Image(data, affine=sform)
 
-def load_dataset(data_file):
+def load_dataset(data_file,mask=None):
     name, ext = os.path.splitext(data_file)
     if ext == '.nii':
-        dataset, image = nii2cmu(data_file)
+        dataset, image = nii2cmu(data_file,mask_file=mask)
         template = data_file
     else:
         dataset = sio.loadmat(data_file)
