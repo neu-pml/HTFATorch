@@ -1,10 +1,10 @@
 #!/bin/sh
 
-for file in /home/zulqarnain/Datasets/new_pieman/pieman_data_intact/*.nii ##path to relevant dataset group
+for file in $1/*.nii ##path to relevant dataset group
 do
   fslmaths "$file" -Tmean -bin "${file}_mean"
 done
 
-fslmerge -t allmeanmasks4d /home/zulqarnain/Datasets/new_pieman/pieman_data_intact/*.nii.gz
-fslmaths allmeanmasks4d -Tmean propDatavox3d
-fslmaths propDatavox3d -thr 1 wholebrain
+fslmerge -t $1/allmeanmasks4d $1/*.nii.gz
+fslmaths $1/allmeanmasks4d -Tmean $1/propDatavox3d
+fslmaths $1/propDatavox3d -thr 1 $1/wholebrain
