@@ -33,6 +33,10 @@ class HierarchicalTopographicFactorAnalysis:
                  mask=None):
         self.num_factors = num_factors
         self.num_subjects = len(data_files)
+        if mask is None:
+            raise ValueError('please provide a mask')
+        else:
+            self.mask = mask
         datasets = [utils.load_dataset(data_file, mask=mask)
                     for data_file in data_files]
         self.voxel_activations = [dataset[0] for dataset in datasets]
@@ -75,7 +79,7 @@ class HierarchicalTopographicFactorAnalysis:
             enc = torch.nn.DataParallel(self.enc)
             dec = torch.nn.DataParallel(self.dec)
             enc.cuda()
-            dec.cuda()
+            dec.cuda(0)
         else:
             enc = self.enc
             dec = self.dec
