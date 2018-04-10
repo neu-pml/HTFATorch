@@ -1,6 +1,6 @@
 #!/bin/sh
 
-for file in /home/zulqarnain/Datasets/new_pieman/pieman_data_intact/*.nii
+for file in /home/zulqarnain/Datasets/new_pieman/pieman_data_intact/*.nii ##path to relevant dataset group
 do
   fslmaths "$file" -Tmean -bin "${file}_mean"
 done
