@@ -43,7 +43,8 @@ class DeepTFA:
         self.num_factors = num_factors
         self.num_subjects = len(data_files)
         self.mask = mask
-        datasets = [utils.load_dataset(data_file,mask=mask) for data_file in data_files]
+        datasets = [utils.load_dataset(data_file, mask=mask)
+                    for data_file in data_files]
         self.voxel_activations = [dataset[0] for dataset in datasets]
         self._images = [dataset[1] for dataset in datasets]
         self.voxel_locations = [dataset[2] for dataset in datasets]
@@ -76,7 +77,7 @@ class DeepTFA:
 
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
               log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES,
-              batch_size=64,use_cuda=True):
+              batch_size=64, use_cuda=True):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
@@ -84,20 +85,19 @@ class DeepTFA:
         activations = torch.Tensor(self.num_times[0], self.num_voxels[0],
                                    len(self.voxel_activations))
         for s in range(self.num_subjects):
-            activations[:,:,s] = self.voxel_activations[s]
+            activations[:, :, s] = self.voxel_activations[s]
         activations_loader = torch.utils.data.DataLoader(
             torch.utils.data.TensorDataset(
                 activations,
-                torch.zeros(activations.shape)
+                torch.zeros(activations.shape[0])
             ),
-            batch_size=batch_size,
-            num_workers=1
+            batch_size=batch_size
         )
         if tfa.CUDA and use_cuda:
             variational = torch.nn.DataParallel(self.variational)
             generative = torch.nn.DataParallel(self.generative)
             variational.cuda()
-            generative.cuda(0)
+            generative.cuda()
         else:
             variational = self.variational
             generative = self.generative
@@ -125,7 +125,7 @@ class DeepTFA:
                 optimizer.zero_grad()
                 q = probtorch.Trace()
                 variational(q, self.generative.embedding, times=trs,
-                        num_particles=num_particles)
+                            num_particles=num_particles)
                 p = probtorch.Trace()
                 generative(p, times=trs, guide=q, observations=activations)
 
