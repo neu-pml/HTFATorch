@@ -12,6 +12,12 @@ import os
 import pickle
 import time
 
+try:
+    if __name__ == '__main__':
+        import matplotlib
+        matplotlib.use('TkAgg')
+finally:
+    import matplotlib.pyplot as plt
 import nilearn.image
 import nilearn.plotting as niplot
 import numpy as np
@@ -33,7 +39,7 @@ from . import utils
 class DeepTFA:
     """Overall container for a run of Deep TFA"""
     def __init__(self, data_files, num_factors=tfa_models.NUM_FACTORS,
-                 embedding_dim=2):
+                 embedding_dim=2, tasks=[]):
         self.num_factors = num_factors
         self.num_subjects = len(data_files)
         datasets = [utils.load_dataset(data_file) for data_file in data_files]
@@ -42,6 +48,7 @@ class DeepTFA:
         self.voxel_locations = [dataset[2] for dataset in datasets]
         self._names = [dataset[3] for dataset in datasets]
         self._templates = [dataset[4] for dataset in datasets]
+        self._tasks = tasks
 
         # Pull out relevant dimensions: the number of time instants and the
         # number of voxels in each timewise "slice"
@@ -251,3 +258,21 @@ class DeepTFA:
             niplot.show()
 
         return plot
+
+    def scatter_factor_embedding(self, filename=None, show=True):
+        hyperparams = self.variational.hyperparams.state_vardict()
+        z_f = hyperparams['embedding']['factors']['mu'].data
+
+        tasks = self._tasks
+        if tasks is None or len(tasks) == 0:
+            tasks = list(range(self.num_subjects))
+        palette = dict(zip(tasks, utils.compose_palette(len(tasks))))
+        subject_colors = np.array([palette[task] for task in tasks])
+
+        plt.scatter(x=z_f[:, 0], y=z_f[:, 1], c=subject_colors)
+        utils.palette_legend(list(palette.keys()), list(palette.values()))
+
+        if filename is not None:
+            plt.savefig(filename)
+        if show:
+            plt.show()
