@@ -276,3 +276,21 @@ class DeepTFA:
             plt.savefig(filename)
         if show:
             plt.show()
+
+    def scatter_weights_embedding(self, t=0, filename=None, show=True):
+        hyperparams = self.variational.hyperparams.state_vardict()
+        z_f = hyperparams['embedding']['weights']['mu'][:, t, :].data
+
+        tasks = self._tasks
+        if tasks is None or len(tasks) == 0:
+            tasks = list(range(self.num_subjects))
+        palette = dict(zip(tasks, utils.compose_palette(len(tasks))))
+        subject_colors = np.array([palette[task] for task in tasks])
+
+        plt.scatter(x=z_f[:, 0], y=z_f[:, 1], c=subject_colors)
+        utils.palette_legend(list(palette.keys()), list(palette.values()))
+
+        if filename is not None:
+            plt.savefig(filename)
+        if show:
+            plt.show()
