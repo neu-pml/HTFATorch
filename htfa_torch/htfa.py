@@ -63,17 +63,16 @@ class HierarchicalTopographicFactorAnalysis:
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
                             level=log_level)
-        activations = torch.Tensor(self.num_times[0], self.num_voxels[0],
+        activations = torch.Tensor(max(self.num_times), max(self.num_voxels),
                                    len(self.voxel_activations))
         for s in range(self.num_subjects):
             activations[:, :, s] = self.voxel_activations[s]
         activations_loader = torch.utils.data.DataLoader(
             torch.utils.data.TensorDataset(
                 activations,
-                torch.zeros(activations.shape)
+                torch.zeros(activations.shape[0])
             ),
-            batch_size=batch_size,
-            num_workers=1
+            batch_size=batch_size
         )
         if tfa.CUDA and use_cuda:
             enc = torch.nn.DataParallel(self.enc)
