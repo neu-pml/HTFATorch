@@ -50,12 +50,20 @@ class DeepTFAEmbedding(tfa_models.Model):
                       1).view(self._num_factors * 4)
         )
 
-    def forward(self, trace, params, guide=probtorch.Trace(), subject=0):
-        weights_embedding = trace.normal(params['embedding']['weights']['mu'],
+    def forward(self, trace, params, guide=probtorch.Trace(), times=None, subject=0):
+        if times is None:
+            weights_embedding = trace.normal(params['embedding']['weights']['mu'],
+                                             params['embedding']['weights']['sigma'],
+                                             value=guide['z_w' + str(subject)],
+                                             name='z_w' + str(subject))
+            times_range = torch.arange(self._num_times).unsqueeze(1)
+        else:
+            weights_embedding = trace.normal(params['embedding']['weights']['mu'],
                                          params['embedding']['weights']['sigma'],
                                          value=guide['z_w' + str(subject)],
                                          name='z_w' + str(subject))
-        times_range = torch.arange(self._num_times).unsqueeze(1)
+            times_range = torch.arange(times[0],times[1]).unsqueeze(1)
+
         if len(weights_embedding.shape) > 2:
             times_range = times_range.expand(weights_embedding.shape[0],
                                              *times_range.shape)
@@ -143,19 +151,30 @@ class DeepTFAGuide(nn.Module):
                                                    self._num_times,
                                                    embedding_dim)
 
-    def forward(self, trace, embedding, num_particles=tfa_models.NUM_PARTICLES):
+    def forward(self, trace, embedding, times=None, num_particles=tfa_models.NUM_PARTICLES):
         params = self.hyperparams.state_vardict()
         weights = [s for s in range(self._num_subjects)]
         centers = [s for s in range(self._num_subjects)]
         log_widths = [s for s in range(self._num_subjects)]
         for s in range(self._num_subjects):
             subject_params = utils.vardict()
-            for k, v in params.iteritems():
-                subject_params[k] = utils.unsqueeze_and_expand(v[s], 0,
-                                                               num_particles,
-                                                               clone=True)
+            if times is None:
+                for k, v in params.iteritems():
+                    subject_params[k] = utils.unsqueeze_and_expand(v[s], 0,
+                                                                   num_particles,
+                                                                   clone=True)
+            else:
+                for k, v in params.iteritems():
+                    if k == 'embedding__weights__mu' or k == 'embedding__weights__sigma':
+                        subject_params[k] = utils.unsqueeze_and_expand(v[s][times[0]:times[1]], 0,
+                                                                       num_particles,
+                                                                       clone=True)
+                    else:
+                        subject_params[k] = utils.unsqueeze_and_expand(v[s], 0,
+                                                                   num_particles,
+                                                                   clone=True)
             weights[s], centers[s], log_widths[s] =\
-                embedding(trace, subject_params, subject=s)
+                embedding(trace, subject_params, times=times, subject=s)
 
         return weights, centers, log_widths
 
@@ -194,15 +213,22 @@ class DeepTFAModel(nn.Module):
         for s, subject_likelihood in enumerate(self.likelihoods):
             self.add_module('_likelihood' + str(s), subject_likelihood)
 
-    def forward(self, trace, guide=probtorch.Trace(), observations=[]):
+    def forward(self, trace, times=None, guide=probtorch.Trace(), observations=[]):
         params = self.hyperparams.state_vardict()
         activations = [s for s in range(self._num_subjects)]
         for s in range(self._num_subjects):
             subject_params = utils.vardict()
-            for k, v in params.iteritems():
-                subject_params[k] = v[s]
+            if times is None:
+                for k, v in params.iteritems():
+                    subject_params[k] = v[s]
+            else:
+                for k, v in params.iteritems():
+                    if k == 'embedding__weights__mu' or k == 'embedding__weights__sigma' and times is not None:
+                        subject_params[k] = v[s][times[0]:times[1]]
+                    else:
+                        subject_params[k] = v[s]
             weights, centers, log_widths = self.embedding(trace, subject_params,
-                                                          guide=guide,
+                                                          guide=guide, times=times,
                                                           subject=s)
             activations[s] = self.likelihoods[s](trace, weights, centers,
                                                  log_widths,
