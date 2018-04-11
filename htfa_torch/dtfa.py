@@ -38,11 +38,12 @@ from . import utils
 
 class DeepTFA:
     """Overall container for a run of Deep TFA"""
-    def __init__(self, data_files, num_factors=tfa_models.NUM_FACTORS,
+    def __init__(self, data_files, mask, num_factors=tfa_models.NUM_FACTORS,
                  embedding_dim=2, tasks=[]):
         self.num_factors = num_factors
         self.num_subjects = len(data_files)
-        datasets = [utils.load_dataset(data_file) for data_file in data_files]
+        self.mask = mask
+        datasets = [utils.load_dataset(data_file,mask=mask) for data_file in data_files]
         self.voxel_activations = [dataset[0] for dataset in datasets]
         self._images = [dataset[1] for dataset in datasets]
         self.voxel_locations = [dataset[2] for dataset in datasets]
@@ -75,21 +76,28 @@ class DeepTFA:
 
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
               log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES,
-              use_cuda=True):
+              batch_size=64,use_cuda=True):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
                             level=log_level)
-
-        activations = [{'Y': Variable(self.voxel_activations[s])}
-                       for s in range(self.num_subjects)]
+        activations = torch.Tensor(self.num_times[0], self.num_voxels[0],
+                                   len(self.voxel_activations))
+        for s in range(self.num_subjects):
+            activations[:,:,s] = self.voxel_activations[s]
+        activations_loader = torch.utils.data.DataLoader(
+            torch.utils.data.TensorDataset(
+                activations,
+                torch.zeros(activations.shape)
+            ),
+            batch_size=batch_size,
+            num_workers=1
+        )
         if tfa.CUDA and use_cuda:
             variational = torch.nn.DataParallel(self.variational)
             generative = torch.nn.DataParallel(self.generative)
             variational.cuda()
-            generative.cuda()
-            for acts in activations:
-                acts['Y'] = acts['Y'].cuda()
+            generative.cuda(0)
         else:
             variational = self.variational
             generative = self.generative
@@ -105,25 +113,38 @@ class DeepTFA:
 
         for epoch in range(num_steps):
             start = time.time()
+            epoch_free_energies = list(range(len(activations_loader)))
+            epoch_lls = list(range(len(activations_loader)))
 
-            optimizer.zero_grad()
-            q = probtorch.Trace()
-            variational(q, self.generative.embedding,
+            for (batch, (data, _)) in enumerate(activations_loader):
+                activations = [{'Y': Variable(data[:, :, s])}
+                               for s in range(self.num_subjects)]
+                trs = (batch * batch_size, None)
+                trs = (trs[0], trs[0] + activations[0]['Y'].shape[0])
+
+                optimizer.zero_grad()
+                q = probtorch.Trace()
+                variational(q, self.generative.embedding, times=trs,
                         num_particles=num_particles)
-            p = probtorch.Trace()
-            generative(p, guide=q, observations=activations)
+                p = probtorch.Trace()
+                generative(p, times=trs, guide=q, observations=activations)
 
-            free_energies[epoch] = tfa.free_energy(q, p, num_particles=num_particles)
-            lls[epoch] = tfa.log_likelihood(q, p, num_particles=num_particles)
+                epoch_free_energies[batch] =\
+                    tfa.free_energy(q, p, num_particles=num_particles)
+                epoch_lls[batch] =\
+                    tfa.log_likelihood(q, p, num_particles=num_particles)
+                epoch_free_energies[batch].backward()
+                optimizer.step()
+                if tfa.CUDA and use_cuda:
+                    epoch_free_energies[batch] = epoch_free_energies[batch].cpu().data.numpy()
+                    epoch_lls[batch] = epoch_lls[batch].cpu().data.numpy()
 
-            free_energies[epoch].backward()
-            optimizer.step()
 
-            if tfa.CUDA and use_cuda:
-                free_energies[epoch] = free_energies[epoch].cpu()
-                lls[epoch] = lls[epoch].cpu()
-            free_energies[epoch] = free_energies[epoch].data.numpy().sum(0)
-            lls[epoch] = lls[epoch].data.numpy().sum(0)
+
+            free_energies[epoch] = np.array(epoch_free_energies).sum(0)
+            free_energies[epoch] = free_energies[epoch].sum(0)
+            lls[epoch] = np.array(epoch_lls).sum(0)
+            lls[epoch] = lls[epoch].sum(0)
 
             end = time.time()
             msg = tfa.EPOCH_MSG % (epoch + 1, (end - start) * 1000, free_energies[epoch])
