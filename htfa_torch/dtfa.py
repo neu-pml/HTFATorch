@@ -1,4 +1,4 @@
-"""Sketch of Deep TFA architecture"""
+"""Perform deep topographic factor analysis on fMRI data"""
 
 __author__ = ('Jan-Willem van de Meent',
               'Eli Sennesh',
@@ -7,59 +7,311 @@ __email__ = ('j.vandemeent@northeastern.edu',
              'e.sennesh@northeastern.edu',
              'khan.zu@husky.neu.edu')
 
-from collections import defaultdict
+import logging
+import os
+import pickle
+import time
+
+try:
+    if __name__ == '__main__':
+        import matplotlib
+        matplotlib.use('TkAgg')
+finally:
+    import matplotlib.pyplot as plt
+import nilearn.image
+import nilearn.plotting as niplot
+import numpy as np
+import scipy.io as sio
 import torch
+import torch.distributions as dists
+from torch.autograd import Variable
+import torch.nn as nn
+from torch.nn import Parameter
+import torch.utils.data
+
 import probtorch
 
-# NOTE: I am writing this as a model relative to PyTorch master, 
-# which no longer requires explicit wrapping in Variable(...)
+from . import dtfa_models
+from . import tfa
+from . import tfa_models
+from . import utils
 
-class DeepTFA(torch.nn.Module):
-    def __init__(self, N=50, T=200, D=2, E=2, K=24):
-        # generative model
-        self.p_z_w_mean = torch.zeros(E)
-        self.p_z_w_std = torch.ones(E)
-        self.w = torch.nn.Sequential(
-                    torch.nn.Linear(E, K/2),
-                    torch.nn.ReLU(),
-                    torch.nn.Linear(K/2, K))
-        self.q_z_f_mean = torch.zeros(D)
-        self.q_z_f_std = torch.ones(D)
-        self.h_f = torch.nn.Sequential(
-                        torch.nn.Linear(D, K/2),
-                        torch.nn.ReLU())
-        self.x_f = torch.nn.Linear(K/2, 3*K)
-        self.log_rho_f = torch.nn.Linear(K/2, K)
-        self.sigma_y = Parameter(1.0)
-        # variational parameters
-        self.q_z_f_mean = Parameter(torch.zeros(N, D))
-        self.q_z_f_std = Parameter(torch.ones(N, D))
-        self.q_z_w_mean = Parameter(torch.zeros(N, T, E))
-        self.q_z_w_std = Parameter(torch.ones(N, T, E))
+class DeepTFA:
+    """Overall container for a run of Deep TFA"""
+    def __init__(self, data_files, mask, num_factors=tfa_models.NUM_FACTORS,
+                 embedding_dim=2, tasks=[]):
+        self.num_factors = num_factors
+        self.num_subjects = len(data_files)
+        self.mask = mask
+        datasets = [utils.load_dataset(data_file, mask=mask)
+                    for data_file in data_files]
+        self.voxel_activations = [dataset[0] for dataset in datasets]
+        self._images = [dataset[1] for dataset in datasets]
+        self.voxel_locations = [dataset[2] for dataset in datasets]
+        self._names = [dataset[3] for dataset in datasets]
+        self._templates = [dataset[4] for dataset in datasets]
+        self._tasks = tasks
 
-    def forward(self, x, y, n, t):
-        p = probtorch.Trace()
+        # Pull out relevant dimensions: the number of time instants and the
+        # number of voxels in each timewise "slice"
+        self.num_times = [acts.shape[0] for acts in self.voxel_activations]
+        self.num_voxels = [acts.shape[1] for acts in self.voxel_activations]
+
+        self.generative = dtfa_models.DeepTFAModel(
+            self.voxel_locations, self.voxel_activations, self.num_factors,
+            self.num_subjects, self.num_times, embedding_dim
+        )
+        self.variational = dtfa_models.DeepTFAGuide(self.num_subjects,
+                                                    self.num_times,
+                                                    embedding_dim)
+
+    def sample(self, posterior_predictive=False, num_particles=1):
         q = probtorch.Trace()
-        z_w = q.normal(self.q_z_w_mean[n, t],
-                       self.q_z_w_std[n, t],
-                       name='z_w')
-        z_w = p.normal(self.p_z_w_mean,
-                       self.p_z_w_std,
-                       value=q['z_w'],
-                       name='z_w')
-        w = self.w(z_w)
-        z_f = q.normal(self.q_z_f_mean[n],
-                       self.q_z_f_std[n],
-                       name='z_f')
-        z_f = p.normal(self.z_f_mean,
-                       self.z_f_std,
-                       value=q['z_f']
-                       name='z_f')
-        x_f = self.x_f(z_f)
-        rho_f = torch.exp(self.log_rho_f(z_f))
-        f = rbf(x, x_f, rho_f)
-        y = p.normal(w * f, 
-                     self.sigma_y, 
-                     value='y', 
-                     name='y')
+        if posterior_predictive:
+            self.variational(q, self.generative.embedding,
+                             num_particles=num_particles)
+        p = probtorch.Trace()
+        self.generative(p, guide=q,
+                        observations=[q for s in range(self.num_subjects)])
         return p, q
+
+    def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
+              log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES,
+              batch_size=64, use_cuda=True):
+        """Optimize the variational guide to reflect the data for `num_steps`"""
+        logging.basicConfig(format='%(asctime)s %(message)s',
+                            datefmt='%m/%d/%Y %H:%M:%S',
+                            level=log_level)
+        activations = torch.Tensor(self.num_times[0], self.num_voxels[0],
+                                   len(self.voxel_activations))
+        for s in range(self.num_subjects):
+            activations[:, :, s] = self.voxel_activations[s]
+        activations_loader = torch.utils.data.DataLoader(
+            torch.utils.data.TensorDataset(
+                activations,
+                torch.zeros(activations.shape[0])
+            ),
+            batch_size=batch_size
+        )
+        if tfa.CUDA and use_cuda:
+            variational = torch.nn.DataParallel(self.variational)
+            generative = torch.nn.DataParallel(self.generative)
+            variational.cuda()
+            generative.cuda()
+        else:
+            variational = self.variational
+            generative = self.generative
+
+        optimizer = torch.optim.Adam(list(variational.parameters()) +\
+                                     list(generative.parameters()),
+                                     lr=learning_rate)
+        variational.train()
+        generative.train()
+
+        free_energies = list(range(num_steps))
+        lls = list(range(num_steps))
+
+        for epoch in range(num_steps):
+            start = time.time()
+            epoch_free_energies = list(range(len(activations_loader)))
+            epoch_lls = list(range(len(activations_loader)))
+
+            for (batch, (data, _)) in enumerate(activations_loader):
+                activations = [{'Y': Variable(data[:, :, s])}
+                               for s in range(self.num_subjects)]
+                trs = (batch * batch_size, None)
+                trs = (trs[0], trs[0] + activations[0]['Y'].shape[0])
+
+                optimizer.zero_grad()
+                q = probtorch.Trace()
+                variational(q, self.generative.embedding, times=trs,
+                            num_particles=num_particles)
+                p = probtorch.Trace()
+                generative(p, times=trs, guide=q, observations=activations)
+
+                epoch_free_energies[batch] =\
+                    tfa.free_energy(q, p, num_particles=num_particles)
+                epoch_lls[batch] =\
+                    tfa.log_likelihood(q, p, num_particles=num_particles)
+                epoch_free_energies[batch].backward()
+                optimizer.step()
+                if tfa.CUDA and use_cuda:
+                    epoch_free_energies[batch] = epoch_free_energies[batch].cpu().data.numpy()
+                    epoch_lls[batch] = epoch_lls[batch].cpu().data.numpy()
+
+
+
+            free_energies[epoch] = np.array(epoch_free_energies).sum(0)
+            free_energies[epoch] = free_energies[epoch].sum(0)
+            lls[epoch] = np.array(epoch_lls).sum(0)
+            lls[epoch] = lls[epoch].sum(0)
+
+            end = time.time()
+            msg = tfa.EPOCH_MSG % (epoch + 1, (end - start) * 1000, free_energies[epoch])
+            logging.info(msg)
+
+        if tfa.CUDA and use_cuda:
+            variational.cpu()
+            generative.cpu()
+
+        return np.vstack([free_energies, lls])
+
+    def results(self, subject):
+        hyperparams = self.variational.hyperparams.state_vardict()
+
+        z_f = hyperparams['embedding']['factors']['mu'][subject]
+        z_f_embedded = self.generative.embedding.embedder(z_f)
+
+        factors = self.generative.embedding.factors_generator(z_f_embedded)
+        factors_shape = (self.num_factors, 4)
+        if len(factors.shape) > 1:
+            factors_shape = (-1,) + factors_shape
+        factors = factors.view(*factors_shape)
+        if len(factors.shape) > 2:
+            centers = factors[:, :, 0:3]
+            log_widths = factors[:, :, 3]
+        else:
+            centers = factors[:, 0:3]
+            log_widths = factors[:, 3]
+
+        z_w = hyperparams['embedding']['weights']['mu'][subject]
+        weights = self.generative.embedding.weights_generator(z_w)
+
+        return {
+            'weights': weights[0:self.voxel_activations[subject].shape[0], :],
+            'factors': tfa_models.radial_basis(self.voxel_locations[subject],
+                                               centers.data, log_widths.data),
+            'factor_centers': centers.data,
+            'factor_log_widths': log_widths.data,
+        }
+
+    def embeddings(self):
+        hyperparams = self.variational.hyperparams.state_vardict()
+
+        return {
+            'factors': hyperparams['embedding']['factors']['mu'],
+            'weights': hyperparams['embedding']['weights']['mu'],
+        }
+
+    def plot_factor_centers(self, subject, filename=None, show=True,
+                            trace=None):
+        hyperparams = self.variational.hyperparams.state_vardict()
+        z_f_std_dev = hyperparams['embedding']['factors']['sigma'][subject]
+
+        if trace:
+            z_f = trace['z_f%d' % subject].value
+            if len(z_f.shape) > 1:
+                if z_f.shape[0] > 1:
+                    z_f_std_dev = z_f.std(0)
+                z_f = z_f.mean(0)
+        else:
+            z_f = hyperparams['embedding']['factors']['mu'][subject]
+
+        z_f_embedded = self.generative.embedding.embedder(z_f)
+
+        factors = self.generative.embedding.factors_generator(z_f_embedded)
+        factors_shape = (self.num_factors, 4)
+        if len(factors.shape) > 1:
+            factors_shape = (-1,) + factors_shape
+        factors = factors.view(*factors_shape)
+        if len(factors.shape) > 2:
+            factor_centers = factors[:, :, 0:3]
+            factor_log_widths = factors[:, :, 3]
+        else:
+            factor_centers = factors[:, 0:3]
+            factor_log_widths = factors[:, 3]
+
+        factor_uncertainties = z_f_std_dev.norm().expand(self.num_factors, 1)
+
+        plot = niplot.plot_connectome(
+            np.eye(self.num_factors),
+            factor_centers.data.numpy(),
+            node_color=utils.uncertainty_palette(factor_uncertainties.data),
+            node_size=np.exp(factor_log_widths.data.numpy() - np.log(2))
+        )
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
+
+    def plot_original_brain(self, subject=None, filename=None, show=True,
+                            plot_abs=False, t=0):
+        if subject is None:
+            subject = np.random.choice(self.num_subjects, 1)[0]
+        image = nilearn.image.index_img(self._images[subject], t)
+        plot = niplot.plot_glass_brain(image, plot_abs=plot_abs)
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
+
+    def plot_reconstruction(self, subject=None, filename=None, show=True,
+                            plot_abs=False, t=0):
+        if subject is None:
+            subject = np.random.choice(self.num_subjects, 1)[0]
+
+        results = self.results(subject)
+
+        reconstruction = results['weights'].data @ results['factors']
+
+        image = utils.cmu2nii(reconstruction.numpy(),
+                              self.voxel_locations[subject].numpy(),
+                              self._templates[subject])
+        image_slice = nilearn.image.index_img(image, t)
+        plot = niplot.plot_glass_brain(image_slice, plot_abs=plot_abs)
+
+        logging.info(
+            'Reconstruction Error (Frobenius Norm): %.8e',
+            np.linalg.norm(
+                (reconstruction - self.voxel_activations[subject]).numpy()
+            )
+        )
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
+
+    def scatter_factor_embedding(self, filename=None, show=True):
+        hyperparams = self.variational.hyperparams.state_vardict()
+        z_f = hyperparams['embedding']['factors']['mu'].data
+
+        tasks = self._tasks
+        if tasks is None or len(tasks) == 0:
+            tasks = list(range(self.num_subjects))
+        palette = dict(zip(tasks, utils.compose_palette(len(tasks))))
+        subject_colors = np.array([palette[task] for task in tasks])
+
+        plt.scatter(x=z_f[:, 0], y=z_f[:, 1], c=subject_colors)
+        utils.palette_legend(list(palette.keys()), list(palette.values()))
+
+        if filename is not None:
+            plt.savefig(filename)
+        if show:
+            plt.show()
+
+    def scatter_weights_embedding(self, t=0, filename=None, show=True):
+        hyperparams = self.variational.hyperparams.state_vardict()
+        z_f = hyperparams['embedding']['weights']['mu'][:, t, :].data
+
+        tasks = self._tasks
+        if tasks is None or len(tasks) == 0:
+            tasks = list(range(self.num_subjects))
+        palette = dict(zip(tasks, utils.compose_palette(len(tasks))))
+        subject_colors = np.array([palette[task] for task in tasks])
+
+        plt.scatter(x=z_f[:, 0], y=z_f[:, 1], c=subject_colors)
+        utils.palette_legend(list(palette.keys()), list(palette.values()))
+
+        if filename is not None:
+            plt.savefig(filename)
+        if show:
+            plt.show()

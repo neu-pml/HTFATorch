@@ -14,6 +14,7 @@ try:
         import matplotlib
         matplotlib.use('TkAgg')
 finally:
+    import matplotlib.patches as mpatches
     import matplotlib.pyplot as plt
 import numpy as np
 import scipy.io as sio
@@ -204,10 +205,34 @@ def gaussian_populator(*dims):
         'sigma': torch.ones(*dims)
     }
 
+def uncertainty_alphas(uncertainties):
+    if len(uncertainties.shape) > 1:
+        uncertainties = np.array([
+            [u] for u in np.linalg.norm((uncertainties**-2).numpy(), axis=1)
+        ])
+    else:
+        uncertainties = uncertainties.numpy()
+    return uncertainties / (1.0 + uncertainties)
+
+def compose_palette(length, base='husl', alphas=None):
+    palette = np.array(sns.color_palette(base, length))
+    if alphas is not None:
+        return np.concatenate([palette, alphas], axis=1)
+    return palette
+
 def uncertainty_palette(uncertainties):
-    uncertainties = np.array([
-        [u] for u in np.linalg.norm((uncertainties**-2).numpy(), axis=1)
-    ])
-    uncertainties = uncertainties / (1.0 + uncertainties)
-    palette = np.array(sns.color_palette("RdBu", uncertainties.shape[0]))
-    return np.concatenate([palette, uncertainties], axis=1)
+    alphas = uncertainty_alphas(uncertainties)
+    return compose_palette(uncertainties.shape[0], base='cubehelix',
+                           alphas=alphas)
+
+def palette_legend(labels, colors):
+    patches = [mpatches.Patch(color=colors[i], label=labels[i]) for i in
+               range(len(colors))]
+    plt.legend(handles=patches)
+
+def isnan(tensor):
+    # Gross: https://github.com/pytorch/pytorch/issues/4767
+    return tensor != tensor
+
+def hasnan(tensor):
+    return isnan(tensor).any()
