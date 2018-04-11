@@ -42,7 +42,7 @@ def radial_basis(locations, centers, log_widths):
 
 class Model(nn.Module):
     def __init__(self):
-        super(self.__class__, self).__init__()
+        super(nn.Module, self).__init__()
 
     def forward(self, *args, trace=probtorch.Trace()):
         pass
