@@ -17,7 +17,7 @@ import probtorch
 from . import utils
 
 NUM_FACTORS = 5
-NUM_SAMPLES = 10
+NUM_PARTICLES = 10
 SOURCE_WEIGHT_STD_DEV = np.sqrt(2.0)
 SOURCE_LOG_WIDTH_STD_DEV = np.sqrt(3.0)
 VOXEL_NOISE = 0.1
@@ -27,15 +27,18 @@ VOXEL_NOISE = 0.1
 # log_widths: S x K
 def radial_basis(locations, centers, log_widths):
     """The radial basis function used as the shape for the factors"""
-    # V x 3 -> 1 x 1 x V x 3
-    locations = locations.unsqueeze(0).unsqueeze(0)
+    # V x 3 -> 1 x V x 3
+    locations = locations.unsqueeze(0)
+    if len(centers.shape) > 3:
+        # 1 x V x 3 -> 1 x 1 x V x 3
+        locations = locations.unsqueeze(0)
     # S x K x 3 -> S x K x 1 x 3
-    centers = centers.unsqueeze(2)
+    centers = centers.unsqueeze(len(centers.shape) - 1)
     # S x K x V x 3
     delta2s = (locations - centers)**2
     # S x K  -> S x K x 1
-    log_widths = log_widths.unsqueeze(2)
-    return torch.exp(-delta2s.sum(3) / torch.exp(log_widths))
+    log_widths = log_widths.unsqueeze(len(log_widths.shape))
+    return torch.exp(-delta2s.sum(len(delta2s.shape) - 1) / torch.exp(log_widths))
 
 class Model(nn.Module):
     def __init__(self):
@@ -58,7 +61,7 @@ class GuidePrior(Model):
     def __init__(self):
         super(Model, self).__init__()
 
-    def forward(self, trace, *args, num_samples=NUM_SAMPLES):
+    def forward(self, trace, *args, num_particles=NUM_PARTICLES):
         pass
 
 class GenerativePrior(Model):
@@ -101,39 +104,51 @@ class TFAGuideHyperParams(HyperParams):
         return utils.vardict(super(self.__class__, self).forward())
 
 class TFAGuidePrior(GuidePrior):
-    def forward(self, trace, params, times=None, num_samples=NUM_SAMPLES):
+    def __init__(self, subject=0):
+        super(TFAGuidePrior, self).__init__()
+        self.subject = subject
+
+    def forward(self, trace, params, times=None, num_particles=NUM_PARTICLES):
         if times is None:
             times = (0, params['weights']['mu'].shape[0])
 
-        for (k, val) in params['weights'].items():
-            params['weights'][k] = val[times[0]:times[1], :]
+        weight_params = {
+            'mu': params['weights']['mu'][times[0]:times[1], :],
+            'sigma': params['weights']['sigma'][times[0]:times[1], :]
+        }
 
-        for (var, val) in params.iteritems():
-            params[var] = val.clone().unsqueeze(0)
+        if num_particles and num_particles > 0:
+            params = utils.unsqueeze_and_expand_vardict(params, 0, num_particles,
+                                                        True)
+            weight_params = utils.unsqueeze_and_expand_vardict(weight_params,
+                                                               0,
+                                                               num_particles,
+                                                               True)
 
-        weights = trace.normal(params['weights']['mu'],
-                               params['weights']['sigma'],
-                               name='Weights')
+        weights = trace.normal(weight_params['mu'],
+                               weight_params['sigma'],
+                               name='Weights' + str(self.subject))
 
         centers = trace.normal(params['factor_centers']['mu'],
                                params['factor_centers']['sigma'],
-                               name='FactorCenters')
+                               name='FactorCenters' + str(self.subject))
         log_widths = trace.normal(params['factor_log_widths']['mu'],
                                   params['factor_log_widths']['sigma'],
-                                  name='FactorLogWidths')
+                                  name='FactorLogWidths' + str(self.subject))
         return weights, centers, log_widths
 
 class TFAGuide(nn.Module):
     """Variational guide for topographic factor analysis"""
-    def __init__(self, means, num_times, num_factors=NUM_FACTORS):
+    def __init__(self, means, num_times, num_factors=NUM_FACTORS, subject=0):
         super(self.__class__, self).__init__()
+        self.subject = subject
 
         self.hyperparams = TFAGuideHyperParams(means, num_times, num_factors)
-        self._prior = TFAGuidePrior()
+        self._prior = TFAGuidePrior(subject=subject)
 
-    def forward(self, trace, times=None, num_samples=NUM_SAMPLES):
+    def forward(self, trace, times=None, num_particles=NUM_PARTICLES):
         params = self.hyperparams.state_vardict()
-        return self._prior(trace, params, times=times, num_samples=num_samples)
+        return self._prior(trace, params, times=times, num_particles=num_particles)
 
 class TFAGenerativeHyperParams(HyperParams):
     def __init__(self, brain_center, brain_center_std_dev,
@@ -161,69 +176,83 @@ class TFAGenerativeHyperParams(HyperParams):
         return utils.vardict(super(self.__class__, self).forward())
 
 class TFAGenerativePrior(GenerativePrior):
-    def __init__(self, num_times):
+    def __init__(self, num_times, subject=0):
         super(self.__class__, self).__init__()
         self._num_times = num_times
+        self.subject = subject
 
     def forward(self, trace, params, times=None, guide=probtorch.Trace()):
         if times is None:
             times = (0, self._num_times)
 
-        params['weights'] = utils.unsqueeze_and_expand_vardict(
-            params['weights'], 0, times[1] - times[0], True
+        weight_params = utils.unsqueeze_and_expand_vardict(
+            params['weights'], len(params['weights']['mu'].shape) - 1,
+            times[1] - times[0], True
         )
 
-        weights = trace.normal(params['weights']['mu'],
-                               params['weights']['sigma'],
-                               value=guide['Weights'],
-                               name='Weights')
+        weights = trace.normal(weight_params['mu'],
+                               weight_params['sigma'],
+                               value=guide['Weights' + str(self.subject)],
+                               name='Weights' + str(self.subject))
 
         factor_centers = trace.normal(params['factor_centers']['mu'],
                                       params['factor_centers']['sigma'],
-                                      value=guide['FactorCenters'],
-                                      name='FactorCenters')
+                                      value=guide['FactorCenters' + str(self.subject)],
+                                      name='FactorCenters' + str(self.subject))
         factor_log_widths = trace.normal(params['factor_log_widths']['mu'],
                                          params['factor_log_widths']['sigma'],
-                                         value=guide['FactorLogWidths'],
-                                         name='FactorLogWidths')
+                                         value=guide['FactorLogWidths' + str(self.subject)],
+                                         name='FactorLogWidths' + str(self.subject))
 
         return weights, factor_centers, factor_log_widths
 
 class TFAGenerativeLikelihood(GenerativeLikelihood):
-    def __init__(self, locations, num_times, voxel_noise=VOXEL_NOISE):
+    def __init__(self, locations, num_times, voxel_noise=VOXEL_NOISE, subject=0):
         super(self.__class__, self).__init__()
 
         self.register_buffer('voxel_locations', Variable(locations))
         self._num_times = num_times
         self._voxel_noise = voxel_noise
+        self.subject = subject
 
     def forward(self, trace, weights, centers, log_widths, times=None,
-                observations=collections.defaultdict()):
+                observations=collections.defaultdict(), voxel_noise=None):
         if times is None:
             times = (0, self._num_times)
+        if voxel_noise is None:
+            voxel_noise = self._voxel_noise
+
         factors = radial_basis(self.voxel_locations, centers, log_widths)
-        activations = trace.normal(torch.matmul(weights, factors),
+        if len(weights.shape) > 2:
+            weights = weights[:, times[0]:times[1], :]
+        else:
+            weights = weights[times[0]:times[1], :]
+
+        activations = trace.normal(weights @ factors,
                                    self._voxel_noise, value=observations['Y'],
-                                   name='Y')
+                                   name='Y' + str(self.subject))
         return activations
 
 class TFAModel(nn.Module):
     """Generative model for topographic factor analysis"""
     def __init__(self, brain_center, brain_center_std_dev, num_times,
-                 locations, num_factors=NUM_FACTORS, voxel_noise=VOXEL_NOISE):
+                 locations, num_factors=NUM_FACTORS, voxel_noise=VOXEL_NOISE,
+                 subject=0):
         super(self.__class__, self).__init__()
 
         self._num_times = num_times
         self._num_factors = num_factors
         self._locations = locations
+        self.subject = subject
 
         self._hyperparams = TFAGenerativeHyperParams(brain_center,
                                                      brain_center_std_dev,
                                                      self._num_factors)
-        self._prior = TFAGenerativePrior(self._num_times)
+        self._prior = TFAGenerativePrior(self._num_times, subject=self.subject)
         self._likelihood = TFAGenerativeLikelihood(self._locations,
                                                    self._num_times,
-                                                   voxel_noise)
+                                                   voxel_noise,
+                                                   subject=self.subject)
 
     def forward(self, trace, times=None, guide=probtorch.Trace(),
                 observations=collections.defaultdict()):

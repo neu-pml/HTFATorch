@@ -1,0 +1,24 @@
+what you want to do is to first get a mean (across time) image for each 4D file and then binarize it*. 
+
+In order to do this, use fslmaths for each 4D file:
+
+fslmaths 4D_inputVolume1 -Tmean -bin 3d_meanmask1
+fslmaths 4D_inputVolume2 -Tmean -bin 3d_meanmask2
+...
+fslmaths 4D_inputVolumeN -Tmean -bin 3d_meanmaskN
+
+Then, we'll want to get the proportion of subjects who have data for each voxel. We do this by creating a 4D file from all the 3D masks and then taking the mean across the 4th dim:
+
+fslmerge -t allmeanmasks4d 3d_meanmask1 3d_meanmask2 ... 3d_meanmaskN
+
+fslmaths allmeanmasks4d -Tmean propDatavox3d
+
+One can look at this file to get a sense of how across subject alignment did and where there is consistent or spotty drop-out of data.
+
+Lastly, make this a binary mask which is 1 where ALL subjects have data and 0 elsewhere (save as wholebrain.nii.gz):
+fslmaths propDatavox3d -thr 1 wholebrain
+
+
+
+
+*Note that if the data is z-scored already, this won't work (it isn't z-scored for greeneyes), because the mean will be ~0 for each voxel and so the binarize operation (turn non-zeros into 1) will be bad, so you would probably have to binarize, take the mean, then binarize again.

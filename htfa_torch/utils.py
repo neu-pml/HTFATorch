@@ -5,6 +5,7 @@ __author__ = 'Eli Sennesh'
 __email__ = 'e.sennesh@northeastern.edu'
 
 import flatdict
+import math
 import os
 import warnings
 
@@ -16,6 +17,9 @@ finally:
     import matplotlib.pyplot as plt
 import numpy as np
 import scipy.io as sio
+import scipy.stats as stats
+import seaborn as sns
+from sklearn.cluster import KMeans
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
@@ -23,6 +27,42 @@ from torch.nn import Parameter
 
 import nibabel as nib
 from nilearn.input_data import NiftiMasker
+
+def brain_centroid(locations):
+    brain_center = torch.mean(locations, 0).unsqueeze(0)
+    brain_center_std_dev = torch.sqrt(
+        torch.var(locations, 0).unsqueeze(0)
+    )
+    return brain_center, brain_center_std_dev
+
+def initial_radial_basis(location, center, widths):
+    """The radial basis function used as the shape for the factors"""
+    # V x 3 -> 1 x V x 3
+    location = np.expand_dims(location, 0)
+    # K x 3 -> K x 1 x 3
+    center = np.expand_dims(center, 1)
+    #
+    delta2s = (location - center) ** 2
+    widths = np.expand_dims(widths, 1)
+    return np.exp(-delta2s.sum(2) / (widths))
+
+def initial_hypermeans(activations, locations, num_factors):
+    """Initialize our center, width, and weight parameters via K-means"""
+    kmeans = KMeans(init='k-means++',
+                    n_clusters=num_factors,
+                    n_init=10,
+                    random_state=100)
+    kmeans.fit(locations)
+    initial_centers = kmeans.cluster_centers_
+    initial_widths = 2.0 * math.pow(np.nanmax(np.std(locations, axis=0)), 2)
+    F = initial_radial_basis(locations, initial_centers, initial_widths)
+    F = F.T
+
+    # beta = np.var(voxel_activations)
+    trans_F = F.T.copy()
+    initial_weights = np.linalg.solve(trans_F.dot(F), trans_F.dot(activations))
+
+    return initial_centers, np.log(initial_widths), initial_weights.T
 
 def plot_losses(losses):
     epochs = range(losses.shape[1])
@@ -101,16 +141,18 @@ def cmu2nii(activations, locations, template):
 
     return nib.Nifti1Image(data, affine=sform)
 
-def load_dataset(data_file):
+def load_dataset(data_file, mask=None):
     name, ext = os.path.splitext(data_file)
     if ext == '.nii':
-        dataset, image = nii2cmu(data_file)
+        dataset, image = nii2cmu(data_file, mask_file=mask)
         template = data_file
     else:
         dataset = sio.loadmat(data_file)
+        image = template = None
     _, name = os.path.split(name)
     # pull out the voxel activations and locations
-    activations = torch.Tensor(dataset['data']).t()
+    zscored_data = stats.zscore(dataset['data'], axis=1, ddof=1)
+    activations = torch.Tensor(zscored_data).t()
     locations = torch.Tensor(dataset['R'])
 
     del dataset
@@ -124,6 +166,10 @@ def vardict(existing=None):
             vdict[k] = v
     return vdict
 
+def vardict_keys(vdict):
+    first_level = [k.rsplit('__', 1)[0] for k in vdict.keys()]
+    return list(set(first_level))
+
 def register_vardict(vdict, module, parameter=True):
     for (k, v) in vdict.iteritems():
         if parameter:
@@ -135,7 +181,8 @@ def unsqueeze_and_expand(tensor, dim, size, clone=False):
     if clone:
         tensor = tensor.clone()
 
-    shape = [size] + list(tensor.shape)
+    shape = list(tensor.shape)
+    shape.insert(dim, size)
     return tensor.unsqueeze(dim).expand(*shape)
 
 def unsqueeze_and_expand_vardict(vdict, dim, size, clone=False):
@@ -145,3 +192,22 @@ def unsqueeze_and_expand_vardict(vdict, dim, size, clone=False):
         result[k] = unsqueeze_and_expand(v, dim, size, clone)
 
     return result
+
+def populate_vardict(vdict, populator, *dims):
+    for k in vdict.iterkeys():
+        vdict[k] = populator(*dims)
+    return vdict
+
+def gaussian_populator(*dims):
+    return {
+        'mu': torch.zeros(*dims),
+        'sigma': torch.ones(*dims)
+    }
+
+def uncertainty_palette(uncertainties):
+    uncertainties = np.array([
+        [u] for u in np.linalg.norm((uncertainties**-2).numpy(), axis=1)
+    ])
+    uncertainties = uncertainties / (1.0 + uncertainties)
+    palette = np.array(sns.color_palette("RdBu", uncertainties.shape[0]))
+    return np.concatenate([palette, uncertainties], axis=1)
