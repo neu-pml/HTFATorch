@@ -27,7 +27,6 @@ import torch.distributions as dists
 from torch.autograd import Variable
 import torch.nn as nn
 from torch.nn import Parameter
-import torch.utils.data
 
 import probtorch
 
@@ -77,15 +76,9 @@ class DeepTFA:
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
                             level=log_level)
-        activations = torch.Tensor(self.num_times[0], self.num_voxels[0],
-                                   len(self.voxel_activations))
-        for s in range(self.num_subjects):
-            activations[:, :, s] = self.voxel_activations[s]
+        # S x T x V -> T x S x V
         activations_loader = torch.utils.data.DataLoader(
-            torch.utils.data.TensorDataset(
-                activations,
-                torch.zeros(activations.shape[0])
-            ),
+            utils.TFADataset(self.voxel_activations),
             batch_size=batch_size
         )
         if tfa.CUDA and use_cuda:
@@ -111,8 +104,8 @@ class DeepTFA:
             epoch_free_energies = list(range(len(activations_loader)))
             epoch_lls = list(range(len(activations_loader)))
 
-            for (batch, (data, _)) in enumerate(activations_loader):
-                activations = [{'Y': Variable(data[:, :, s])}
+            for (batch, data) in enumerate(activations_loader):
+                activations = [{'Y': Variable(data[:, s, :])}
                                for s in range(self.num_subjects)]
                 trs = (batch * batch_size, None)
                 trs = (trs[0], trs[0] + activations[0]['Y'].shape[0])
