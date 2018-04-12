@@ -8,6 +8,7 @@ import pickle
 import time
 
 import hypertools as hyp
+import nibabel as nib
 import nilearn.image
 import nilearn.plotting as niplot
 import numpy as np
@@ -54,7 +55,7 @@ class TopographicalFactorAnalysis:
     def __init__(self, data_file, num_factors=tfa_models.NUM_FACTORS):
         self.num_factors = num_factors
 
-        self.voxel_activations, self._image, self.voxel_locations, self._name,\
+        self.voxel_activations, self.voxel_locations, self._name,\
             self._template = utils.load_dataset(data_file)
 
         # Pull out relevant dimensions: the number of times-of-recording, and
@@ -274,7 +275,7 @@ class TopographicalFactorAnalysis:
 
     def plot_original_brain(self, filename=None, show=True, plot_abs=False,
                             time=0):
-        image = nilearn.image.index_img(self._image, time)
+        image = nilearn.image.index_img(nib.load(self._template), time)
         plot = niplot.plot_glass_brain(image, plot_abs=plot_abs)
 
         if filename is not None:

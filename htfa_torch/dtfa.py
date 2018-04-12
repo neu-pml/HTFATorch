@@ -46,10 +46,9 @@ class DeepTFA:
         datasets = [utils.load_dataset(data_file, mask=mask)
                     for data_file in data_files]
         self.voxel_activations = [dataset[0] for dataset in datasets]
-        self._images = [dataset[1] for dataset in datasets]
-        self.voxel_locations = [dataset[2] for dataset in datasets]
-        self._names = [dataset[3] for dataset in datasets]
-        self._templates = [dataset[4] for dataset in datasets]
+        self.voxel_locations = [dataset[1] for dataset in datasets]
+        self._names = [dataset[2] for dataset in datasets]
+        self._templates = [dataset[3] for dataset in datasets]
         self._tasks = tasks
 
         # Pull out relevant dimensions: the number of time instants and the

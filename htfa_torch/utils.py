@@ -123,7 +123,7 @@ def nii2cmu(nifti_file, mask_file=None):
     voxel_coordinates = full_fact(image.shape[0:3])[vmask, ::-1] - 1
     voxel_locations = np.array(np.dot(voxel_coordinates, sform[0:3, 0:3])) + sform[:3, 3]
 
-    return {'data': voxel_activations, 'R': voxel_locations}, image
+    return {'data': voxel_activations, 'R': voxel_locations}
 
 def cmu2nii(activations, locations, template):
     image = nib.load(template)
@@ -145,11 +145,11 @@ def cmu2nii(activations, locations, template):
 def load_dataset(data_file, mask=None):
     name, ext = os.path.splitext(data_file)
     if ext == '.nii':
-        dataset, image = nii2cmu(data_file, mask_file=mask)
+        dataset = nii2cmu(data_file, mask_file=mask)
         template = data_file
     else:
         dataset = sio.loadmat(data_file)
-        image = template = None
+        template = None
     _, name = os.path.split(name)
     # pull out the voxel activations and locations
     zscored_data = stats.zscore(dataset['data'], axis=1, ddof=1)
@@ -158,7 +158,7 @@ def load_dataset(data_file, mask=None):
 
     del dataset
 
-    return activations, image, locations, name, template
+    return activations, locations, name, template
 
 def vardict(existing=None):
     vdict = flatdict.FlatDict(delimiter='__')

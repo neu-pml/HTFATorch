@@ -9,6 +9,7 @@ import pickle
 import time
 
 import hypertools as hyp
+import nibabel as nib
 import nilearn.image
 import nilearn.plotting as niplot
 import numpy as np
@@ -40,10 +41,9 @@ class HierarchicalTopographicFactorAnalysis:
         datasets = [utils.load_dataset(data_file, mask=mask)
                     for data_file in data_files]
         self.voxel_activations = [dataset[0] for dataset in datasets]
-        self._images = [dataset[1] for dataset in datasets]
-        self.voxel_locations = [dataset[2] for dataset in datasets]
-        self._names = [dataset[3] for dataset in datasets]
-        self._templates = [dataset[4] for dataset in datasets]
+        self.voxel_locations = [dataset[1] for dataset in datasets]
+        self._names = [dataset[2] for dataset in datasets]
+        self._templates = [dataset[3] for dataset in datasets]
 
         # Pull out relevant dimensions: the number of time instants and the
         # number of voxels in each timewise "slice"
@@ -218,7 +218,7 @@ class HierarchicalTopographicFactorAnalysis:
                             plot_abs=False, t=0):
         if subject is None:
             subject = np.random.choice(self.num_subjects, 1)[0]
-        image = nilearn.image.index_img(self._images[subject], t)
+        image = nilearn.image.index_img(nib.load(self._templates[subject]), t)
         plot = niplot.plot_glass_brain(image, plot_abs=plot_abs)
 
         if filename is not None:
