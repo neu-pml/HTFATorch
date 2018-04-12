@@ -25,6 +25,7 @@ import torch
 from torch.autograd import Variable
 import torch.nn as nn
 from torch.nn import Parameter
+import torch.utils.data
 
 import nibabel as nib
 from nilearn.input_data import NiftiMasker
@@ -260,3 +261,15 @@ def isnan(tensor):
 
 def hasnan(tensor):
     return isnan(tensor).any()
+
+class TFADataset(torch.utils.data.Dataset):
+    def __init__(self, activations):
+        self._activations = activations
+        self._num_subjects = len(self._activations)
+        self._num_times = min([acts.shape[0] for acts in self._activations])
+
+    def __len__(self):
+        return self._num_times
+
+    def __getitem__(self, i):
+        return torch.stack([acts[i] for acts in self._activations], dim=0)
