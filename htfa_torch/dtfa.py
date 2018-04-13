@@ -27,7 +27,6 @@ import torch.distributions as dists
 from torch.autograd import Variable
 import torch.nn as nn
 from torch.nn import Parameter
-import torch.utils.data
 
 import probtorch
 
@@ -43,12 +42,8 @@ class DeepTFA:
         self.num_factors = num_factors
         self.num_subjects = len(data_files)
         self.mask = mask
-        datasets = [utils.load_dataset(data_file, mask=mask)
-                    for data_file in data_files]
-        self.voxel_activations = [dataset[0] for dataset in datasets]
-        self.voxel_locations = [dataset[1] for dataset in datasets]
-        self._names = [dataset[2] for dataset in datasets]
-        self._templates = [dataset[3] for dataset in datasets]
+        self.voxel_activations, self.voxel_locations, self._names,\
+            self._templates = utils.load_collective_dataset(data_files, mask)
         self._tasks = tasks
 
         # Pull out relevant dimensions: the number of time instants and the
@@ -81,15 +76,9 @@ class DeepTFA:
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
                             level=log_level)
-        activations = torch.Tensor(self.num_times[0], self.num_voxels[0],
-                                   len(self.voxel_activations))
-        for s in range(self.num_subjects):
-            activations[:, :, s] = self.voxel_activations[s]
+        # S x T x V -> T x S x V
         activations_loader = torch.utils.data.DataLoader(
-            torch.utils.data.TensorDataset(
-                activations,
-                torch.zeros(activations.shape[0])
-            ),
+            utils.TFADataset(self.voxel_activations),
             batch_size=batch_size
         )
         if tfa.CUDA and use_cuda:
@@ -115,9 +104,12 @@ class DeepTFA:
             epoch_free_energies = list(range(len(activations_loader)))
             epoch_lls = list(range(len(activations_loader)))
 
-            for (batch, (data, _)) in enumerate(activations_loader):
-                activations = [{'Y': Variable(data[:, :, s])}
+            for (batch, data) in enumerate(activations_loader):
+                activations = [{'Y': Variable(data[:, s, :])}
                                for s in range(self.num_subjects)]
+                for acts in activations:
+                    if tfa.CUDA and use_cuda:
+                        acts['Y'] = acts['Y'].cuda()
                 trs = (batch * batch_size, None)
                 trs = (trs[0], trs[0] + activations[0]['Y'].shape[0])
 
@@ -297,9 +289,13 @@ class DeepTFA:
         if show:
             plt.show()
 
-    def scatter_weights_embedding(self, t=0, filename=None, show=True):
+    def scatter_weights_embedding(self, t=None, filename=None, show=True):
         hyperparams = self.variational.hyperparams.state_vardict()
-        z_f = hyperparams['embedding']['weights']['mu'][:, t, :].data
+        z_f = hyperparams['embedding']['weights']['mu'].data
+        if t is not None:
+            z_f = z_f[:, t, :]
+        else:
+            z_f = z_f.mean(1)
 
         tasks = self._tasks
         if tasks is None or len(tasks) == 0:

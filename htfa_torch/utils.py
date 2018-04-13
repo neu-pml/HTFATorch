@@ -25,6 +25,7 @@ import torch
 from torch.autograd import Variable
 import torch.nn as nn
 from torch.nn import Parameter
+import torch.utils.data
 
 import nibabel as nib
 from nilearn.input_data import NiftiMasker
@@ -142,6 +143,30 @@ def cmu2nii(activations, locations, template):
 
     return nib.Nifti1Image(data, affine=sform)
 
+def load_collective_dataset(data_files, mask):
+    datasets = [list(load_dataset(data, mask=mask)) for data in data_files]
+    min_time = min([dataset[0].shape[0] for dataset in datasets])
+    for dataset in datasets:
+        difference = dataset[0].shape[0] - min_time
+        if difference > 0:
+            start_cut = difference // 2
+            end_cut = difference - start_cut
+            length = dataset[0].shape[0]
+            dataset[0] = dataset[0][start_cut:length-end_cut, :]
+
+    activations = [d[0] for d in datasets]
+    locations = [d[1] for d in datasets]
+    names = [d[2] for d in datasets]
+    templates = [d[3] for d in datasets]
+
+    for d in datasets:
+        acts = d[0]
+        locs = d[1]
+        del acts
+        del locs
+
+    return activations, locations, names, templates
+
 def load_dataset(data_file, mask=None):
     name, ext = os.path.splitext(data_file)
     if ext == '.nii':
@@ -236,3 +261,15 @@ def isnan(tensor):
 
 def hasnan(tensor):
     return isnan(tensor).any()
+
+class TFADataset(torch.utils.data.Dataset):
+    def __init__(self, activations):
+        self._activations = activations
+        self._num_subjects = len(self._activations)
+        self._num_times = min([acts.shape[0] for acts in self._activations])
+
+    def __len__(self):
+        return self._num_times
+
+    def __getitem__(self, i):
+        return torch.stack([acts[i] for acts in self._activations], dim=0)
