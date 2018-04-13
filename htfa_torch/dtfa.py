@@ -107,6 +107,9 @@ class DeepTFA:
             for (batch, data) in enumerate(activations_loader):
                 activations = [{'Y': Variable(data[:, s, :])}
                                for s in range(self.num_subjects)]
+                for acts in activations:
+                    if tfa.CUDA and use_cuda:
+                        acts['Y'] = acts['Y'].cuda()
                 trs = (batch * batch_size, None)
                 trs = (trs[0], trs[0] + activations[0]['Y'].shape[0])
 
