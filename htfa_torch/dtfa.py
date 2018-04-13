@@ -286,9 +286,13 @@ class DeepTFA:
         if show:
             plt.show()
 
-    def scatter_weights_embedding(self, t=0, filename=None, show=True):
+    def scatter_weights_embedding(self, t=None, filename=None, show=True):
         hyperparams = self.variational.hyperparams.state_vardict()
-        z_f = hyperparams['embedding']['weights']['mu'][:, t, :].data
+        z_f = hyperparams['embedding']['weights']['mu'].data
+        if t is not None:
+            z_f = z_f[:, t, :]
+        else:
+            z_f = z_f.mean(1)
 
         tasks = self._tasks
         if tasks is None or len(tasks) == 0:
