@@ -271,42 +271,79 @@ class DeepTFA:
 
         return plot
 
-    def scatter_factor_embedding(self, filename=None, show=True):
+    def scatter_factor_embedding(self, tasks=None, filename=None, show=True,
+                                 xlims=None, ylims=None):
         hyperparams = self.variational.hyperparams.state_vardict()
         z_f = hyperparams['embedding']['factors']['mu'].data
 
-        tasks = self._tasks
-        if tasks is None or len(tasks) == 0:
-            tasks = list(range(self.num_subjects))
-        palette = dict(zip(tasks, utils.compose_palette(len(tasks))))
-        subject_colors = np.array([palette[task] for task in tasks])
+        all_tasks = self._tasks
+        if all_tasks is None or len(tasks) == 0:
+            all_tasks = list(range(self.num_subjects))
+        palette = dict(zip(all_tasks, utils.compose_palette(len(all_tasks))))
 
-        plt.scatter(x=z_f[:, 0], y=z_f[:, 1], c=subject_colors)
+        if tasks is None:
+            tasks = all_tasks
+
+        z_fs = [z_f[s] for s in range(self.num_subjects)
+                if all_tasks[s] in tasks]
+        z_fs = torch.stack(z_fs)
+        subject_colors = [palette[all_tasks[s]]
+                          for s in range(self.num_subjects)
+                          if all_tasks[s] in tasks]
+        palette = {t: c for (t, c) in palette.items() if t in tasks}
+
+        fig = plt.figure(1, figsize=(3.75, 2.75))
+        ax = fig.add_subplot(111, facecolor='white')
+        fig.axes[0].set_xlabel('$z^F_1$')
+        if xlims is not None:
+            fig.axes[0].set_xlim(*xlims)
+        fig.axes[0].set_ylabel('$z^F_2$')
+        if ylims is not None:
+            fig.axes[0].set_ylim(*ylims)
+        fig.axes[0].set_title('Factor Embeddings')
+        ax.scatter(x=z_fs[:, 0], y=z_fs[:, 1], c=subject_colors)
         utils.palette_legend(list(palette.keys()), list(palette.values()))
 
         if filename is not None:
-            plt.savefig(filename)
+            fig.savefig(filename)
         if show:
-            plt.show()
+            fig.show()
 
-    def scatter_weights_embedding(self, t=None, filename=None, show=True):
+    def scatter_weights_embedding(self, t=None, tasks=None, filename=None,
+                                  show=True, xlims=None, ylims=None):
         hyperparams = self.variational.hyperparams.state_vardict()
-        z_f = hyperparams['embedding']['weights']['mu'].data
+        z_w = hyperparams['embedding']['weights']['mu'].data
         if t is not None:
-            z_f = z_f[:, t, :]
+            z_w = z_w[:, t, :]
         else:
-            z_f = z_f.mean(1)
+            z_w = z_w.mean(1)
 
-        tasks = self._tasks
-        if tasks is None or len(tasks) == 0:
-            tasks = list(range(self.num_subjects))
-        palette = dict(zip(tasks, utils.compose_palette(len(tasks))))
-        subject_colors = np.array([palette[task] for task in tasks])
+        all_tasks = self._tasks
+        if all_tasks is None or len(tasks) == 0:
+            all_tasks = list(range(self.num_subjects))
+        palette = dict(zip(all_tasks, utils.compose_palette(len(all_tasks))))
 
-        plt.scatter(x=z_f[:, 0], y=z_f[:, 1], c=subject_colors)
+        z_ws = [z_w[s] for s in range(self.num_subjects)
+                if any([task in all_tasks[s] for task in tasks])]
+        z_ws = torch.stack(z_ws)
+        subject_colors = [palette[all_tasks[s]]
+                          for s in range(self.num_subjects)
+                          if all_tasks[s] in tasks]
+        palette = {t: c for (t, c) in palette.items() if t in tasks}
+
+        fig = plt.figure(1, figsize=(3.75, 2.75))
+        ax = fig.add_subplot(111, facecolor='white')
+        fig.axes[0].set_xlabel('$z^W_1$')
+        if xlims is not None:
+            fig.axes[0].set_xlim(*xlims)
+        fig.axes[0].set_ylabel('$z^W_2$')
+        if ylims is not None:
+            fig.axes[0].set_ylim(*ylims)
+        fig.axes[0].set_title('Weight Embeddings')
+        ax.scatter(x=z_ws[:, 0], y=z_ws[:, 1], c=subject_colors)
         utils.palette_legend(list(palette.keys()), list(palette.values()))
 
         if filename is not None:
-            plt.savefig(filename)
+            fig.savefig(filename)
         if show:
-            plt.show()
+            fig.show()

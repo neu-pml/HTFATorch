@@ -239,7 +239,7 @@ def uncertainty_alphas(uncertainties):
         uncertainties = uncertainties.numpy()
     return uncertainties / (1.0 + uncertainties)
 
-def compose_palette(length, base='husl', alphas=None):
+def compose_palette(length, base='dark', alphas=None):
     palette = np.array(sns.color_palette(base, length))
     if alphas is not None:
         return np.concatenate([palette, alphas], axis=1)
