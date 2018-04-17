@@ -55,7 +55,11 @@ class HyperParams(Model):
         utils.register_vardict(vs, self, self._guide)
 
     def state_vardict(self):
-        return utils.vardict(self.state_dict(keep_vars=True))
+        result = utils.vardict(self.state_dict(keep_vars=True))
+        for k, v in result.items():
+            if not isinstance(v, Variable):
+                result[k] = Variable(v)
+        return result
 
 class GuidePrior(Model):
     def __init__(self):
@@ -210,7 +214,7 @@ class TFAGenerativeLikelihood(GenerativeLikelihood):
     def __init__(self, locations, num_times, voxel_noise=VOXEL_NOISE, subject=0):
         super(self.__class__, self).__init__()
 
-        self.register_buffer('voxel_locations', Variable(locations))
+        self.register_buffer('voxel_locations', locations)
         self._num_times = num_times
         self._voxel_noise = voxel_noise
         self.subject = subject
@@ -222,7 +226,8 @@ class TFAGenerativeLikelihood(GenerativeLikelihood):
         if voxel_noise is None:
             voxel_noise = self._voxel_noise
 
-        factors = radial_basis(self.voxel_locations, centers, log_widths)
+        factors = radial_basis(Variable(self.voxel_locations), centers,
+                               log_widths)
 
         activations = trace.normal(weights @ factors,
                                    self._voxel_noise, value=observations['Y'],

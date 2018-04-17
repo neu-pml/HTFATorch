@@ -201,7 +201,7 @@ def register_vardict(vdict, module, parameter=True):
         if parameter:
             module.register_parameter(k, Parameter(v))
         else:
-            module.register_buffer(k, Variable(v))
+            module.register_buffer(k, v)
 
 def unsqueeze_and_expand(tensor, dim, size, clone=False):
     if clone:
