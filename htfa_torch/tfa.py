@@ -34,6 +34,8 @@ LEARNING_RATE = 0.1
 
 EPOCH_MSG = '[Epoch %d] (%dms) Posterior free-energy %.8e'
 
+CHECKPOINT_TAG = 'CHECK_%m%d%Y_%H%M%S'
+
 def free_energy(q, p, num_particles=tfa_models.NUM_PARTICLES):
     """Calculate the free-energy (negative of the evidence lower bound)"""
     if num_particles and num_particles > 0:
