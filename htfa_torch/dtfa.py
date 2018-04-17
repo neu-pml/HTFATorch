@@ -7,6 +7,7 @@ __email__ = ('j.vandemeent@northeastern.edu',
              'e.sennesh@northeastern.edu',
              'khan.zu@husky.neu.edu')
 
+import datetime
 import logging
 import os
 import pickle
@@ -71,7 +72,7 @@ class DeepTFA:
 
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
               log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES,
-              batch_size=64, use_cuda=True):
+              batch_size=64, use_cuda=True, checkpoint_steps=None):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
@@ -140,6 +141,11 @@ class DeepTFA:
             end = time.time()
             msg = tfa.EPOCH_MSG % (epoch + 1, (end - start) * 1000, free_energies[epoch])
             logging.info(msg)
+            if checkpoint_steps is not None and epoch % checkpoint_steps == 0:
+                now = datetime.datetime.now()
+                checkpoint_name = now.strftime(tfa.CHECKPOINT_TAG)
+                logging.info('Saving checkpoint...')
+                self.save_state(path='.', tag=checkpoint_name)
 
         if tfa.CUDA and use_cuda:
             variational.cpu()
@@ -347,3 +353,35 @@ class DeepTFA:
             fig.savefig(filename)
         if show:
             fig.show()
+
+    def save_state(self, path='.', tag=''):
+        name = os.path.commonprefix(self._names) + tag
+        variational_state = self.variational.state_dict()
+        torch.save(variational_state,
+                   path + '/' + name + '.dtfa_guide')
+        torch.save(self.generative.state_dict(),
+                   path + '/' + name + '.dtfa_model')
+
+    def save(self, path='.'):
+        name = os.path.commonprefix(self._names)
+        torch.save(self.variational.state_dict(),
+                   path + '/' + name + '.dtfa_guide')
+        torch.save(self.generative.state_dict(),
+                   path + '/' + name + '.dtfa_model')
+        with open(path + '/' + name + '.dtfa', 'wb') as pickle_file:
+            pickle.dump(self, pickle_file)
+
+    def load_state(self, basename):
+        model_state = torch.load(basename + '.dtfa_model')
+        self.generative.load_state_dict(model_state)
+
+        guide_state = torch.load(basename + '.dtfa_guide')
+        self.variational.load_state_dict(guide_state)
+
+    @classmethod
+    def load(cls, basename):
+        with open(basename + '.dtfa', 'rb') as pickle_file:
+            dtfa = pickle.load(pickle_file)
+        dtfa.load_state(basename)
+
+        return dtfa
