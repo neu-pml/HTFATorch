@@ -86,12 +86,6 @@ class TopographicalFactorAnalysis:
                                        self.num_times, self.voxel_locations,
                                        num_factors=self.num_factors)
 
-        if CUDA:
-            self.enc.cuda()
-            self.dec.cuda()
-            self.enc = torch.nn.DataParallel(self.enc)
-            self.dec = torch.nn.DataParallel(self.dec)
-
     def train(self, num_steps=10, learning_rate=LEARNING_RATE,
               log_level=logging.WARNING, batch_size=64,
               num_particles=tfa_models.NUM_PARTICLES,
@@ -171,9 +165,9 @@ class TopographicalFactorAnalysis:
         q = probtorch.Trace()
         self.enc(q, num_particles=tfa_models.NUM_PARTICLES)
 
-        weights = q['Weights' + str(self.enc.module.subject)].value.data.mean(0)
-        factor_centers = q['FactorCenters' + str(self.enc.module.subject)].value.data.mean(0)
-        factor_log_widths = q['FactorLogWidths' + str(self.enc.module.subject)].value.data.mean(0)
+        weights = q['Weights' + str(self.enc.subject)].value.data.mean(0)
+        factor_centers = q['FactorCenters' + str(self.enc.subject)].value.data.mean(0)
+        factor_log_widths = q['FactorLogWidths' + str(self.enc.subject)].value.data.mean(0)
 
         if CUDA:
             weights = weights.cpu()
@@ -205,8 +199,8 @@ class TopographicalFactorAnalysis:
                             level=log_level)
 
         if CUDA:
-            self.enc.module.hyperparams.cpu()
-        params = self.enc.module.hyperparams.state_vardict()
+            self.enc.hyperparams.cpu()
+        params = self.enc.hyperparams.state_vardict()
         for k, v in params.items():
             params[k] = v.data
 
@@ -255,8 +249,8 @@ class TopographicalFactorAnalysis:
         results = self.results()
 
         if CUDA:
-            self.enc.module.hyperparams.cpu()
-        params = self.enc.module.hyperparams.state_vardict()
+            self.enc.hyperparams.cpu()
+        params = self.enc.hyperparams.state_vardict()
         for k, v in params.items():
             params[k] = v.data
         uncertainties = params['factor_centers']['sigma']
@@ -310,8 +304,8 @@ class TopographicalFactorAnalysis:
     def plot_connectome(self, filename=None, show=True):
         results = self.results()
         if CUDA:
-            self.enc.module.hyperparams.cpu()
-        params = self.enc.module.hyperparams.state_vardict()
+            self.enc.hyperparams.cpu()
+        params = self.enc.hyperparams.state_vardict()
         for k, v in params.items():
             params[k] = v.data
         uncertainties = params['factor_centers']['sigma']
