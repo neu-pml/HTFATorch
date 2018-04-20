@@ -167,7 +167,7 @@ def load_collective_dataset(data_files, mask):
 
     return activations, locations, names, templates
 
-def load_dataset(data_file, mask=None):
+def load_dataset(data_file, mask=None, zscore=True):
     name, ext = os.path.splitext(data_file)
     if ext == '.nii':
         dataset = nii2cmu(data_file, mask_file=mask)
@@ -177,8 +177,11 @@ def load_dataset(data_file, mask=None):
         template = None
     _, name = os.path.split(name)
     # pull out the voxel activations and locations
-    zscored_data = stats.zscore(dataset['data'], axis=1, ddof=1)
-    activations = torch.Tensor(zscored_data).t()
+    if zscore:
+        data = stats.zscore(dataset['data'], axis=1, ddof=1)
+    else:
+        data = dataset['data']
+    activations = torch.Tensor(data).t()
     locations = torch.Tensor(dataset['R'])
 
     del dataset
