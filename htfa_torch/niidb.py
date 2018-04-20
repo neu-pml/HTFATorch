@@ -1,0 +1,116 @@
+"""Utilities for topographic factor analysis"""
+
+__author__ = ('Jan-Willem van de Meent',
+              'Eli Sennesh',
+              'Zulqarnain Khan')
+__email__ = ('j.vandemeent@northeastern.edu',
+             'sennesh.e@husky.neu.edu',
+             'khan.zu@husky.neu.edu')
+import types
+
+import dataset
+import torch.utils.data
+
+from . import utils
+
+class FMriActivationBlock(object):
+    def __init__(self, zscore=True):
+        self._zscore = zscore
+        self.filename = ''
+        self.mask = None
+        self.subject = 0
+        self.run = 0
+        self.task = None
+        self.block = 0
+        self.start_time = None
+        self.end_time = None
+        self.activations = None
+        self.locations = None
+
+    def load(self):
+        self.activations, self.locations, _, _ =\
+            utils.load_dataset(self.filename, self.mask, self._zscore)
+        if self.start_time is None:
+            self.start_time = 0
+        if self.end_time is None:
+            self.end_time = self.activations.shape[0]
+        self.activations = self.activations[self.start_time:self.end_time]
+
+    def unload(self):
+        del self.activations
+        del self.locations
+        self.activations = None
+        self.locations = None
+
+    def __len__(self):
+        return self.activations.shape[0]
+
+class FMriActivationsDb:
+    def __init__(self, name, mask=None):
+        self._db = dataset.connect('sqlite:///%s' % name)
+        self._table = self._db['fmri_activations']
+        self.mask = mask
+
+    def insert(self, block):
+        if self.mask is not None:
+            block.mask = self.mask
+        block_dict = block.__dict__.copy()
+        del block_dict['activations']
+        del block_dict['locations']
+        self._table.insert(block_dict)
+
+    def update(self, block, cols):
+        block_dict = block.__dict__.copy()
+        del block_dict['activations']
+        del block_dict['locations']
+        self._table.update(block_dict, cols)
+
+    def __getattr__(self, name):
+        attr = getattr(self._table, name)
+        if isinstance(attr, types.MethodType):
+            def wrapped_table_method(*args, **kwargs):
+                block_dicts = attr(*args, **kwargs)
+                if hasattr(block_dicts, '__iter__') or\
+                   hasattr(block_dicts, 'next'):
+                    #block_dicts is an iterable or iterator
+                    for block_dict in block_dicts:
+                        block = FMriActivationBlock()
+                        block.__dict__.update(**block_dict)
+                        if self.mask is not None:
+                            block.mask = self.mask
+                        yield block
+                elif isinstance(block_dicts, dict):
+                    block = FMriActivationBlock()
+                    block.__dict__.update(**block_dicts)
+                    if self.mask is not None:
+                        block.mask = self.mask
+                    return block
+                else:
+                    return block_dicts
+            return wrapped_table_method
+        return attr
+
+class QueryDataset(torch.utils.data.Dataset):
+    def __init__(self, qiter):
+        self._num_times = -1
+        self.blocks = list(qiter)
+        for block in self.blocks:
+            block.load()
+            if self._num_times < 0 or block.end_time < self._num_times:
+                self._num_times = block.end_time
+            block.unload()
+
+    def __len__(self):
+        return self._num_times
+
+    def load(self):
+        for block in self.blocks:
+            block.load()
+
+    def unload(self):
+        for block in self.blocks:
+            block.unload()
+
+    def __getitem__(self, i):
+        return torch.stack([block.activations[i] for block in self.blocks],
+                           dim=0)
