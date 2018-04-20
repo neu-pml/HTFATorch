@@ -90,15 +90,19 @@ class FMriActivationsDb:
             return wrapped_table_method
         return attr
 
+def query_min_time(qiter):
+    result = -1
+    for block in qiter:
+        block.load()
+        if result < 0 or block.end_time < result:
+            result = block.end_time
+        block.unload()
+    return result
+
 class QueryDataset(torch.utils.data.Dataset):
     def __init__(self, qiter):
-        self._num_times = -1
         self.blocks = list(qiter)
-        for block in self.blocks:
-            block.load()
-            if self._num_times < 0 or block.end_time < self._num_times:
-                self._num_times = block.end_time
-            block.unload()
+        self._num_times = query_min_time(self.blocks)
 
     def __len__(self):
         return self._num_times
