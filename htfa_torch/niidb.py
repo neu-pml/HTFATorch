@@ -6,12 +6,17 @@ __author__ = ('Jan-Willem van de Meent',
 __email__ = ('j.vandemeent@northeastern.edu',
              'sennesh.e@husky.neu.edu',
              'khan.zu@husky.neu.edu')
+from functools import lru_cache
 import types
 
 import dataset
 import torch.utils.data
 
 from . import utils
+
+@lru_cache(maxsize=16)
+def lru_load_dataset(fname, mask, zscore):
+    return utils.load_dataset(fname, mask, zscore)
 
 class FMriActivationBlock(object):
     def __init__(self, zscore=True):
@@ -29,7 +34,7 @@ class FMriActivationBlock(object):
 
     def load(self):
         self.activations, self.locations, _, _ =\
-            utils.load_dataset(self.filename, self.mask, self._zscore)
+            lru_load_dataset(self.filename, self.mask, self._zscore)
         if self.start_time is None:
             self.start_time = 0
         if self.end_time is None:
