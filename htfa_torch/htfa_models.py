@@ -10,6 +10,7 @@ from torch.autograd import Variable
 import probtorch
 import torch.nn as nn
 
+from . import niidb
 from . import tfa_models
 from . import utils
 
@@ -19,10 +20,10 @@ TEMPLATE_SHAPE = utils.vardict({
 })
 
 class HTFAGuideHyperParams(tfa_models.HyperParams):
-    def __init__(self, hyper_means, num_times, num_subjects,
+    def __init__(self, hyper_means, num_times, num_blocks,
                  num_factors=tfa_models.NUM_FACTORS):
         self._num_times = num_times
-        self._num_subjects = num_subjects
+        self._num_blocks = num_blocks
         self._num_factors = num_factors
 
         params = utils.vardict()
@@ -40,26 +41,26 @@ class HTFAGuideHyperParams(tfa_models.HyperParams):
         params['template']['factor_log_widths']['sigma'] =\
             torch.sqrt(torch.rand(self._num_factors))
 
-        params['subject'] = utils.vardict({
+        params['block'] = utils.vardict({
             'factor_centers': {
                 'mu': hyper_means['factor_centers'].\
-                        repeat(self._num_subjects, 1, 1),
-                'sigma': torch.ones(self._num_subjects, self._num_factors, 3),
+                        repeat(self._num_blocks, 1, 1),
+                'sigma': torch.ones(self._num_blocks, self._num_factors, 3),
             },
             'factor_log_widths': {
-                'mu': torch.ones(self._num_subjects, self._num_factors) *\
+                'mu': torch.ones(self._num_blocks, self._num_factors) *\
                       hyper_means['factor_log_widths'],
-                'sigma': torch.sqrt(torch.rand(self._num_subjects, self._num_factors)),
+                'sigma': torch.sqrt(torch.rand(self._num_blocks, self._num_factors)),
             },
             'weights': {
-                'mu': torch.randn(self._num_subjects, self._num_times,
+                'mu': torch.randn(self._num_blocks, self._num_times,
                                   self._num_factors),
-                'sigma': torch.ones(self._num_subjects, self._num_times,
+                'sigma': torch.ones(self._num_blocks, self._num_times,
                                     self._num_factors),
             },
             'voxel_noise': {
-                'mu': torch.ones(self._num_subjects),
-                'sigma': torch.sqrt(torch.rand(self._num_subjects))
+                'mu': torch.ones(self._num_blocks),
+                'sigma': torch.sqrt(torch.rand(self._num_blocks))
             }
         })
 
@@ -81,22 +82,22 @@ class HTFAGuideTemplatePrior(tfa_models.GuidePrior):
         return template
 
 class HTFAGuideSubjectPrior(tfa_models.GuidePrior):
-    def __init__(self, num_subjects, num_times):
+    def __init__(self, num_blocks, num_times):
         super(self.__class__, self).__init__()
-        self._num_subjects = num_subjects
+        self._num_blocks = num_blocks
         self._num_times = num_times
-        self._tfa_priors = [tfa_models.TFAGuidePrior(subject=s)\
-                            for s in range(self._num_subjects)]
+        self._tfa_priors = [tfa_models.TFAGuidePrior(block=b)\
+                            for b in range(self._num_blocks)]
 
     def forward(self, trace, params, times=None,
                 num_particles=tfa_models.NUM_PARTICLES):
         # We only expand the parameters for which we're actually going to sample
         # values in this very method, and thus want to expand to get multiple
         # particles.
-        voxel_noise_params = params['subject']['voxel_noise']
+        voxel_noise_params = params['block']['voxel_noise']
         if num_particles and num_particles > 0:
             voxel_noise_params = utils.unsqueeze_and_expand_vardict(
-                params['subject']['voxel_noise'], 0, num_particles, True
+                params['block']['voxel_noise'], 0, num_particles, True
             )
         voxel_noise = trace.normal(voxel_noise_params['mu'],
                                    voxel_noise_params['sigma'],
@@ -106,15 +107,15 @@ class HTFAGuideSubjectPrior(tfa_models.GuidePrior):
         factor_centers = []
         factor_log_widths = []
         scan_times = times is None
-        for s in range(self._num_subjects):
+        for b in range(self._num_blocks):
             if scan_times:
-                times = (0, self._num_times[s])
+                times = (0, self._num_times[b])
             # The TFA prior is going to expand out particles all on its own, so
             # we never actually have to expand them.
-            sparams = utils.vardict(params['subject'])
+            sparams = utils.vardict(params['block'])
             for k, v in sparams.iteritems():
-                sparams[k] = v[s]
-            w, fc, flw = self._tfa_priors[s](trace, sparams, times=times,
+                sparams[k] = v[b]
+            w, fc, flw = self._tfa_priors[b](trace, sparams, times=times,
                                              num_particles=num_particles)
             weights += [w]
             factor_centers += [fc]
@@ -124,26 +125,27 @@ class HTFAGuideSubjectPrior(tfa_models.GuidePrior):
 
 class HTFAGuide(nn.Module):
     """Variational guide for hierarchical topographic factor analysis"""
-    def __init__(self, activations, locations,
-                 num_factors=tfa_models.NUM_FACTORS):
+    def __init__(self, query, num_factors=tfa_models.NUM_FACTORS):
         super(self.__class__, self).__init__()
-        self._num_subjects = len(activations)
-        self._num_times = [acts.shape[0] for acts in activations]
+        self._num_blocks = len(query)
+        self._num_times = niidb.query_min_time(query)
 
-        s = np.random.choice(self._num_subjects, 1)[0]
-        centers, widths, weights = utils.initial_hypermeans(activations[s].numpy().T,
-                                                            locations[s].numpy(),
-                                                            num_factors)
+        b = np.random.choice(self._num_blocks, 1)[0]
+        query[b].load()
+        centers, widths, weights = utils.initial_hypermeans(
+            query[b].activations.numpy().T, query[b].locations.numpy(),
+            num_factors
+        )
         hyper_means = {
             'weights': torch.Tensor(weights),
             'factor_centers': torch.Tensor(centers),
             'factor_log_widths': widths,
         }
         self.hyperparams = HTFAGuideHyperParams(hyper_means,
-                                                max(self._num_times),
-                                                self._num_subjects, num_factors)
+                                                self._num_times,
+                                                self._num_blocks, num_factors)
         self._template_prior = HTFAGuideTemplatePrior()
-        self._subject_prior = HTFAGuideSubjectPrior(self._num_subjects,
+        self._subject_prior = HTFAGuideSubjectPrior(self._num_blocks,
                                                     self._num_times)
 
     def forward(self, trace, times=None,
@@ -154,10 +156,10 @@ class HTFAGuide(nn.Module):
                                    num_particles=num_particles)
 
 class HTFAGenerativeHyperParams(tfa_models.HyperParams):
-    def __init__(self, brain_center, brain_center_std_dev, num_subjects,
+    def __init__(self, brain_center, brain_center_std_dev, num_blocks,
                  num_factors=tfa_models.NUM_FACTORS):
         self._num_factors = num_factors
-        self._num_subjects = num_subjects
+        self._num_blocks = num_blocks
 
         params = utils.vardict()
         params['template'] = utils.populate_vardict(
@@ -176,15 +178,15 @@ class HTFAGenerativeHyperParams(tfa_models.HyperParams):
         params['template']['factor_log_widths']['sigma'] =\
             tfa_models.SOURCE_LOG_WIDTH_STD_DEV * torch.ones(self._num_factors)
 
-        params['subject'] = {
-            'factor_center_noise': torch.ones(self._num_subjects),
-            'factor_log_width_noise': torch.ones(self._num_subjects),
+        params['block'] = {
+            'factor_center_noise': torch.ones(self._num_blocks),
+            'factor_log_width_noise': torch.ones(self._num_blocks),
             'weights': {
-                'mu': torch.rand(self._num_subjects, self._num_factors),
+                'mu': torch.rand(self._num_blocks, self._num_factors),
                 'sigma': tfa_models.SOURCE_WEIGHT_STD_DEV *\
-                         torch.ones(self._num_subjects, self._num_factors)
+                         torch.ones(self._num_blocks, self._num_factors)
             },
-            'voxel_noise': utils.gaussian_populator(self._num_subjects)
+            'voxel_noise': utils.gaussian_populator(self._num_blocks)
         }
         super(self.__class__, self).__init__(params, guide=False)
 
@@ -200,40 +202,40 @@ class HTFAGenerativeTemplatePrior(tfa_models.GenerativePrior):
         return template
 
 class HTFAGenerativeSubjectPrior(tfa_models.GenerativePrior):
-    def __init__(self, num_subjects, num_times):
+    def __init__(self, num_blocks, num_times):
         super(self.__class__, self).__init__()
-        self._num_subjects = num_subjects
+        self._num_blocks = num_blocks
         self._num_times = num_times
-        self._tfa_priors = [tfa_models.TFAGenerativePrior(self._num_times[s],
-                                                          subject=s)\
-                            for s in range(self._num_subjects)]
+        self._tfa_priors = [tfa_models.TFAGenerativePrior(self._num_times[b],
+                                                          block=b)\
+                            for b in range(self._num_blocks)]
 
     def forward(self, trace, params, template, times=None,
                 guide=probtorch.Trace()):
-        voxel_noise = trace.normal(params['subject']['voxel_noise']['mu'],
-                                   params['subject']['voxel_noise']['sigma'],
+        voxel_noise = trace.normal(params['block']['voxel_noise']['mu'],
+                                   params['block']['voxel_noise']['sigma'],
                                    value=guide['voxel_noise'],
                                    name='voxel_noise')
 
         weights = []
         factor_centers = []
         factor_log_widths = []
-        for s in range(self._num_subjects):
+        for b in range(self._num_blocks):
             sparams = utils.vardict({
                 'factor_centers': {
                     'mu': template['factor_centers'],
-                    'sigma': params['subject']['factor_center_noise'][s],
+                    'sigma': params['block']['factor_center_noise'][b],
                 },
                 'factor_log_widths': {
                     'mu': template['factor_log_widths'],
-                    'sigma': params['subject']['factor_log_width_noise'][s],
+                    'sigma': params['block']['factor_log_width_noise'][b],
                 },
                 'weights': {
-                    'mu': params['subject']['weights']['mu'][s],
-                    'sigma': params['subject']['weights']['sigma'][s],
+                    'mu': params['block']['weights']['mu'][b],
+                    'sigma': params['block']['weights']['sigma'][b],
                 }
             })
-            w, fc, flw = self._tfa_priors[s](trace, sparams, times=times,
+            w, fc, flw = self._tfa_priors[b](trace, sparams, times=times,
                                              guide=guide)
             weights += [w]
             factor_centers += [fc]
@@ -243,31 +245,33 @@ class HTFAGenerativeSubjectPrior(tfa_models.GenerativePrior):
 
 class HTFAModel(nn.Module):
     """Generative model for hierarchical topographic factor analysis"""
-    def __init__(self, locations, num_subjects, num_times,
+    def __init__(self, query, num_blocks, num_times,
                  num_factors=tfa_models.NUM_FACTORS):
         super(self.__class__, self).__init__()
 
-        self._locations = locations
         self._num_factors = num_factors
-        self._num_subjects = num_subjects
+        self._num_blocks = num_blocks
         self._num_times = num_times
 
-        s = np.random.choice(self._num_subjects, 1)[0]
-        center, center_sigma = utils.brain_centroid(self._locations[s])
+        b = np.random.choice(self._num_blocks, 1)[0]
+        query[b].load()
+        center, center_sigma = utils.brain_centroid(query[b].locations)
 
         self._hyperparams = HTFAGenerativeHyperParams(center, center_sigma,
-                                                      self._num_subjects,
+                                                      self._num_blocks,
                                                       self._num_factors)
         self._template_prior = HTFAGenerativeTemplatePrior()
         self._subject_prior = HTFAGenerativeSubjectPrior(
-            self._num_subjects, self._num_times
+            self._num_blocks, self._num_times
         )
+        for block in query:
+            block.load()
         self._likelihoods = [tfa_models.TFAGenerativeLikelihood(
-            self._locations[s], self._num_times[s], tfa_models.VOXEL_NOISE,
-            subject=s
-        ) for s in range(self._num_subjects)]
-        for s, subject_likelihood in enumerate(self._likelihoods):
-            self.add_module('_likelihood' + str(s), subject_likelihood)
+            query[b].locations, self._num_times[b], tfa_models.VOXEL_NOISE,
+            block=b
+        ) for b in range(self._num_blocks)]
+        for b, block_likelihood in enumerate(self._likelihoods):
+            self.add_module('_likelihood' + str(b), block_likelihood)
 
     def forward(self, trace, times=None, guide=probtorch.Trace(),
                 observations=[]):
@@ -278,7 +282,7 @@ class HTFAModel(nn.Module):
             trace, params, template, times=times, guide=guide
         )
 
-        return [self._likelihoods[s](trace, weights[s], centers[s], log_widths[s],
-                                     times=times, observations=observations[s],
+        return [self._likelihoods[b](trace, weights[b], centers[b], log_widths[b],
+                                     times=times, observations=observations[b],
                                      voxel_noise=voxel_noise)
-                for s in range(self._num_subjects)]
+                for b in range(self._num_blocks)]
