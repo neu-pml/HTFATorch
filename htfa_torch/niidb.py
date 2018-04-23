@@ -70,6 +70,15 @@ class FMriActivationsDb:
         del block_dict['locations']
         self._table.update(block_dict, cols)
 
+    def upsert(self, block):
+        if self.mask is not None:
+            block.mask = self.mask
+        block_dict = block.__dict__.copy()
+        del block_dict['activations']
+        del block_dict['locations']
+        self._table.upsert(block_dict, ['subject', 'run', 'task', 'block',
+                                        'start_time', 'end_time'])
+
     def __getattr__(self, name):
         attr = getattr(self._table, name)
         if isinstance(attr, types.MethodType):
