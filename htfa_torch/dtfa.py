@@ -38,14 +38,18 @@ from . import utils
 
 class DeepTFA:
     """Overall container for a run of Deep TFA"""
-    def __init__(self, data_files, mask, num_factors=tfa_models.NUM_FACTORS,
-                 embedding_dim=2, tasks=[]):
+    def __init__(self, query, mask, num_factors=tfa_models.NUM_FACTORS,
+                 embedding_dim=2):
         self.num_factors = num_factors
-        self.num_blocks = len(data_files)
         self.mask = mask
-        self.voxel_activations, self.voxel_locations, self._names,\
-            self._templates = utils.load_collective_dataset(data_files, mask)
-        self._tasks = tasks
+        self._blocks = list(query)
+        for block in self._blocks:
+            block.load()
+        self.num_blocks = len(self._blocks)
+        self.voxel_activations = [block.activations for block in self._blocks]
+        self.voxel_locations = [block.locations for block in self._blocks]
+        self._templates = [block.filename for block in self._blocks]
+        self._tasks = [block.task for block in self._blocks]
 
         # Pull out relevant dimensions: the number of time instants and the
         # number of voxels in each timewise "slice"
@@ -67,7 +71,7 @@ class DeepTFA:
                              num_particles=num_particles)
         p = probtorch.Trace()
         self.generative(p, guide=q,
-                        observations=[q for s in range(self.num_blocks)])
+                        observations=[q for b in range(self.num_blocks)])
         return p, q
 
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
@@ -106,8 +110,8 @@ class DeepTFA:
             epoch_lls = list(range(len(activations_loader)))
 
             for (batch, data) in enumerate(activations_loader):
-                activations = [{'Y': Variable(data[:, s, :])}
-                               for s in range(self.num_blocks)]
+                activations = [{'Y': Variable(data[:, b, :])}
+                               for b in range(self.num_blocks)]
                 for acts in activations:
                     if tfa.CUDA and use_cuda:
                         acts['Y'] = acts['Y'].cuda()
@@ -277,26 +281,21 @@ class DeepTFA:
 
         return plot
 
-    def scatter_factor_embedding(self, tasks=None, filename=None, show=True,
+    def scatter_factor_embedding(self, labeler=None, filename=None, show=True,
                                  xlims=None, ylims=None):
         hyperparams = self.variational.hyperparams.state_vardict()
         z_f = hyperparams['embedding']['factors']['mu'].data
 
-        all_tasks = self._tasks
-        if all_tasks is None or len(tasks) == 0:
-            all_tasks = list(range(self.num_blocks))
-        palette = dict(zip(all_tasks, utils.compose_palette(len(all_tasks))))
+        if labeler is None:
+            labeler = lambda b: b.default_label()
+        labels = [labeler(b) for b in self._blocks]
+        all_labels = [l for l in labels if l is not None]
+        palette = dict(zip(all_labels, utils.compose_palette(len(all_labels))))
 
-        if tasks is None:
-            tasks = all_tasks
-
-        z_fs = [z_f[s] for s in range(self.num_blocks)
-                if all_tasks[s] in tasks]
+        z_fs = [z_f[b] for b in range(self.num_blocks) if labels[b] is not None]
         z_fs = torch.stack(z_fs)
-        block_colors = [palette[all_tasks[s]]
-                          for s in range(self.num_blocks)
-                          if all_tasks[s] in tasks]
-        palette = {t: c for (t, c) in palette.items() if t in tasks}
+        block_colors = [palette[labels[b]] for b in range(self.num_blocks)
+                        if labels[b] is not None]
 
         fig = plt.figure(1, figsize=(3.75, 2.75))
         ax = fig.add_subplot(111, facecolor='white')
@@ -315,7 +314,7 @@ class DeepTFA:
         if show:
             fig.show()
 
-    def scatter_weights_embedding(self, t=None, tasks=None, filename=None,
+    def scatter_weights_embedding(self, t=None, labeler=None, filename=None,
                                   show=True, xlims=None, ylims=None):
         hyperparams = self.variational.hyperparams.state_vardict()
         z_w = hyperparams['embedding']['weights']['mu'].data
@@ -324,18 +323,16 @@ class DeepTFA:
         else:
             z_w = z_w.mean(1)
 
-        all_tasks = self._tasks
-        if all_tasks is None or len(tasks) == 0:
-            all_tasks = list(range(self.num_blocks))
-        palette = dict(zip(all_tasks, utils.compose_palette(len(all_tasks))))
+        if labeler is None:
+            labeler = lambda b: b.default_label()
+        labels = [labeler(b) for b in self._blocks]
+        all_labels = [l for l in labels if l is not None]
+        palette = dict(zip(all_labels, utils.compose_palette(len(all_labels))))
 
-        z_ws = [z_w[s] for s in range(self.num_blocks)
-                if any([task in all_tasks[s] for task in tasks])]
+        z_ws = [z_w[b] for b in range(self.num_blocks) if labels[b] is not None]
         z_ws = torch.stack(z_ws)
-        block_colors = [palette[all_tasks[s]]
-                          for s in range(self.num_blocks)
-                          if all_tasks[s] in tasks]
-        palette = {t: c for (t, c) in palette.items() if t in tasks}
+        block_colors = [palette[labels[b]] for b in range(self.num_blocks)
+                        if labels[b] is not None]
 
         fig = plt.figure(1, figsize=(3.75, 2.75))
         ax = fig.add_subplot(111, facecolor='white')
@@ -354,8 +351,12 @@ class DeepTFA:
         if show:
             fig.show()
 
+    def common_name(self):
+        return os.path.commonprefix([os.path.basename(b.filename)
+                                     for b in self._blocks])
+
     def save_state(self, path='.', tag=''):
-        name = os.path.commonprefix(self._names) + tag
+        name = self.common_name() + tag
         variational_state = self.variational.state_dict()
         torch.save(variational_state,
                    path + '/' + name + '.dtfa_guide')
@@ -363,7 +364,7 @@ class DeepTFA:
                    path + '/' + name + '.dtfa_model')
 
     def save(self, path='.'):
-        name = os.path.commonprefix(self._names)
+        name = self.common_name()
         torch.save(self.variational.state_dict(),
                    path + '/' + name + '.dtfa_guide')
         torch.save(self.generative.state_dict(),
