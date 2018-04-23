@@ -41,7 +41,7 @@ class DeepTFA:
     def __init__(self, data_files, mask, num_factors=tfa_models.NUM_FACTORS,
                  embedding_dim=2, tasks=[]):
         self.num_factors = num_factors
-        self.num_subjects = len(data_files)
+        self.num_blocks = len(data_files)
         self.mask = mask
         self.voxel_activations, self.voxel_locations, self._names,\
             self._templates = utils.load_collective_dataset(data_files, mask)
@@ -54,9 +54,9 @@ class DeepTFA:
 
         self.generative = dtfa_models.DeepTFAModel(
             self.voxel_locations, self.voxel_activations, self.num_factors,
-            self.num_subjects, self.num_times, embedding_dim
+            self.num_blocks, self.num_times, embedding_dim
         )
-        self.variational = dtfa_models.DeepTFAGuide(self.num_subjects,
+        self.variational = dtfa_models.DeepTFAGuide(self.num_blocks,
                                                     self.num_times,
                                                     embedding_dim)
 
@@ -67,7 +67,7 @@ class DeepTFA:
                              num_particles=num_particles)
         p = probtorch.Trace()
         self.generative(p, guide=q,
-                        observations=[q for s in range(self.num_subjects)])
+                        observations=[q for s in range(self.num_blocks)])
         return p, q
 
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
@@ -107,7 +107,7 @@ class DeepTFA:
 
             for (batch, data) in enumerate(activations_loader):
                 activations = [{'Y': Variable(data[:, s, :])}
-                               for s in range(self.num_subjects)]
+                               for s in range(self.num_blocks)]
                 for acts in activations:
                     if tfa.CUDA and use_cuda:
                         acts['Y'] = acts['Y'].cuda()
@@ -153,10 +153,10 @@ class DeepTFA:
 
         return np.vstack([free_energies, lls])
 
-    def results(self, subject):
+    def results(self, block):
         hyperparams = self.variational.hyperparams.state_vardict()
 
-        z_f = hyperparams['embedding']['factors']['mu'][subject]
+        z_f = hyperparams['embedding']['factors']['mu'][block]
         z_f_embedded = self.generative.embedding.embedder(z_f)
 
         factors = self.generative.embedding.factors_generator(z_f_embedded)
@@ -171,12 +171,12 @@ class DeepTFA:
             centers = factors[:, 0:3]
             log_widths = factors[:, 3]
 
-        z_w = hyperparams['embedding']['weights']['mu'][subject]
+        z_w = hyperparams['embedding']['weights']['mu'][block]
         weights = self.generative.embedding.weights_generator(z_w)
 
         return {
-            'weights': weights[0:self.voxel_activations[subject].shape[0], :],
-            'factors': tfa_models.radial_basis(self.voxel_locations[subject],
+            'weights': weights[0:self.voxel_activations[block].shape[0], :],
+            'factors': tfa_models.radial_basis(self.voxel_locations[block],
                                                centers.data, log_widths.data),
             'factor_centers': centers.data,
             'factor_log_widths': log_widths.data,
@@ -190,19 +190,19 @@ class DeepTFA:
             'weights': hyperparams['embedding']['weights']['mu'],
         }
 
-    def plot_factor_centers(self, subject, filename=None, show=True,
+    def plot_factor_centers(self, block, filename=None, show=True,
                             trace=None):
         hyperparams = self.variational.hyperparams.state_vardict()
-        z_f_std_dev = hyperparams['embedding']['factors']['sigma'][subject]
+        z_f_std_dev = hyperparams['embedding']['factors']['sigma'][block]
 
         if trace:
-            z_f = trace['z_f%d' % subject].value
+            z_f = trace['z_f%d' % block].value
             if len(z_f.shape) > 1:
                 if z_f.shape[0] > 1:
                     z_f_std_dev = z_f.std(0)
                 z_f = z_f.mean(0)
         else:
-            z_f = hyperparams['embedding']['factors']['mu'][subject]
+            z_f = hyperparams['embedding']['factors']['mu'][block]
 
         z_f_embedded = self.generative.embedding.embedder(z_f)
 
@@ -234,11 +234,11 @@ class DeepTFA:
 
         return plot
 
-    def plot_original_brain(self, subject=None, filename=None, show=True,
+    def plot_original_brain(self, block=None, filename=None, show=True,
                             plot_abs=False, t=0):
-        if subject is None:
-            subject = np.random.choice(self.num_subjects, 1)[0]
-        image = nilearn.image.index_img(self._images[subject], t)
+        if block is None:
+            block = np.random.choice(self.num_blocks, 1)[0]
+        image = nilearn.image.index_img(self._images[block], t)
         plot = niplot.plot_glass_brain(image, plot_abs=plot_abs)
 
         if filename is not None:
@@ -248,25 +248,25 @@ class DeepTFA:
 
         return plot
 
-    def plot_reconstruction(self, subject=None, filename=None, show=True,
+    def plot_reconstruction(self, block=None, filename=None, show=True,
                             plot_abs=False, t=0):
-        if subject is None:
-            subject = np.random.choice(self.num_subjects, 1)[0]
+        if block is None:
+            block = np.random.choice(self.num_blocks, 1)[0]
 
-        results = self.results(subject)
+        results = self.results(block)
 
         reconstruction = results['weights'].data @ results['factors']
 
         image = utils.cmu2nii(reconstruction.numpy(),
-                              self.voxel_locations[subject].numpy(),
-                              self._templates[subject])
+                              self.voxel_locations[block].numpy(),
+                              self._templates[block])
         image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(image_slice, plot_abs=plot_abs)
 
         logging.info(
             'Reconstruction Error (Frobenius Norm): %.8e',
             np.linalg.norm(
-                (reconstruction - self.voxel_activations[subject]).numpy()
+                (reconstruction - self.voxel_activations[block]).numpy()
             )
         )
 
@@ -284,17 +284,17 @@ class DeepTFA:
 
         all_tasks = self._tasks
         if all_tasks is None or len(tasks) == 0:
-            all_tasks = list(range(self.num_subjects))
+            all_tasks = list(range(self.num_blocks))
         palette = dict(zip(all_tasks, utils.compose_palette(len(all_tasks))))
 
         if tasks is None:
             tasks = all_tasks
 
-        z_fs = [z_f[s] for s in range(self.num_subjects)
+        z_fs = [z_f[s] for s in range(self.num_blocks)
                 if all_tasks[s] in tasks]
         z_fs = torch.stack(z_fs)
-        subject_colors = [palette[all_tasks[s]]
-                          for s in range(self.num_subjects)
+        block_colors = [palette[all_tasks[s]]
+                          for s in range(self.num_blocks)
                           if all_tasks[s] in tasks]
         palette = {t: c for (t, c) in palette.items() if t in tasks}
 
@@ -307,7 +307,7 @@ class DeepTFA:
         if ylims is not None:
             fig.axes[0].set_ylim(*ylims)
         fig.axes[0].set_title('Factor Embeddings')
-        ax.scatter(x=z_fs[:, 0], y=z_fs[:, 1], c=subject_colors)
+        ax.scatter(x=z_fs[:, 0], y=z_fs[:, 1], c=block_colors)
         utils.palette_legend(list(palette.keys()), list(palette.values()))
 
         if filename is not None:
@@ -326,14 +326,14 @@ class DeepTFA:
 
         all_tasks = self._tasks
         if all_tasks is None or len(tasks) == 0:
-            all_tasks = list(range(self.num_subjects))
+            all_tasks = list(range(self.num_blocks))
         palette = dict(zip(all_tasks, utils.compose_palette(len(all_tasks))))
 
-        z_ws = [z_w[s] for s in range(self.num_subjects)
+        z_ws = [z_w[s] for s in range(self.num_blocks)
                 if any([task in all_tasks[s] for task in tasks])]
         z_ws = torch.stack(z_ws)
-        subject_colors = [palette[all_tasks[s]]
-                          for s in range(self.num_subjects)
+        block_colors = [palette[all_tasks[s]]
+                          for s in range(self.num_blocks)
                           if all_tasks[s] in tasks]
         palette = {t: c for (t, c) in palette.items() if t in tasks}
 
@@ -346,7 +346,7 @@ class DeepTFA:
         if ylims is not None:
             fig.axes[0].set_ylim(*ylims)
         fig.axes[0].set_title('Weight Embeddings')
-        ax.scatter(x=z_ws[:, 0], y=z_ws[:, 1], c=subject_colors)
+        ax.scatter(x=z_ws[:, 0], y=z_ws[:, 1], c=block_colors)
         utils.palette_legend(list(palette.keys()), list(palette.values()))
 
         if filename is not None:
