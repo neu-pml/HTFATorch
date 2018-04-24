@@ -169,12 +169,12 @@ def load_collective_dataset(data_files, mask):
 
 def load_dataset(data_file, mask=None, zscore=True):
     name, ext = os.path.splitext(data_file)
-    if ext == '.nii':
-        dataset = nii2cmu(data_file, mask_file=mask)
-        template = data_file
-    else:
+    if ext == 'mat':
         dataset = sio.loadmat(data_file)
         template = None
+    else:
+        dataset = nii2cmu(data_file, mask_file=mask)
+        template = data_file
     _, name = os.path.split(name)
     # pull out the voxel activations and locations
     if zscore:
