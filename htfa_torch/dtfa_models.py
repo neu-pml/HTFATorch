@@ -202,7 +202,7 @@ class DeepTFAModel(nn.Module):
 
         self.likelihoods = [tfa_models.TFAGenerativeLikelihood(
             self._locations[b], self._num_times[b], tfa_models.VOXEL_NOISE,
-            block=b
+            block=b, register_locations=False
         ) for b in range(self._num_blocks)]
         for b, block_likelihood in enumerate(self.likelihoods):
             self.add_module('_likelihood' + str(b), block_likelihood)

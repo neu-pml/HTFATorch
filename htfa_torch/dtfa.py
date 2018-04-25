@@ -115,9 +115,12 @@ class DeepTFA:
                 for block_batch in block_batches:
                     activations = [{'Y': Variable(data[:, b, :])}
                                    for b in block_batch]
-                    for acts in activations:
-                        if tfa.CUDA and use_cuda:
+                    if tfa.CUDA and use_cuda:
+                        for acts in activations:
                             acts['Y'] = acts['Y'].cuda()
+                        for b in block_batch:
+                            generative.module.likelihoods[b].voxel_locations =\
+                            generative.module.likelihoods[b].voxel_locations.cuda()
                     trs = (batch * batch_size, None)
                     trs = (trs[0], trs[0] + activations[0]['Y'].shape[0])
 
@@ -135,6 +138,13 @@ class DeepTFA:
                     free_energy.backward()
                     optimizer.step()
                     epoch_free_energies[batch] += free_energy
+
+                    if tfa.CUDA and use_cuda:
+                        del activations
+                        for b in block_batch:
+                            generative.module.likelihoods[b].voxel_locations =\
+                            generative.module.likelihoods[b].voxel_locations.cpu()
+                        torch.cuda.empty_cache()
                 if tfa.CUDA and use_cuda:
                     epoch_free_energies[batch] = epoch_free_energies[batch].cpu().data.numpy()
 
