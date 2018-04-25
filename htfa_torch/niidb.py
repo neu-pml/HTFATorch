@@ -7,6 +7,7 @@ __email__ = ('j.vandemeent@northeastern.edu',
              'sennesh.e@husky.neu.edu',
              'khan.zu@husky.neu.edu')
 from functools import lru_cache
+import logging
 import types
 
 import dataset
@@ -16,6 +17,8 @@ from . import utils
 
 @lru_cache(maxsize=16)
 def lru_load_dataset(fname, mask, zscore):
+    logging.info('Loading Nifti image %s with mask %s (zscore=%s)', fname, mask,
+                 zscore)
     return utils.load_dataset(fname, mask, zscore)
 
 class FMriActivationBlock(object):
