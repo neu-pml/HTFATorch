@@ -276,3 +276,7 @@ class TFADataset(torch.utils.data.Dataset):
 
     def __getitem__(self, i):
         return torch.stack([acts[i] for acts in self._activations], dim=0)
+
+def chunks(chunkable, n):
+    for i in range(0, len(chunkable), n):
+        yield chunkable[i:i+n]

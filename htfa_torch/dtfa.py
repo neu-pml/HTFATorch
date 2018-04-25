@@ -76,7 +76,8 @@ class DeepTFA:
 
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
               log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES,
-              batch_size=64, use_cuda=True, checkpoint_steps=None):
+              batch_size=64, use_cuda=True, checkpoint_steps=None,
+              blocks_batch_size=4):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
@@ -102,45 +103,43 @@ class DeepTFA:
         generative.train()
 
         free_energies = list(range(num_steps))
-        lls = list(range(num_steps))
 
         for epoch in range(num_steps):
             start = time.time()
             epoch_free_energies = list(range(len(activations_loader)))
-            epoch_lls = list(range(len(activations_loader)))
 
             for (batch, data) in enumerate(activations_loader):
-                activations = [{'Y': Variable(data[:, b, :])}
-                               for b in range(self.num_blocks)]
-                for acts in activations:
-                    if tfa.CUDA and use_cuda:
-                        acts['Y'] = acts['Y'].cuda()
-                trs = (batch * batch_size, None)
-                trs = (trs[0], trs[0] + activations[0]['Y'].shape[0])
+                epoch_free_energies[batch] = 0.0
+                block_batches = utils.chunks(list(range(self.num_blocks)),
+                                             n=blocks_batch_size)
+                for block_batch in block_batches:
+                    activations = [{'Y': Variable(data[:, b, :])}
+                                   for b in block_batch]
+                    for acts in activations:
+                        if tfa.CUDA and use_cuda:
+                            acts['Y'] = acts['Y'].cuda()
+                    trs = (batch * batch_size, None)
+                    trs = (trs[0], trs[0] + activations[0]['Y'].shape[0])
 
-                optimizer.zero_grad()
-                q = probtorch.Trace()
-                variational(q, self.generative.embedding, times=trs,
-                            num_particles=num_particles)
-                p = probtorch.Trace()
-                generative(p, times=trs, guide=q, observations=activations)
+                    optimizer.zero_grad()
+                    q = probtorch.Trace()
+                    variational(q, self.generative.embedding, times=trs,
+                                num_particles=num_particles, blocks=block_batch)
+                    p = probtorch.Trace()
+                    generative(p, times=trs, guide=q, observations=activations,
+                               blocks=block_batch)
 
-                epoch_free_energies[batch] =\
-                    tfa.free_energy(q, p, num_particles=num_particles)
-                epoch_lls[batch] =\
-                    tfa.log_likelihood(q, p, num_particles=num_particles)
-                epoch_free_energies[batch].backward()
-                optimizer.step()
+                    free_energy = tfa.free_energy(q, p,
+                                                  num_particles=num_particles)
+
+                    free_energy.backward()
+                    optimizer.step()
+                    epoch_free_energies[batch] += free_energy
                 if tfa.CUDA and use_cuda:
                     epoch_free_energies[batch] = epoch_free_energies[batch].cpu().data.numpy()
-                    epoch_lls[batch] = epoch_lls[batch].cpu().data.numpy()
-
-
 
             free_energies[epoch] = np.array(epoch_free_energies).sum(0)
             free_energies[epoch] = free_energies[epoch].sum(0)
-            lls[epoch] = np.array(epoch_lls).sum(0)
-            lls[epoch] = lls[epoch].sum(0)
 
             end = time.time()
             msg = tfa.EPOCH_MSG % (epoch + 1, (end - start) * 1000, free_energies[epoch])
@@ -155,7 +154,7 @@ class DeepTFA:
             variational.cpu()
             generative.cpu()
 
-        return np.vstack([free_energies, lls])
+        return np.vstack([free_energies])
 
     def results(self, block):
         hyperparams = self.variational.hyperparams.state_vardict()

@@ -148,13 +148,15 @@ class DeepTFAGuide(nn.Module):
                                                    self._num_times,
                                                    embedding_dim)
 
-    def forward(self, trace, embedding, times=None,
+    def forward(self, trace, embedding, times=None, blocks=None,
                 num_particles=tfa_models.NUM_PARTICLES):
         params = self.hyperparams.state_vardict()
-        weights = [b for b in range(self._num_blocks)]
-        centers = [b for b in range(self._num_blocks)]
-        log_widths = [b for b in range(self._num_blocks)]
-        for b in range(self._num_blocks):
+        if blocks is None:
+            blocks = list(range(self._num_blocks))
+        weights = [b for b in blocks]
+        centers = [b for b in blocks]
+        log_widths = [b for b in blocks]
+        for (i, b) in enumerate(blocks):
             block_params = utils.vardict()
             for k, v in params.iteritems():
                 if 'weights' in k and times is not None:
@@ -165,7 +167,7 @@ class DeepTFAGuide(nn.Module):
                     block_params[k] = utils.unsqueeze_and_expand(
                         v[b], 0, num_particles, clone=True
                     )
-            weights[b], centers[b], log_widths[b] =\
+            weights[i], centers[i], log_widths[i] =\
                 embedding(trace, block_params, times=times, block=b)
 
         return weights, centers, log_widths
@@ -206,10 +208,12 @@ class DeepTFAModel(nn.Module):
             self.add_module('_likelihood' + str(b), block_likelihood)
 
     def forward(self, trace, times=None, guide=probtorch.Trace(),
-                observations=[]):
+                observations=[], blocks=None):
         params = self.hyperparams.state_vardict()
-        activations = [b for b in range(self._num_blocks)]
-        for b in range(self._num_blocks):
+        if blocks is None:
+            blocks = list(range(self._num_blocks))
+        activations = [b for b in blocks]
+        for (i, b) in enumerate(blocks):
             block_params = utils.vardict()
             if times is None:
                 for k, v in params.iteritems():
@@ -223,8 +227,8 @@ class DeepTFAModel(nn.Module):
             weights, centers, log_widths = self.embedding(trace, block_params,
                                                           guide=guide, times=times,
                                                           block=b)
-            activations[b] = self.likelihoods[b](trace, weights, centers,
+            activations[i] = self.likelihoods[b](trace, weights, centers,
                                                  log_widths,
-                                                 observations=observations[b])
+                                                 observations=observations[i])
 
         return activations
