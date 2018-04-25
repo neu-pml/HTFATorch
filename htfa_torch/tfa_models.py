@@ -211,10 +211,14 @@ class TFAGenerativePrior(GenerativePrior):
         return weights, factor_centers, factor_log_widths
 
 class TFAGenerativeLikelihood(GenerativeLikelihood):
-    def __init__(self, locations, num_times, voxel_noise=VOXEL_NOISE, block=0):
+    def __init__(self, locations, num_times, voxel_noise=VOXEL_NOISE, block=0,
+                 register_locations=True):
         super(self.__class__, self).__init__()
 
-        self.register_buffer('voxel_locations', locations)
+        if register_locations:
+            self.register_buffer('voxel_locations', locations)
+        else:
+            self.voxel_locations = locations
         self._num_times = num_times
         self._voxel_noise = voxel_noise
         self.block = block
@@ -238,7 +242,7 @@ class TFAModel(nn.Module):
     """Generative model for topographic factor analysis"""
     def __init__(self, brain_center, brain_center_std_dev, num_times,
                  locations, num_factors=NUM_FACTORS, voxel_noise=VOXEL_NOISE,
-                 block=0):
+                 block=0, register_locations=True):
         super(self.__class__, self).__init__()
 
         self._num_times = num_times
@@ -253,7 +257,8 @@ class TFAModel(nn.Module):
         self._likelihood = TFAGenerativeLikelihood(self._locations,
                                                    self._num_times,
                                                    voxel_noise,
-                                                   block=self.block)
+                                                   block=self.block,
+                                                   register_locations=register_locations)
 
     def forward(self, trace, times=None, guide=probtorch.Trace(),
                 observations=collections.defaultdict()):
