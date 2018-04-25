@@ -151,22 +151,22 @@ class DeepTFAGuide(nn.Module):
     def forward(self, trace, embedding, times=None,
                 num_particles=tfa_models.NUM_PARTICLES):
         params = self.hyperparams.state_vardict()
-        weights = [s for s in range(self._num_blocks)]
-        centers = [s for s in range(self._num_blocks)]
-        log_widths = [s for s in range(self._num_blocks)]
-        for s in range(self._num_blocks):
+        weights = [b for b in range(self._num_blocks)]
+        centers = [b for b in range(self._num_blocks)]
+        log_widths = [b for b in range(self._num_blocks)]
+        for b in range(self._num_blocks):
             block_params = utils.vardict()
             for k, v in params.iteritems():
                 if 'weights' in k and times is not None:
                     block_params[k] = utils.unsqueeze_and_expand(
-                        v[s][times[0]:times[1]], 0, num_particles, clone=True
+                        v[b][times[0]:times[1]], 0, num_particles, clone=True
                     )
                 else:
                     block_params[k] = utils.unsqueeze_and_expand(
-                        v[s], 0, num_particles, clone=True
+                        v[b], 0, num_particles, clone=True
                     )
-            weights[s], centers[s], log_widths[s] =\
-                embedding(trace, block_params, times=times, block=s)
+            weights[b], centers[b], log_widths[b] =\
+                embedding(trace, block_params, times=times, block=b)
 
         return weights, centers, log_widths
 
@@ -181,9 +181,9 @@ class DeepTFAModel(nn.Module):
         self._num_blocks = num_blocks
         self._num_times = num_times
 
-        s = np.random.choice(self._num_blocks, 1)[0]
+        b = np.random.choice(self._num_blocks, 1)[0]
         centers, widths, weights = utils.initial_hypermeans(
-            activations[s].numpy().T, locations[s].numpy(), self._num_factors
+            activations[b].numpy().T, locations[b].numpy(), self._num_factors
         )
         hyper_means = {
             'weights': torch.Tensor(weights),
@@ -199,32 +199,32 @@ class DeepTFAModel(nn.Module):
                                                         embedding_dim)
 
         self.likelihoods = [tfa_models.TFAGenerativeLikelihood(
-            self._locations[s], self._num_times[s], tfa_models.VOXEL_NOISE,
-            block=s
-        ) for s in range(self._num_blocks)]
-        for s, block_likelihood in enumerate(self.likelihoods):
-            self.add_module('_likelihood' + str(s), block_likelihood)
+            self._locations[b], self._num_times[b], tfa_models.VOXEL_NOISE,
+            block=b
+        ) for b in range(self._num_blocks)]
+        for b, block_likelihood in enumerate(self.likelihoods):
+            self.add_module('_likelihood' + str(b), block_likelihood)
 
     def forward(self, trace, times=None, guide=probtorch.Trace(),
                 observations=[]):
         params = self.hyperparams.state_vardict()
-        activations = [s for s in range(self._num_blocks)]
-        for s in range(self._num_blocks):
+        activations = [b for b in range(self._num_blocks)]
+        for b in range(self._num_blocks):
             block_params = utils.vardict()
             if times is None:
                 for k, v in params.iteritems():
-                    block_params[k] = v[s]
+                    block_params[k] = v[b]
             else:
                 for k, v in params.iteritems():
-                    block_params[k] = v[s]
+                    block_params[k] = v[b]
                     if 'weights' in k and times is not None:
-                        block_params[k] = v[s][times[0]:times[1]]
+                        block_params[k] = v[b][times[0]:times[1]]
 
             weights, centers, log_widths = self.embedding(trace, block_params,
                                                           guide=guide, times=times,
-                                                          block=s)
-            activations[s] = self.likelihoods[s](trace, weights, centers,
+                                                          block=b)
+            activations[b] = self.likelihoods[b](trace, weights, centers,
                                                  log_widths,
-                                                 observations=observations[s])
+                                                 observations=observations[b])
 
         return activations
