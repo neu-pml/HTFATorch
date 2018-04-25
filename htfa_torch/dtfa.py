@@ -142,8 +142,10 @@ class DeepTFA:
                     if tfa.CUDA and use_cuda:
                         del activations
                         for b in block_batch:
+                            locs = generative.module.likelihoods[b].voxel_locations
                             generative.module.likelihoods[b].voxel_locations =\
-                            generative.module.likelihoods[b].voxel_locations.cpu()
+                                locs.cpu()
+                            del locs
                         torch.cuda.empty_cache()
                 if tfa.CUDA and use_cuda:
                     epoch_free_energies[batch] = epoch_free_energies[batch].cpu().data.numpy()
