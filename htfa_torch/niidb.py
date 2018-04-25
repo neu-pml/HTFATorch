@@ -113,10 +113,13 @@ class FMriActivationsDb:
 def query_min_time(qiter):
     result = -1
     for block in qiter:
-        block.load()
+        load = block.activations is None
+        if load:
+            block.load()
         if result < 0 or block.end_time < result:
             result = block.end_time
-        block.unload()
+        if load:
+            block.unload()
     return result
 
 class QueryDataset(torch.utils.data.Dataset):
