@@ -167,18 +167,21 @@ def load_collective_dataset(data_files, mask):
 
     return activations, locations, names, templates
 
-def load_dataset(data_file, mask=None):
+def load_dataset(data_file, mask=None, zscore=True):
     name, ext = os.path.splitext(data_file)
-    if ext == '.nii':
-        dataset = nii2cmu(data_file, mask_file=mask)
-        template = data_file
-    else:
+    if ext == 'mat':
         dataset = sio.loadmat(data_file)
         template = None
+    else:
+        dataset = nii2cmu(data_file, mask_file=mask)
+        template = data_file
     _, name = os.path.split(name)
     # pull out the voxel activations and locations
-    zscored_data = stats.zscore(dataset['data'], axis=1, ddof=1)
-    activations = torch.Tensor(zscored_data).t()
+    if zscore:
+        data = stats.zscore(dataset['data'], axis=1, ddof=1)
+    else:
+        data = dataset['data']
+    activations = torch.Tensor(data).t()
     locations = torch.Tensor(dataset['R'])
 
     del dataset
@@ -273,3 +276,7 @@ class TFADataset(torch.utils.data.Dataset):
 
     def __getitem__(self, i):
         return torch.stack([acts[i] for acts in self._activations], dim=0)
+
+def chunks(chunkable, n):
+    for i in range(0, len(chunkable), n):
+        yield chunkable[i:i+n]

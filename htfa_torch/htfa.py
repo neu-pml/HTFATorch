@@ -24,37 +24,36 @@ import torch.utils.data
 import probtorch
 
 from . import htfa_models
+from . import niidb
 from . import tfa
 from . import tfa_models
 from . import utils
 
 class HierarchicalTopographicFactorAnalysis:
     """Overall container for a run of TFA"""
-    def __init__(self, data_files, num_factors=tfa_models.NUM_FACTORS,
+    def __init__(self, query, num_factors=tfa_models.NUM_FACTORS,
                  mask=None):
         self.num_factors = num_factors
-        self.num_subjects = len(data_files)
         if mask is None:
             raise ValueError('please provide a mask')
         else:
             self.mask = mask
-        datasets = [utils.load_dataset(data_file, mask=mask)
-                    for data_file in data_files]
-        self.voxel_activations = [dataset[0] for dataset in datasets]
-        self.voxel_locations = [dataset[1] for dataset in datasets]
-        self._names = [dataset[2] for dataset in datasets]
-        self._templates = [dataset[3] for dataset in datasets]
+        self._blocks = list(query)
+        for block in self._blocks:
+            block.load()
+        self.num_blocks = len(self._blocks)
+        self.voxel_activations = [block.activations for block in self._blocks]
+        self.voxel_locations = [block.locations for block in self._blocks]
+        self._templates = [block.filename for block in self._blocks]
 
         # Pull out relevant dimensions: the number of time instants and the
         # number of voxels in each timewise "slice"
         self.num_times = [acts.shape[0] for acts in self.voxel_activations]
         self.num_voxels = [acts.shape[1] for acts in self.voxel_activations]
 
-        self.enc = htfa_models.HTFAGuide(self.voxel_activations,
-                                         self.voxel_locations,
+        self.enc = htfa_models.HTFAGuide(query, self.num_factors)
+        self.dec = htfa_models.HTFAModel(query, self.num_blocks, self.num_times,
                                          self.num_factors)
-        self.dec = htfa_models.HTFAModel(self.voxel_locations, self.num_subjects,
-                                         self.num_times, self.num_factors)
 
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
               log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES,
@@ -72,7 +71,7 @@ class HierarchicalTopographicFactorAnalysis:
             enc = torch.nn.DataParallel(self.enc)
             dec = torch.nn.DataParallel(self.dec)
             enc.cuda()
-            dec.cuda(0)
+            dec.cuda()
         else:
             enc = self.enc
             dec = self.dec
@@ -90,8 +89,8 @@ class HierarchicalTopographicFactorAnalysis:
             epoch_lls = list(range(len(activations_loader)))
 
             for (batch, data) in enumerate(activations_loader):
-                activations = [{'Y': Variable(data[:, s, :])}
-                               for s in range(self.num_subjects)]
+                activations = [{'Y': Variable(data[:, b, :])}
+                               for b in range(self.num_blocks)]
                 for acts in activations:
                     if tfa.CUDA and use_cuda:
                         acts['Y'] = acts['Y'].cuda()
@@ -146,22 +145,22 @@ class HierarchicalTopographicFactorAnalysis:
         """Return the inferred variational parameters"""
         return self.enc.hyperparams.state_vardict()
 
-    def plot_voxels(self, subject=None):
-        if subject:
-            hyp.plot(self.voxel_locations[subject].numpy(), 'k.')
+    def plot_voxels(self, block=None):
+        if block:
+            hyp.plot(self.voxel_locations[block].numpy(), 'k.')
         else:
-            for s in range(self.num_subjects):
-                hyp.plot(self.voxel_locations[s].numpy(), 'k.')
+            for b in range(self.num_blocks):
+                hyp.plot(self.voxel_locations[b].numpy(), 'k.')
 
-    def plot_factor_centers(self, subject=None, filename=None, show=True,
+    def plot_factor_centers(self, block=None, filename=None, show=True,
                             trace=None):
         hyperparams = self.results()
 
         if trace:
-            if subject is not None:
-                factor_centers = trace['FactorCenters%d' % subject].value
-                factor_log_widths = trace['FactorLogWidths%d' % subject].value
-                factor_uncertainties = hyperparams['subject']['factor_centers']['sigma'][subject]
+            if block is not None:
+                factor_centers = trace['FactorCenters%d' % block].value
+                factor_log_widths = trace['FactorLogWidths%d' % block].value
+                factor_uncertainties = hyperparams['block']['factor_centers']['sigma'][block]
             else:
                 factor_centers = trace['template_factor_centers'].value
                 factor_log_widths = trace['template_factor_log_widths'].value
@@ -173,13 +172,13 @@ class HierarchicalTopographicFactorAnalysis:
             if len(factor_uncertainties.shape) > 2:
                 factor_uncertainties = factor_uncertainties.mean(0)
         else:
-            if subject is not None:
+            if block is not None:
                 factor_centers =\
-                    hyperparams['subject']['factor_centers']['mu'][subject]
+                    hyperparams['block']['factor_centers']['mu'][block]
                 factor_log_widths =\
-                    hyperparams['subject']['factor_log_widths']['mu'][subject]
+                    hyperparams['block']['factor_log_widths']['mu'][block]
                 factor_uncertainties =\
-                    hyperparams['subject']['factor_centers']['sigma'][subject]
+                    hyperparams['block']['factor_centers']['sigma'][block]
             else:
                 factor_centers =\
                     hyperparams['template']['factor_centers']['mu']
@@ -208,14 +207,14 @@ class HierarchicalTopographicFactorAnalysis:
             self.enc(q, times=times, num_particles=1)
         p = probtorch.Trace()
         self.dec(p, times=times, guide=q,
-                 observations=[q for s in range(self.num_subjects)])
+                 observations=[q for b in range(self.num_blocks)])
         return p, q
 
-    def plot_original_brain(self, subject=None, filename=None, show=True,
+    def plot_original_brain(self, block=None, filename=None, show=True,
                             plot_abs=False, t=0):
-        if subject is None:
-            subject = np.random.choice(self.num_subjects, 1)[0]
-        image = nilearn.image.index_img(nib.load(self._templates[subject]), t)
+        if block is None:
+            block = np.random.choice(self.num_blocks, 1)[0]
+        image = nilearn.image.index_img(nib.load(self._templates[block]), t)
         plot = niplot.plot_glass_brain(image, plot_abs=plot_abs)
 
         if filename is not None:
@@ -225,39 +224,39 @@ class HierarchicalTopographicFactorAnalysis:
 
         return plot
 
-    def plot_reconstruction(self, subject=None, filename=None, show=True,
+    def plot_reconstruction(self, block=None, filename=None, show=True,
                             plot_abs=False, t=0):
         results = self.results()
 
-        if subject is not None:
-            weights = results['subject']['weights']['mu'][subject]
-            factor_centers = results['subject']['factor_centers']['mu'][subject]
+        if block is not None:
+            weights = results['block']['weights']['mu'][block]
+            factor_centers = results['block']['factor_centers']['mu'][block]
             factor_log_widths =\
-                results['subject']['factor_log_widths']['mu'][subject]
+                results['block']['factor_log_widths']['mu'][block]
         else:
             factor_centers = results['template']['factor_centers']['mu']
             factor_log_widths =\
                 results['template']['factor_log_widths']['mu']
-            subject = np.random.choice(self.num_subjects, 1)[0]
-            weights = results['subject']['weights']['mu'][subject]
+            block = np.random.choice(self.num_blocks, 1)[0]
+            weights = results['block']['weights']['mu'][block]
 
         factors = tfa_models.radial_basis(
-            self.voxel_locations[subject], factor_centers.data,
+            self.voxel_locations[block], factor_centers.data,
             factor_log_widths.data
         )
-        times = (0, self.voxel_activations[subject].shape[0])
+        times = (0, self.voxel_activations[block].shape[0])
         reconstruction = weights[times[0]:times[1], :].data @ factors
 
         image = utils.cmu2nii(reconstruction.numpy(),
-                              self.voxel_locations[subject].numpy(),
-                              self._templates[subject])
+                              self.voxel_locations[block].numpy(),
+                              self._templates[block])
         image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(image_slice, plot_abs=plot_abs)
 
         logging.info(
             'Reconstruction Error (Frobenius Norm): %.8e',
             np.linalg.norm(
-                (reconstruction - self.voxel_activations[subject]).numpy()
+                (reconstruction - self.voxel_activations[block]).numpy()
             )
         )
 
