@@ -89,7 +89,7 @@ class HTFAGuideSubjectPrior(tfa_models.GuidePrior):
         self._tfa_priors = [tfa_models.TFAGuidePrior(block=b)\
                             for b in range(self._num_blocks)]
 
-    def forward(self, trace, params, times=None,
+    def forward(self, trace, params, times=None, blocks=None,
                 num_particles=tfa_models.NUM_PARTICLES):
         # We only expand the parameters for which we're actually going to sample
         # values in this very method, and thus want to expand to get multiple
@@ -103,11 +103,14 @@ class HTFAGuideSubjectPrior(tfa_models.GuidePrior):
                                    voxel_noise_params['sigma'],
                                    name='voxel_noise')
 
+        if blocks is None:
+            blocks = list(range(self._num_blocks))
+
         weights = []
         factor_centers = []
         factor_log_widths = []
         scan_times = times is None
-        for b in range(self._num_blocks):
+        for b in blocks:
             if scan_times:
                 times = (0, self._num_times[b])
             # The TFA prior is going to expand out particles all on its own, so
@@ -148,11 +151,11 @@ class HTFAGuide(nn.Module):
         self._subject_prior = HTFAGuideSubjectPrior(self._num_blocks,
                                                     self._num_times)
 
-    def forward(self, trace, times=None,
+    def forward(self, trace, times=None, blocks=None,
                 num_particles=tfa_models.NUM_PARTICLES):
         params = self.hyperparams.state_vardict()
         self._template_prior(trace, params, num_particles=num_particles)
-        return self._subject_prior(trace, params, times=times,
+        return self._subject_prior(trace, params, times=times, blocks=blocks,
                                    num_particles=num_particles)
 
 class HTFAGenerativeHyperParams(tfa_models.HyperParams):
@@ -210,17 +213,20 @@ class HTFAGenerativeSubjectPrior(tfa_models.GenerativePrior):
                                                           block=b)\
                             for b in range(self._num_blocks)]
 
-    def forward(self, trace, params, template, times=None,
+    def forward(self, trace, params, template, times=None, blocks=None,
                 guide=probtorch.Trace()):
         voxel_noise = trace.normal(params['block']['voxel_noise']['mu'],
                                    params['block']['voxel_noise']['sigma'],
                                    value=guide['voxel_noise'],
                                    name='voxel_noise')
 
+        if blocks is None:
+            blocks = list(range(self._num_blocks))
+
         weights = []
         factor_centers = []
         factor_log_widths = []
-        for b in range(self._num_blocks):
+        for b in blocks:
             sparams = utils.vardict({
                 'factor_centers': {
                     'mu': template['factor_centers'],
@@ -266,15 +272,17 @@ class HTFAModel(nn.Module):
         )
         for block in query:
             block.load()
-        self._likelihoods = [tfa_models.TFAGenerativeLikelihood(
+        self.likelihoods = [tfa_models.TFAGenerativeLikelihood(
             query[b].locations, self._num_times[b], tfa_models.VOXEL_NOISE,
             block=b
         ) for b in range(self._num_blocks)]
-        for b, block_likelihood in enumerate(self._likelihoods):
-            self.add_module('_likelihood' + str(b), block_likelihood)
+        for b, block_likelihood in enumerate(self.likelihoods):
+            self.add_module('likelihood' + str(b), block_likelihood)
 
-    def forward(self, trace, times=None, guide=probtorch.Trace(),
+    def forward(self, trace, times=None, guide=probtorch.Trace(), blocks=None,
                 observations=[]):
+        if blocks is None:
+            blocks = list(range(self._num_blocks))
         params = self._hyperparams.state_vardict()
 
         template = self._template_prior(trace, params, guide)
@@ -282,7 +290,7 @@ class HTFAModel(nn.Module):
             trace, params, template, times=times, guide=guide
         )
 
-        return [self._likelihoods[b](trace, weights[b], centers[b], log_widths[b],
-                                     times=times, observations=observations[b],
-                                     voxel_noise=voxel_noise)
-                for b in range(self._num_blocks)]
+        return [self.likelihoods[b](trace, weights[i], centers[i], log_widths[i],
+                                    times=times, observations=observations[i],
+                                    voxel_noise=voxel_noise)
+                for (i, b) in enumerate(blocks)]
