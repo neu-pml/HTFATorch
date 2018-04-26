@@ -50,6 +50,9 @@ class FMriActivationBlock(object):
     def __len__(self):
         return self.activations.shape[0]
 
+    def default_label(self):
+        return "subject%d_run%d_block%d" % (self.subject, self.run, self.block)
+
 class FMriActivationsDb:
     def __init__(self, name, mask=None):
         self._db = dataset.connect('sqlite:///%s' % name)
