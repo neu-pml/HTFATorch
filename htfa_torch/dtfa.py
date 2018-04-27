@@ -56,11 +56,23 @@ class DeepTFA:
         self.num_times = [acts.shape[0] for acts in self.voxel_activations]
         self.num_voxels = [acts.shape[1] for acts in self.voxel_activations]
 
+        b = np.random.choice(self.num_blocks, 1)[0]
+        centers, widths, weights = utils.initial_hypermeans(
+            self.voxel_activations[b].numpy().T, self.voxel_locations[b].numpy(), self.num_factors
+        )
+        hyper_means = {
+            'weights': torch.Tensor(weights),
+            'factor_centers': torch.Tensor(centers),
+            'factor_log_widths': widths * torch.ones(self.num_factors),
+        }
+
         self.generative = dtfa_models.DeepTFAModel(
-            self.voxel_locations, self.voxel_activations, self.num_factors,
+            self.voxel_locations, hyper_means, self.num_factors,
             self.num_blocks, self.num_times, embedding_dim
         )
-        self.variational = dtfa_models.DeepTFAGuide(self.num_blocks,
+        self.variational = dtfa_models.DeepTFAGuide(hyper_means,
+                                                    self.num_factors,
+                                                    self.num_blocks,
                                                     self.num_times,
                                                     embedding_dim)
 
@@ -169,6 +181,8 @@ class DeepTFA:
         return np.vstack([free_energies])
 
     def results(self, block):
+        template_centers = hyperparams['template']['factor_centers']['mu']
+        template_log_widths = hyperparams['template']['factor_log_widths']['mu']
         hyperparams = self.variational.hyperparams.state_vardict()
 
         z_f = hyperparams['embedding']['factors']['mu'][block]
@@ -180,14 +194,16 @@ class DeepTFA:
             factors_shape = (-1,) + factors_shape
         factors = factors.view(*factors_shape)
         if len(factors.shape) > 2:
-            centers = factors[:, :, 0:3]
-            log_widths = factors[:, :, 3]
+            centers = factors[:, :, 0:3] + template_centers
+            log_widths = factors[:, :, 3] + template_log_widths
         else:
-            centers = factors[:, 0:3]
-            log_widths = factors[:, 3]
+            centers = factors[:, 0:3] + template_centers
+            log_widths = factors[:, 3] + template_log_widths
 
         z_w = hyperparams['embedding']['weights']['mu'][block]
-        weights = self.generative.embedding.weights_generator(z_w)
+        weights = self.generative.embedding.weights_generator(
+            self.generative.embedding.embedder(z_w)
+        )
 
         return {
             'weights': weights[0:self.voxel_activations[block].shape[0], :],
@@ -208,6 +224,10 @@ class DeepTFA:
     def plot_factor_centers(self, block, filename=None, show=True,
                             trace=None):
         hyperparams = self.variational.hyperparams.state_vardict()
+
+        template_centers = hyperparams['template']['factor_centers']['mu']
+        template_log_widths = hyperparams['template']['factor_log_widths']['mu']
+
         z_f_std_dev = hyperparams['embedding']['factors']['sigma'][block]
 
         if trace:
@@ -220,24 +240,35 @@ class DeepTFA:
             z_f = hyperparams['embedding']['factors']['mu'][block]
 
         z_f_embedded = self.generative.embedding.embedder(z_f)
+        factors_std_dev = self.generative.embedding.factors_generator(
+            self.generative.embedding.embedder(z_f_std_dev)
+        )
 
         factors = self.generative.embedding.factors_generator(z_f_embedded)
         factors_shape = (self.num_factors, 4)
         if len(factors.shape) > 1:
             factors_shape = (-1,) + factors_shape
         factors = factors.view(*factors_shape)
+        factors_std_dev = factors_std_dev.view(*factors_shape)
         if len(factors.shape) > 2:
-            factor_centers = factors[:, :, 0:3]
-            factor_log_widths = factors[:, :, 3]
+            factor_centers = factors[:, :, 0:3].clone()
+            factor_log_widths = factors[:, :, 3].clone()
+            factors_std_dev = factors_std_dev[:, :, 0:3].clone()
         else:
-            factor_centers = factors[:, 0:3]
-            factor_log_widths = factors[:, 3]
+            factor_centers = factors[:, 0:3].clone()
+            factor_log_widths = factors[:, 3].clone()
+            factors_std_dev = factors_std_dev[:, 0:3].clone()
+        factor_centers = factor_centers + template_centers
+        factor_log_widths = torch.log(torch.exp(factor_log_widths) +
+                                      torch.exp(template_log_widths))
 
-        factor_uncertainties = z_f_std_dev.norm().expand(self.num_factors, 1)
+        factor_uncertainties =\
+            hyperparams['template']['factor_centers']['sigma']
+        factor_uncertainties = factor_uncertainties + factors_std_dev
 
         plot = niplot.plot_connectome(
             np.eye(self.num_factors),
-            factor_centers.data.numpy(),
+            template_centers.data.numpy(),
             node_color=utils.uncertainty_palette(factor_uncertainties.data),
             node_size=np.exp(factor_log_widths.data.numpy() - np.log(2))
         )

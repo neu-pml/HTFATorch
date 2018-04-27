@@ -18,6 +18,7 @@ import torch.utils.data
 
 import probtorch
 
+from . import htfa_models
 from . import tfa_models
 from . import utils
 
@@ -44,11 +45,6 @@ class DeepTFAEmbedding(tfa_models.Model):
         )
         self.factors_generator = torch.nn.Linear(int(self._num_factors / 2),
                                                  self._num_factors * 4)
-        self.factors_generator.bias = torch.nn.Parameter(
-            torch.cat((hyper_means['factor_centers'],
-                       hyper_means['factor_log_widths'].unsqueeze(1)),
-                      1).view(self._num_factors * 4)
-        )
 
     def forward(self, trace, params, guide=probtorch.Trace(), times=None,
                 block=0):
@@ -94,9 +90,11 @@ class DeepTFAEmbedding(tfa_models.Model):
         return weights, factor_centers, factor_log_widths
 
 class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
-    def __init__(self, num_blocks, num_times, embedding_dim=2):
+    def __init__(self, brain_center, brain_center_std_dev, num_blocks,
+                 num_times, num_factors, embedding_dim=2):
         self.num_blocks = num_blocks
         self.num_times = max(num_times)
+        self._num_factors = num_factors
         self.embedding_dim = embedding_dim
 
         params = utils.vardict()
@@ -109,16 +107,29 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
             },
             'factors': {
                 'mu': torch.zeros(self.num_blocks, self.embedding_dim),
-                'sigma': torch.ones(self.num_blocks, self.embedding_dim),
+                'sigma': torch.sqrt(torch.rand(self.num_blocks, self.embedding_dim)),
+            },
+        }
+        params['template'] = {
+            'factor_centers': {
+                'mu': brain_center.expand(self._num_factors, 3),
+                'sigma': brain_center_std_dev.expand(self._num_factors, 3),
+            },
+            'factor_log_widths': {
+                'mu': torch.ones(self._num_factors),
+                'sigma': tfa_models.SOURCE_LOG_WIDTH_STD_DEV *\
+                         torch.ones(self._num_factors),
             },
         }
 
         super(self.__class__, self).__init__(params, guide=False)
 
 class DeepTFAGuideHyperparams(tfa_models.HyperParams):
-    def __init__(self, num_blocks, num_times, embedding_dim=2):
+    def __init__(self, hyper_means, num_blocks, num_times, num_factors,
+                 embedding_dim=2):
         self.num_blocks = num_blocks
         self.num_times = max(num_times)
+        self._num_factors = num_factors
         self.embedding_dim = embedding_dim
 
         params = utils.vardict()
@@ -134,23 +145,40 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
                 'sigma': torch.ones(self.num_blocks, self.embedding_dim),
             },
         }
+        params['template'] = utils.vardict(htfa_models.TEMPLATE_SHAPE)
+        params['template']['factor_centers'] =\
+            utils.gaussian_populator(self._num_factors, 3)
+        params['template']['factor_centers']['mu'] +=\
+            hyper_means['factor_centers']
+        params['template']['factor_log_widths'] = {
+            'mu': hyper_means['factor_log_widths'] * torch.ones(self._num_factors),
+            'sigma': torch.sqrt(torch.rand(self._num_factors)),
+        }
 
         super(self.__class__, self).__init__(params, guide=True)
 
 class DeepTFAGuide(nn.Module):
     """Variational guide for deep topographic factor analysis"""
-    def __init__(self, num_blocks=1, num_times=[1], embedding_dim=2):
+    def __init__(self, hyper_means, num_factors, num_blocks=1, num_times=[1],
+                 embedding_dim=2):
         super(self.__class__, self).__init__()
         self._num_blocks = num_blocks
         self._num_times = num_times
+        self._num_factors = num_factors
 
-        self.hyperparams = DeepTFAGuideHyperparams(self._num_blocks,
+        self.hyperparams = DeepTFAGuideHyperparams(hyper_means,
+                                                   self._num_blocks,
                                                    self._num_times,
+                                                   self._num_factors,
                                                    embedding_dim)
+        self.template = htfa_models.HTFAGuideTemplatePrior()
 
     def forward(self, trace, embedding, times=None, blocks=None,
                 num_particles=tfa_models.NUM_PARTICLES):
         params = self.hyperparams.state_vardict()
+
+        template = self.template(trace, params, num_particles=num_particles)
+
         if blocks is None:
             blocks = list(range(self._num_blocks))
         weights = [b for b in blocks]
@@ -158,7 +186,7 @@ class DeepTFAGuide(nn.Module):
         log_widths = [b for b in blocks]
         for (i, b) in enumerate(blocks):
             block_params = utils.vardict()
-            for k, v in params.iteritems():
+            for k, v in [(k, v) for k, v in params.iteritems() if 'embedding' in k]:
                 if 'weights' in k and times is not None:
                     block_params[k] = utils.unsqueeze_and_expand(
                         v[b][times[0]:times[1]], 0, num_particles, clone=True
@@ -169,12 +197,15 @@ class DeepTFAGuide(nn.Module):
                     )
             weights[i], centers[i], log_widths[i] =\
                 embedding(trace, block_params, times=times, block=b)
+            centers[i] = centers[i] + template['factor_centers']
+            log_widths[i] = torch.log(torch.exp(log_widths[i]) +
+                                      torch.exp(template['factor_log_widths']))
 
         return weights, centers, log_widths
 
 class DeepTFAModel(nn.Module):
     """Generative model for deep topographic factor analysis"""
-    def __init__(self, locations, activations,
+    def __init__(self, locations, hyper_means,
                  num_factors=tfa_models.NUM_FACTORS, num_blocks=1,
                  num_times=[1], embedding_dim=2):
         super(self.__class__, self).__init__()
@@ -184,21 +215,17 @@ class DeepTFAModel(nn.Module):
         self._num_times = num_times
 
         b = np.random.choice(self._num_blocks, 1)[0]
-        centers, widths, weights = utils.initial_hypermeans(
-            activations[b].numpy().T, locations[b].numpy(), self._num_factors
-        )
-        hyper_means = {
-            'weights': torch.Tensor(weights),
-            'factor_centers': torch.Tensor(centers),
-            'factor_log_widths': widths * torch.ones(self._num_factors),
-        }
+        center, center_sigma = utils.brain_centroid(self._locations[b])
 
         self.embedding = DeepTFAEmbedding(self._num_factors, self._num_times,
                                           hyper_means, embedding_dim)
 
-        self.hyperparams = DeepTFAGenerativeHyperparams(self._num_blocks,
+        self.hyperparams = DeepTFAGenerativeHyperparams(center, center_sigma,
+                                                        self._num_blocks,
                                                         self._num_times,
+                                                        self._num_factors,
                                                         embedding_dim)
+        self.template = htfa_models.HTFAGenerativeTemplatePrior()
 
         self.likelihoods = [tfa_models.TFAGenerativeLikelihood(
             self._locations[b], self._num_times[b], tfa_models.VOXEL_NOISE,
@@ -213,22 +240,28 @@ class DeepTFAModel(nn.Module):
         if blocks is None:
             blocks = list(range(self._num_blocks))
         activations = [b for b in blocks]
+
+        template = self.template(trace, params, guide=guide)
+
         for (i, b) in enumerate(blocks):
             block_params = utils.vardict()
             if times is None:
-                for k, v in params.iteritems():
+                for k, v in [(k, v) for k, v in params.iteritems() if 'embedding' in k]:
                     block_params[k] = v[b]
             else:
-                for k, v in params.iteritems():
+                for k, v in [(k, v) for k, v in params.iteritems() if 'embedding' in k]:
                     block_params[k] = v[b]
                     if 'weights' in k and times is not None:
                         block_params[k] = v[b][times[0]:times[1]]
 
-            weights, centers, log_widths = self.embedding(trace, block_params,
-                                                          guide=guide, times=times,
-                                                          block=b)
-            activations[i] = self.likelihoods[b](trace, weights, centers,
-                                                 log_widths,
-                                                 observations=observations[i])
+            weights, center_resids, log_width_resids = self.embedding(
+                trace, block_params, guide=guide, times=times, block=b
+            )
+            activations[i] = self.likelihoods[b](
+                trace, weights,
+                template['factor_centers'] + center_resids,
+                torch.log(torch.exp(template['factor_log_widths']) + torch.exp(log_width_resids)),
+                observations=observations[i]
+            )
 
         return activations
