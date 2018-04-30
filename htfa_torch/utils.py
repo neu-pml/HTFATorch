@@ -18,6 +18,7 @@ finally:
     import matplotlib.pyplot as plt
 import numpy as np
 import scipy.io as sio
+import scipy.special as spspecial
 import scipy.stats as stats
 import seaborn as sns
 from sklearn.cluster import KMeans
@@ -240,7 +241,7 @@ def uncertainty_alphas(uncertainties):
         ])
     else:
         uncertainties = uncertainties.numpy()
-    return uncertainties / (1.0 + uncertainties)
+    return 1.0 - spspecial.expit(uncertainties)
 
 def compose_palette(length, base='dark', alphas=None):
     palette = np.array(sns.color_palette(base, length))
