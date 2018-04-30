@@ -110,7 +110,7 @@ class DeepTFA:
 
         optimizer = torch.optim.Adam(list(variational.parameters()) +\
                                      list(generative.parameters()),
-                                     lr=learning_rate)
+                                     lr=learning_rate, weight_decay=1e-2)
         variational.train()
         generative.train()
 
