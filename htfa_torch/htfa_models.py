@@ -67,13 +67,14 @@ class HTFAGuideHyperParams(tfa_models.HyperParams):
         super(self.__class__, self).__init__(params, guide=True)
 
 class HTFAGuideTemplatePrior(tfa_models.GuidePrior):
-    def forward(self, trace, params, num_particles=tfa_models.NUM_PARTICLES):
+    def forward(self, trace, params, template_shape=TEMPLATE_SHAPE,
+                num_particles=tfa_models.NUM_PARTICLES):
         template_params = params['template']
         if num_particles and num_particles > 0:
             template_params = utils.unsqueeze_and_expand_vardict(
                 template_params, 0, num_particles, True
             )
-        template = TEMPLATE_SHAPE.copy()
+        template = template_shape.copy()
         for (k, _) in template.iteritems():
             template[k] = trace.normal(template_params[k]['mu'],
                                        template_params[k]['sigma'],
@@ -194,8 +195,9 @@ class HTFAGenerativeHyperParams(tfa_models.HyperParams):
         super(self.__class__, self).__init__(params, guide=False)
 
 class HTFAGenerativeTemplatePrior(tfa_models.GenerativePrior):
-    def forward(self, trace, params, guide=probtorch.Trace()):
-        template = utils.vardict(TEMPLATE_SHAPE.copy())
+    def forward(self, trace, params,  template_shape=TEMPLATE_SHAPE,
+                guide=probtorch.Trace()):
+        template = utils.vardict(template_shape.copy())
         for (k, _) in template.iteritems():
             template[k] = trace.normal(params['template'][k]['mu'],
                                        params['template'][k]['sigma'],
