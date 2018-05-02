@@ -22,6 +22,10 @@ from . import htfa_models
 from . import tfa_models
 from . import utils
 
+TEMPLATE_SHAPE = utils.vardict()
+for k, v in htfa_models.TEMPLATE_SHAPE.iteritems():
+    TEMPLATE_SHAPE[k] = v
+
 class DeepTFAEmbedding(tfa_models.Model):
     def __init__(self, num_factors, num_times, hyper_means, embedding_dim=2):
         super(tfa_models.Model, self).__init__()
@@ -145,7 +149,7 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
                 'sigma': torch.ones(self.num_blocks, self.embedding_dim),
             },
         }
-        params['template'] = utils.vardict(htfa_models.TEMPLATE_SHAPE)
+        params['template'] = utils.vardict(TEMPLATE_SHAPE)
         params['template']['factor_centers'] =\
             utils.gaussian_populator(self._num_factors, 3)
         params['template']['factor_centers']['mu'] +=\
@@ -177,7 +181,9 @@ class DeepTFAGuide(nn.Module):
                 num_particles=tfa_models.NUM_PARTICLES):
         params = self.hyperparams.state_vardict()
 
-        template = self.template(trace, params, num_particles=num_particles)
+        template_shape = TEMPLATE_SHAPE.copy()
+        template = self.template(trace, params, template_shape=template_shape,
+                                 num_particles=num_particles)
 
         if blocks is None:
             blocks = list(range(self._num_blocks))
@@ -241,7 +247,9 @@ class DeepTFAModel(nn.Module):
             blocks = list(range(self._num_blocks))
         activations = [b for b in blocks]
 
-        template = self.template(trace, params, guide=guide)
+        template_shape = TEMPLATE_SHAPE.copy()
+        template = self.template(trace, params, template_shape=template_shape,
+                                 guide=guide)
 
         for (i, b) in enumerate(blocks):
             block_params = utils.vardict()
