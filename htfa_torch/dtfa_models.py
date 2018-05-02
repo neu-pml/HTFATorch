@@ -56,8 +56,8 @@ class DeepTFAEmbedding(tfa_models.Model):
             times_range = torch.arange(self._num_times).unsqueeze(1)
         else:
             times_range = torch.arange(times[0], times[1]).unsqueeze(1)
-        weights_embedding = trace.normal(params['embedding']['weights']['mu'],
-                                         params['embedding']['weights']['sigma'],
+        weights_embedding = trace.normal(params['weights']['mu'],
+                                         params['weights']['sigma'],
                                          value=guide['z_w' + str(block)],
                                          name='z_w' + str(block))
 
@@ -73,8 +73,7 @@ class DeepTFAEmbedding(tfa_models.Model):
         weights = self.weights_generator(weights_embedding)
 
         factors_embedding = self.embedder(trace.normal(
-            params['embedding']['factors']['mu'],
-            params['embedding']['factors']['sigma'],
+            params['factors']['mu'], params['factors']['sigma'],
             value=guide['z_f' + str(block)],
             name='z_f' + str(block)
         ))
@@ -202,7 +201,8 @@ class DeepTFAGuide(nn.Module):
                         v[b], 0, num_particles, clone=True
                     )
             weights[i], centers[i], log_widths[i] =\
-                embedding(trace, block_params, times=times, block=b)
+                embedding(trace, block_params['embedding'], times=times,
+                          block=b)
             centers[i] = centers[i] + template['factor_centers']
             log_widths[i] = torch.log(torch.exp(log_widths[i]) +
                                       torch.exp(template['factor_log_widths']))
@@ -263,7 +263,8 @@ class DeepTFAModel(nn.Module):
                         block_params[k] = v[b][times[0]:times[1]]
 
             weights, center_resids, log_width_resids = self.embedding(
-                trace, block_params, guide=guide, times=times, block=b
+                trace, block_params['embedding'], guide=guide, times=times,
+                block=b
             )
             activations[i] = self.likelihoods[b](
                 trace, weights,
