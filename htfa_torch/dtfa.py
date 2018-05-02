@@ -268,7 +268,7 @@ class DeepTFA:
 
         plot = niplot.plot_connectome(
             np.eye(self.num_factors),
-            template_centers.data.numpy(),
+            factor_centers.data.numpy(),
             node_color=utils.uncertainty_palette(factor_uncertainties.data),
             node_size=np.exp(factor_log_widths.data.numpy() - np.log(2))
         )
