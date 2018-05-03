@@ -14,13 +14,13 @@ try:
         import matplotlib
         matplotlib.use('TkAgg')
 finally:
+    import matplotlib.colors as mcolors
     import matplotlib.patches as mpatches
     import matplotlib.pyplot as plt
 import numpy as np
 import scipy.io as sio
 import scipy.special as spspecial
 import scipy.stats as stats
-import seaborn as sns
 from sklearn.cluster import KMeans
 import torch
 from torch.autograd import Variable
@@ -244,7 +244,7 @@ def uncertainty_alphas(uncertainties):
     return 1.0 - spspecial.expit(uncertainties)
 
 def compose_palette(length, base='dark', alphas=None):
-    palette = np.array(sns.color_palette(base, length))
+    palette = np.array(mcolors.to_rgb_array(mcolors.BASE_COLORS.values())[:length])
     if alphas is not None:
         return np.concatenate([palette, alphas], axis=1)
     return palette
