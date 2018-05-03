@@ -303,7 +303,7 @@ class DeepTFA:
         return plot
 
     def scatter_factor_embedding(self, labeler=None, filename=None, show=True,
-                                 xlims=None, ylims=None):
+                                 xlims=None, ylims=None, figsize=(3.75, 2.75)):
         hyperparams = self.variational.hyperparams.state_vardict()
         z_f = hyperparams['embedding']['factors']['mu'].data
 
@@ -318,7 +318,7 @@ class DeepTFA:
         block_colors = [palette[labels[b]] for b in range(self.num_blocks)
                         if labels[b] is not None]
 
-        fig = plt.figure(1, figsize=(3.75, 2.75))
+        fig = plt.figure(1, figsize=figsize)
         ax = fig.add_subplot(111, facecolor='white')
         fig.axes[0].set_xlabel('$z^F_1$')
         if xlims is not None:
@@ -336,7 +336,8 @@ class DeepTFA:
             fig.show()
 
     def scatter_weights_embedding(self, t=None, labeler=None, filename=None,
-                                  show=True, xlims=None, ylims=None):
+                                  show=True, xlims=None, ylims=None,
+                                  figsize=(3.75, 2.75)):
         hyperparams = self.variational.hyperparams.state_vardict()
         z_w = hyperparams['embedding']['weights']['mu'].data
         if t is not None:
@@ -355,7 +356,7 @@ class DeepTFA:
         block_colors = [palette[labels[b]] for b in range(self.num_blocks)
                         if labels[b] is not None]
 
-        fig = plt.figure(1, figsize=(3.75, 2.75))
+        fig = plt.figure(1, figsize=figsize)
         ax = fig.add_subplot(111, facecolor='white')
         fig.axes[0].set_xlabel('$z^W_1$')
         if xlims is not None:
