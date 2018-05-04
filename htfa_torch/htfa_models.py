@@ -276,7 +276,7 @@ class HTFAModel(nn.Module):
             block.load()
         self.likelihoods = [tfa_models.TFAGenerativeLikelihood(
             query[b].locations, self._num_times[b], tfa_models.VOXEL_NOISE,
-            block=b
+            block=b, register_locations=False
         ) for b in range(self._num_blocks)]
         for b, block_likelihood in enumerate(self.likelihoods):
             self.add_module('likelihood' + str(b), block_likelihood)
@@ -289,7 +289,7 @@ class HTFAModel(nn.Module):
 
         template = self._template_prior(trace, params, guide=guide)
         weights, centers, log_widths, voxel_noise = self._subject_prior(
-            trace, params, template, times=times, guide=guide
+            trace, params, template, times=times, blocks=blocks, guide=guide
         )
 
         return [self.likelihoods[b](trace, weights[i], centers[i], log_widths[i],
