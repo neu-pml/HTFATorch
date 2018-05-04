@@ -14,7 +14,7 @@ try:
         import matplotlib
         matplotlib.use('TkAgg')
 finally:
-    import matplotlib.colors as mcolors
+    import matplotlib.cm as cm
     import matplotlib.patches as mpatches
     import matplotlib.pyplot as plt
 import numpy as np
@@ -236,23 +236,20 @@ def gaussian_populator(*dims):
 
 def uncertainty_alphas(uncertainties):
     if len(uncertainties.shape) > 1:
-        uncertainties = np.array([
-            [u] for u in np.linalg.norm((uncertainties**-2).numpy(), axis=1)
-        ])
-    else:
-        uncertainties = uncertainties.numpy()
-    return 1.0 - spspecial.expit(uncertainties)
+        uncertainties = uncertainties.norm(p=2, dim=1)
+    return (1.0 - torch.sigmoid(torch.log(uncertainties))).numpy()
 
-def compose_palette(length, base='dark', alphas=None):
-    palette = np.array(mcolors.to_rgb_array(mcolors.BASE_COLORS.values())[:length])
+def compose_palette(length, alphas=None):
+    scalar_map = cm.ScalarMappable(None, 'Set2')
+    colors = scalar_map.to_rgba(np.linspace(0, 1, length), norm=False)
     if alphas is not None:
-        return np.concatenate([palette, alphas], axis=1)
-    return palette
+        colors[:, 3] = alphas
+        return colors
+    return colors
 
 def uncertainty_palette(uncertainties):
     alphas = uncertainty_alphas(uncertainties)
-    return compose_palette(uncertainties.shape[0], base='cubehelix',
-                           alphas=alphas)
+    return compose_palette(uncertainties.shape[0], alphas=alphas)
 
 def palette_legend(labels, colors):
     patches = [mpatches.Patch(color=colors[i], label=labels[i]) for i in
