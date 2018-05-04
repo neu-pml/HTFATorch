@@ -195,9 +195,9 @@ class HTFAGenerativeHyperParams(tfa_models.HyperParams):
         super(self.__class__, self).__init__(params, guide=False)
 
 class HTFAGenerativeTemplatePrior(tfa_models.GenerativePrior):
-    def forward(self, trace, params,  guide=probtorch.Trace(),
-                template_shape=TEMPLATE_SHAPE):
-        template = utils.vardict(TEMPLATE_SHAPE.copy())
+    def forward(self, trace, params, template_shape=TEMPLATE_SHAPE,
+                guide=probtorch.Trace()):
+        template = utils.vardict(template_shape.copy())
         for (k, _) in template.iteritems():
             template[k] = trace.normal(params['template'][k]['mu'],
                                        params['template'][k]['sigma'],
@@ -287,7 +287,7 @@ class HTFAModel(nn.Module):
             blocks = list(range(self._num_blocks))
         params = self._hyperparams.state_vardict()
 
-        template = self._template_prior(trace, params, guide)
+        template = self._template_prior(trace, params, guide=guide)
         weights, centers, log_widths, voxel_noise = self._subject_prior(
             trace, params, template, times=times, guide=guide
         )
