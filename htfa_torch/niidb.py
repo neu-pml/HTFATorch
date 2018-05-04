@@ -50,6 +50,10 @@ class FMriActivationBlock(object):
         self.activations = None
         self.locations = None
 
+    def unload_locations(self):
+        del self.locations
+        self.locations = None
+
     def __len__(self):
         return self.activations.shape[0]
 
