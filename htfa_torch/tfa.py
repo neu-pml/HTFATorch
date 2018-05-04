@@ -165,9 +165,9 @@ class TopographicalFactorAnalysis:
         q = probtorch.Trace()
         self.enc(q, num_particles=tfa_models.NUM_PARTICLES)
 
-        weights = q['Weights' + str(self.enc.subject)].value.data.mean(0)
-        factor_centers = q['FactorCenters' + str(self.enc.subject)].value.data.mean(0)
-        factor_log_widths = q['FactorLogWidths' + str(self.enc.subject)].value.data.mean(0)
+        weights = q['Weights' + str(self.enc.block)].value.data.mean(0)
+        factor_centers = q['FactorCenters' + str(self.enc.block)].value.data.mean(0)
+        factor_log_widths = q['FactorLogWidths' + str(self.enc.block)].value.data.mean(0)
 
         if CUDA:
             weights = weights.cpu()
@@ -253,7 +253,7 @@ class TopographicalFactorAnalysis:
         params = self.enc.hyperparams.state_vardict()
         for k, v in params.items():
             params[k] = v.data
-        uncertainties = params['factor_centers']['sigma']
+        uncertainties = params['factor_centers']['sigma'] / self.brain_center_std_dev
 
         plot = niplot.plot_connectome(
             np.eye(self.num_factors),
