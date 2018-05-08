@@ -221,7 +221,7 @@ class DeepTFAModel(nn.Module):
         self._num_times = num_times
 
         b = np.random.choice(self._num_blocks, 1)[0]
-        center, center_sigma = utils.brain_centroid(self._locations[b])
+        center, center_sigma = utils.brain_centroid(self._locations)
 
         self.embedding = DeepTFAEmbedding(self._num_factors, self._num_times,
                                           hyper_means, embedding_dim)
@@ -234,7 +234,7 @@ class DeepTFAModel(nn.Module):
         self.template = htfa_models.HTFAGenerativeTemplatePrior()
 
         self.likelihoods = [tfa_models.TFAGenerativeLikelihood(
-            self._locations[b], self._num_times[b], tfa_models.VOXEL_NOISE,
+            self._locations, self._num_times[b], tfa_models.VOXEL_NOISE,
             block=b, register_locations=False
         ) for b in range(self._num_blocks)]
         for b, block_likelihood in enumerate(self.likelihoods):

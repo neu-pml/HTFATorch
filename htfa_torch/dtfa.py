@@ -47,7 +47,9 @@ class DeepTFA:
             block.load()
         self.num_blocks = len(self._blocks)
         self.voxel_activations = [block.activations for block in self._blocks]
-        self.voxel_locations = [block.locations for block in self._blocks]
+        self.voxel_locations = self._blocks[0].locations
+        for block in self._blocks:
+            block.unload_locations()
         self._templates = [block.filename for block in self._blocks]
         self._tasks = [block.task for block in self._blocks]
 
@@ -58,7 +60,7 @@ class DeepTFA:
 
         b = np.random.choice(self.num_blocks, 1)[0]
         centers, widths, weights = utils.initial_hypermeans(
-            self.voxel_activations[b].numpy().T, self.voxel_locations[b].numpy(), self.num_factors
+            self.voxel_activations[b].numpy().T, self.voxel_locations.numpy(), self.num_factors
         )
         hyper_means = {
             'weights': torch.Tensor(weights),
@@ -132,7 +134,7 @@ class DeepTFA:
                             acts['Y'] = acts['Y'].cuda()
                         for b in block_batch:
                             generative.module.likelihoods[b].voxel_locations =\
-                            generative.module.likelihoods[b].voxel_locations.cuda()
+                                self.voxel_locations.cuda()
                     trs = (batch * batch_size, None)
                     trs = (trs[0], trs[0] + activations[0]['Y'].shape[0])
 
@@ -216,7 +218,7 @@ class DeepTFA:
 
         return {
             'weights': weights[0:self.voxel_activations[block].shape[0], :],
-            'factors': tfa_models.radial_basis(self.voxel_locations[block],
+            'factors': tfa_models.radial_basis(self.voxel_locations,
                                                centers.data, log_widths.data),
             'factor_centers': centers.data,
             'factor_log_widths': log_widths.data,
@@ -283,7 +285,7 @@ class DeepTFA:
         reconstruction = results['weights'].data @ results['factors']
 
         image = utils.cmu2nii(reconstruction.numpy(),
-                              self.voxel_locations[block].numpy(),
+                              self.voxel_locations.numpy(),
                               self._templates[block])
         image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(image_slice, plot_abs=plot_abs)
