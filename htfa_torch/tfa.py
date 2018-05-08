@@ -44,6 +44,27 @@ def free_energy(q, p, num_particles=tfa_models.NUM_PARTICLES):
         sample_dim = None
     return -probtorch.objectives.montecarlo.elbo(q, p, sample_dim=sample_dim)
 
+def hierarchical_elbo(q, p, rv_weight=lambda x: 1.0,
+                      num_particles=tfa_models.NUM_PARTICLES,
+                      sample_dim=None, batch_dim=None):
+    if num_particles and num_particles > 0:
+        sample_dim = 0
+    else:
+        sample_dim = None
+
+    weight_rvs = utils.inverse(rv_weight, p)
+    weighted_elbo = 0.0
+    for weight, rvs in weight_rvs.items():
+        local_elbo = p.log_joint(sample_dim=sample_dim, batch_dim=batch_dim,
+                                 nodes=rvs) -\
+                     q.log_joint(sample_dim=sample_dim, batch_dim=batch_dim,
+                                 nodes=rvs)
+        weighted_elbo += weight * local_elbo.sum()
+    return weighted_elbo
+
+def hierarchical_free_energy(*args, **kwargs):
+    return -hierarchical_elbo(*args, **kwargs)
+
 def log_likelihood(q, p, num_particles=tfa_models.NUM_PARTICLES):
     """The expected log-likelihood of observed data under the proposal distribution"""
     if num_particles and num_particles > 0:
@@ -138,8 +159,18 @@ class TopographicalFactorAnalysis:
                 p = probtorch.Trace()
                 dec(p, times=trs, guide=q, observations={'Y': activations})
 
-                epoch_free_energies[batch] = free_energy(q, p, num_particles=num_particles)
-                epoch_lls[batch] = log_likelihood(q, p, num_particles=num_particles)
+                def rv_weight(node):
+                    result = 1.0
+                    if 'Weights' not in node and 'Y' not in node:
+                        result *= (trs[1] - trs[0]) / self.num_times
+                    return result
+                epoch_free_energies[batch] = hierarchical_free_energy(
+                    q, p,
+                    rv_weight=rv_weight,
+                    num_particles=num_particles
+                )
+                epoch_lls[batch] = log_likelihood(q, p,
+                                                  num_particles=num_particles)
                 epoch_free_energies[batch].backward()
                 optimizer.step()
 
@@ -165,9 +196,9 @@ class TopographicalFactorAnalysis:
         q = probtorch.Trace()
         self.enc(q, num_particles=tfa_models.NUM_PARTICLES)
 
-        weights = q['Weights' + str(self.enc.subject)].value.data.mean(0)
-        factor_centers = q['FactorCenters' + str(self.enc.subject)].value.data.mean(0)
-        factor_log_widths = q['FactorLogWidths' + str(self.enc.subject)].value.data.mean(0)
+        weights = q['Weights' + str(self.enc.block)].value.data.mean(0)
+        factor_centers = q['FactorCenters' + str(self.enc.block)].value.data.mean(0)
+        factor_log_widths = q['FactorLogWidths' + str(self.enc.block)].value.data.mean(0)
 
         if CUDA:
             weights = weights.cpu()
@@ -253,7 +284,7 @@ class TopographicalFactorAnalysis:
         params = self.enc.hyperparams.state_vardict()
         for k, v in params.items():
             params[k] = v.data
-        uncertainties = params['factor_centers']['sigma']
+        uncertainties = params['factor_centers']['sigma'] / self.brain_center_std_dev
 
         plot = niplot.plot_connectome(
             np.eye(self.num_factors),

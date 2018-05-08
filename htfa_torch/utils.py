@@ -14,13 +14,13 @@ try:
         import matplotlib
         matplotlib.use('TkAgg')
 finally:
+    import matplotlib.cm as cm
     import matplotlib.patches as mpatches
     import matplotlib.pyplot as plt
 import numpy as np
 import scipy.io as sio
 import scipy.special as spspecial
 import scipy.stats as stats
-import seaborn as sns
 from sklearn.cluster import KMeans
 import torch
 from torch.autograd import Variable
@@ -236,23 +236,20 @@ def gaussian_populator(*dims):
 
 def uncertainty_alphas(uncertainties):
     if len(uncertainties.shape) > 1:
-        uncertainties = np.array([
-            [u] for u in np.linalg.norm((uncertainties**-2).numpy(), axis=1)
-        ])
-    else:
-        uncertainties = uncertainties.numpy()
-    return 1.0 - spspecial.expit(uncertainties)
+        uncertainties = uncertainties.norm(p=2, dim=1)
+    return (1.0 - torch.sigmoid(torch.log(uncertainties))).numpy()
 
-def compose_palette(length, base='dark', alphas=None):
-    palette = np.array(sns.color_palette(base, length))
+def compose_palette(length, alphas=None):
+    scalar_map = cm.ScalarMappable(None, 'Set2')
+    colors = scalar_map.to_rgba(np.linspace(0, 1, length), norm=False)
     if alphas is not None:
-        return np.concatenate([palette, alphas], axis=1)
-    return palette
+        colors[:, 3] = alphas
+        return colors
+    return colors
 
 def uncertainty_palette(uncertainties):
     alphas = uncertainty_alphas(uncertainties)
-    return compose_palette(uncertainties.shape[0], base='cubehelix',
-                           alphas=alphas)
+    return compose_palette(uncertainties.shape[0], alphas=alphas)
 
 def palette_legend(labels, colors):
     patches = [mpatches.Patch(color=colors[i], label=labels[i]) for i in
@@ -270,10 +267,10 @@ class TFADataset(torch.utils.data.Dataset):
     def __init__(self, activations):
         self._activations = activations
         self._num_subjects = len(self._activations)
-        self._num_times = min([acts.shape[0] for acts in self._activations])
+        self.num_times = min([acts.shape[0] for acts in self._activations])
 
     def __len__(self):
-        return self._num_times
+        return self.num_times
 
     def __getitem__(self, i):
         return torch.stack([acts[i] for acts in self._activations], dim=0)
@@ -281,3 +278,13 @@ class TFADataset(torch.utils.data.Dataset):
 def chunks(chunkable, n):
     for i in range(0, len(chunkable), n):
         yield chunkable[i:i+n]
+
+def inverse(func, args):
+    result = {}
+    for arg in args:
+        val = func(arg)
+        if val in result:
+            result[val] += [arg]
+        else:
+            result[val] = [arg]
+    return result

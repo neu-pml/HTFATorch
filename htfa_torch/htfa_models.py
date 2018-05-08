@@ -195,7 +195,7 @@ class HTFAGenerativeHyperParams(tfa_models.HyperParams):
         super(self.__class__, self).__init__(params, guide=False)
 
 class HTFAGenerativeTemplatePrior(tfa_models.GenerativePrior):
-    def forward(self, trace, params,  template_shape=TEMPLATE_SHAPE,
+    def forward(self, trace, params, template_shape=TEMPLATE_SHAPE,
                 guide=probtorch.Trace()):
         template = utils.vardict(template_shape.copy())
         for (k, _) in template.iteritems():
@@ -276,7 +276,7 @@ class HTFAModel(nn.Module):
             block.load()
         self.likelihoods = [tfa_models.TFAGenerativeLikelihood(
             query[b].locations, self._num_times[b], tfa_models.VOXEL_NOISE,
-            block=b
+            block=b, register_locations=False
         ) for b in range(self._num_blocks)]
         for b, block_likelihood in enumerate(self.likelihoods):
             self.add_module('likelihood' + str(b), block_likelihood)
@@ -287,9 +287,9 @@ class HTFAModel(nn.Module):
             blocks = list(range(self._num_blocks))
         params = self._hyperparams.state_vardict()
 
-        template = self._template_prior(trace, params, guide)
+        template = self._template_prior(trace, params, guide=guide)
         weights, centers, log_widths, voxel_noise = self._subject_prior(
-            trace, params, template, times=times, guide=guide
+            trace, params, template, times=times, blocks=blocks, guide=guide
         )
 
         return [self.likelihoods[b](trace, weights[i], centers[i], log_widths[i],

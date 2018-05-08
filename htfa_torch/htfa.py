@@ -3,6 +3,7 @@
 __author__ = 'Eli Sennesh', 'Zulqarnain Khan'
 __email__ = 'e.sennesh@northeastern.edu', 'khan.zu@husky.neu.edu'
 
+import collections
 import logging
 import os
 import pickle
@@ -31,19 +32,17 @@ from . import utils
 
 class HierarchicalTopographicFactorAnalysis:
     """Overall container for a run of TFA"""
-    def __init__(self, query, num_factors=tfa_models.NUM_FACTORS,
-                 mask=None):
+    def __init__(self, query, mask, num_factors=tfa_models.NUM_FACTORS):
         self.num_factors = num_factors
-        if mask is None:
-            raise ValueError('please provide a mask')
-        else:
-            self.mask = mask
+        self.mask = mask
         self._blocks = list(query)
         for block in self._blocks:
             block.load()
         self.num_blocks = len(self._blocks)
         self.voxel_activations = [block.activations for block in self._blocks]
-        self.voxel_locations = [block.locations for block in self._blocks]
+        self.voxel_locations = self._blocks[0].locations
+        for block in self._blocks:
+            block.unload_locations()
         self._templates = [block.filename for block in self._blocks]
 
         # Pull out relevant dimensions: the number of time instants and the
@@ -81,6 +80,8 @@ class HierarchicalTopographicFactorAnalysis:
         dec.train()
 
         free_energies = list(range(num_steps))
+        rv_occurrences = collections.defaultdict(int)
+        measure_occurrences = True
 
         for epoch in range(num_steps):
             start = time.time()
@@ -98,7 +99,7 @@ class HierarchicalTopographicFactorAnalysis:
                             acts['Y'] = acts['Y'].cuda()
                         for b in block_batch:
                             dec.module.likelihoods[b].voxel_locations =\
-                            dec.module.likelihoods[b].voxel_locations.cuda()
+                                self.voxel_locations.cuda()
                     trs = (batch * batch_size, None)
                     trs = (trs[0], trs[0] + activations[0]['Y'].shape[0])
 
@@ -110,8 +111,18 @@ class HierarchicalTopographicFactorAnalysis:
                     dec(p, times=trs, guide=q, observations=activations,
                         blocks=block_batch)
 
-                    free_energy = tfa.free_energy(q, p,
-                                                  num_particles=num_particles)
+                    def block_rv_weight(node):
+                        result = 1.0
+                        if measure_occurrences:
+                            rv_occurrences[node] += 1
+                        if 'Weights' not in node and 'Y' not in node:
+                            result /= rv_occurrences[node]
+                        return result
+                    free_energy = tfa.hierarchical_free_energy(
+                        q, p,
+                        rv_weight=block_rv_weight,
+                        num_particles=num_particles
+                    )
 
                     free_energy.backward()
                     optimizer.step()
@@ -130,6 +141,8 @@ class HierarchicalTopographicFactorAnalysis:
 
             free_energies[epoch] = np.array(epoch_free_energies).sum(0)
             free_energies[epoch] = free_energies[epoch].sum(0)
+
+            measure_occurrences = False
 
             end = time.time()
             msg = tfa.EPOCH_MSG % (epoch + 1, (end - start) * 1000, free_energies[epoch])
