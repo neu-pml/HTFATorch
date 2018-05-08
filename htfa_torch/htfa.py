@@ -181,10 +181,10 @@ class HierarchicalTopographicFactorAnalysis:
 
     def plot_voxels(self, block=None):
         if block:
-            hyp.plot(self.voxel_locations[block].numpy(), 'k.')
+            hyp.plot(self.voxel_locations.numpy(), 'k.')
         else:
             for b in range(self.num_blocks):
-                hyp.plot(self.voxel_locations[b].numpy(), 'k.')
+                hyp.plot(self.voxel_locations.numpy(), 'k.')
 
     def plot_factor_centers(self, block=None, filename=None, show=True,
                             trace=None):
@@ -275,14 +275,14 @@ class HierarchicalTopographicFactorAnalysis:
             weights = results['block']['weights']['mu'][block]
 
         factors = tfa_models.radial_basis(
-            self.voxel_locations[block], factor_centers.data,
+            self.voxel_locations, factor_centers.data,
             factor_log_widths.data
         )
         times = (0, self.voxel_activations[block].shape[0])
         reconstruction = weights[times[0]:times[1], :].data @ factors
 
         image = utils.cmu2nii(reconstruction.numpy(),
-                              self.voxel_locations[block].numpy(),
+                              self.voxel_locations.numpy(),
                               self._templates[block])
         image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(image_slice, plot_abs=plot_abs)
