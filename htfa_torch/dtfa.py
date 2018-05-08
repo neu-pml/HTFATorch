@@ -46,11 +46,11 @@ class DeepTFA:
         self._blocks = list(query)
         for block in self._blocks:
             block.load()
+            block.unload_locations()
         self.num_blocks = len(self._blocks)
         self.voxel_activations = [block.activations for block in self._blocks]
-        self.voxel_locations = self._blocks[0].locations
-        for block in self._blocks:
-            block.unload_locations()
+        self._blocks[-1].load()
+        self.voxel_locations = self._blocks[-1].locations
         self._templates = [block.filename for block in self._blocks]
         self._tasks = [block.task for block in self._blocks]
 
