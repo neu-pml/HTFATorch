@@ -9,12 +9,22 @@ import os
 import pickle
 import time
 
+try:
+    if __name__ == '__main__':
+        import matplotlib
+        matplotlib.use('TkAgg')
+finally:
+    import matplotlib.pyplot as plt
+
 import hypertools as hyp
 import nibabel as nib
 import nilearn.image
 import nilearn.plotting as niplot
 import numpy as np
 import scipy.io as sio
+from sklearn.manifold import TSNE
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 import torch
 import torch.distributions as dists
 from torch.autograd import Variable
@@ -290,3 +300,86 @@ class HierarchicalTopographicFactorAnalysis:
             niplot.show()
 
         return plot
+
+    def scatter_factor_embedding(self, labeler=None, filename=None, show=True,
+                                 xlims=None, ylims=None, figsize=None,embedding=TSNE):
+
+        factor_centers_map = self.enc.hyperparams.block__factor_centers__mu.data.numpy()
+        factor_widths_map = self.enc.hyperparams.block__factor_log_widths__mu.data.numpy()
+        factors_map = np.concatenate((np.expand_dims(factor_widths_map, 2), factor_centers_map), axis=2)
+        factors_map = np.reshape(factors_map, newshape=(self.num_blocks, self.num_factors * 4))
+        X = StandardScaler().fit_transform(factors_map)
+        if embedding == 'TSNE':
+            z_f = TSNE(n_components=2).fit_transform(X)
+        else:
+            z_f = PCA(n_components=2).fit_transform(X)
+
+
+        if labeler is None:
+            labeler = lambda b: b.default_label()
+        labels = [labeler(b) for b in self._blocks]
+        all_labels = [l for l in labels if l is not None]
+        all_labels = np.unique(all_labels)
+        palette = dict(zip(all_labels, utils.compose_palette(len(all_labels))))
+
+        z_fs = [z_f[b] for b in range(self.num_blocks) if labels[b] is not None]
+        z_fs = np.stack(z_fs)
+        block_colors = [palette[labels[b]] for b in range(self.num_blocks)
+                        if labels[b] is not None]
+
+        fig = plt.figure(1, figsize=figsize)
+        ax = fig.add_subplot(111, facecolor='white')
+        fig.axes[0].set_xlabel('Embedded Dimension_1')
+        if xlims is not None:
+            fig.axes[0].set_xlim(*xlims)
+        fig.axes[0].set_ylabel('Embedded Dimension_2')
+        if ylims is not None:
+            fig.axes[0].set_ylim(*ylims)
+        fig.axes[0].set_title('Factor Embeddings')
+        ax.scatter(x=z_fs[:, 0], y=z_fs[:, 1], c=block_colors)
+        utils.palette_legend(list(palette.keys()), list(palette.values()))
+
+        if filename is not None:
+            fig.savefig(filename)
+        if show:
+            plt.show()
+
+    def scatter_weight_embedding(self, labeler=None, filename=None, show=True,
+                                 xlims=None, ylims=None, figsize=None,embedding='TSNE'):
+
+        weight_map = self.enc.hyperparams.block__weights__mu.data.numpy()
+        weight_map = np.reshape(weight_map, newshape=(self.num_blocks, self.num_factors * weight_map.shape[1]))
+        X = StandardScaler().fit_transform(weight_map)
+        if embedding == 'TSNE':
+            z_w = TSNE(n_components=2).fit_transform(X)
+        else:
+            z_w = PCA(n_components=2).fit_transform(X)
+
+        if labeler is None:
+            labeler = lambda b: b.default_label()
+        labels = [labeler(b) for b in self._blocks]
+        all_labels = [l for l in labels if l is not None]
+        all_labels = np.unique(all_labels)
+        palette = dict(zip(all_labels, utils.compose_palette(len(all_labels))))
+
+        z_ws = [z_w[b] for b in range(self.num_blocks) if labels[b] is not None]
+        z_ws = np.stack(z_ws)
+        block_colors = [palette[labels[b]] for b in range(self.num_blocks)
+                        if labels[b] is not None]
+
+        fig = plt.figure(1, figsize=figsize)
+        ax = fig.add_subplot(111, facecolor='white')
+        fig.axes[0].set_xlabel('Embedded Dimension_1')
+        if xlims is not None:
+            fig.axes[0].set_xlim(*xlims)
+        fig.axes[0].set_ylabel('Embedded Dimension_2')
+        if ylims is not None:
+            fig.axes[0].set_ylim(*ylims)
+        fig.axes[0].set_title('Weight Embeddings')
+        ax.scatter(x=z_ws[:, 0], y=z_ws[:, 1], c=block_colors)
+        utils.palette_legend(list(palette.keys()), list(palette.values()))
+
+        if filename is not None:
+            fig.savefig(filename)
+        if show:
+            plt.show()
