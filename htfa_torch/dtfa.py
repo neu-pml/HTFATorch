@@ -258,9 +258,10 @@ class DeepTFA:
                 hyperparams['embedding']['factors']['sigma'][block]
             )
         )
-        factor_uncertainties =\
-            hyperparams['template']['factor_centers']['sigma'] +\
-            factors_std_dev.view(self.num_factors, 4)[:, 0:3]
+        factor_uncertainties = torch.sqrt(
+            hyperparams['template']['factor_centers']['sigma']**2 +\
+            factors_std_dev.view(self.num_factors, 4)[:, 0:3]**2
+        )
 
         plot = niplot.plot_connectome(
             np.eye(self.num_factors),
