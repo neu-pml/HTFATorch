@@ -234,21 +234,22 @@ def gaussian_populator(*dims):
         'sigma': torch.ones(*dims)
     }
 
-def uncertainty_alphas(uncertainties):
+def uncertainty_alphas(uncertainties, scalars=None):
+    if scalars is not None:
+        uncertainties = uncertainties / scalars
     if len(uncertainties.shape) > 1:
         uncertainties = uncertainties.norm(p=2, dim=1)
     return (1.0 - torch.sigmoid(torch.log(uncertainties))).numpy()
 
-def compose_palette(length, alphas=None):
-    scalar_map = cm.ScalarMappable(None, 'Set2')
+def compose_palette(length, alphas=None, colormap='Set2'):
+    scalar_map = cm.ScalarMappable(None, colormap)
     colors = scalar_map.to_rgba(np.linspace(0, 1, length), norm=False)
     if alphas is not None:
         colors[:, 3] = alphas
-        return colors
     return colors
 
-def uncertainty_palette(uncertainties):
-    alphas = uncertainty_alphas(uncertainties)
+def uncertainty_palette(uncertainties, scalars=None):
+    alphas = uncertainty_alphas(uncertainties, scalars=scalars)
     return compose_palette(uncertainties.shape[0], alphas=alphas)
 
 def palette_legend(labels, colors):

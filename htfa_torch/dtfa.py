@@ -253,10 +253,16 @@ class DeepTFA:
         )
         factors_std_dev = factor_params.view(self.num_factors, 4)[:, 0:3]
 
+        _, brain_center_std_dev = utils.brain_centroid(self.voxel_locations)
+        brain_center_std_dev = brain_center_std_dev.expand(
+            self.num_factors, 3
+        )
+
         plot = niplot.plot_connectome(
             np.eye(self.num_factors),
             results['factor_centers'].numpy(),
-            node_color=utils.uncertainty_palette(factors_std_dev.data),
+            node_color=utils.uncertainty_palette(factors_std_dev.data,
+                                                 scalars=brain_center_std_dev),
             node_size=np.exp(results['factor_log_widths'].numpy() - np.log(2))
         )
 
