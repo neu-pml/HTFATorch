@@ -241,7 +241,8 @@ class DeepTFA:
             'factor_log_widths': factor_log_widths.data,
         }
 
-    def plot_factor_centers(self, block, filename=None, show=True):
+    def plot_factor_centers(self, block, filename=None, show=True,
+                            colormap='Set2'):
         results = self.results(block)
         hyperparams = self.variational.hyperparams.state_vardict()
         subject = self.generative.embedding.subjects[block]
@@ -262,7 +263,8 @@ class DeepTFA:
             np.eye(self.num_factors),
             results['factor_centers'].numpy(),
             node_color=utils.uncertainty_palette(factors_std_dev.data,
-                                                 scalars=brain_center_std_dev),
+                                                 scalars=brain_center_std_dev,
+                                                 colormap=colormap),
             node_size=np.exp(results['factor_log_widths'].numpy() - np.log(2))
         )
 
@@ -317,7 +319,8 @@ class DeepTFA:
         return plot
 
     def scatter_factor_embedding(self, labeler=None, filename=None, show=True,
-                                 xlims=None, ylims=None, figsize=(3.75, 2.75)):
+                                 xlims=None, ylims=None, figsize=(3.75, 2.75),
+                                 colormap='Set1'):
         hyperparams = self.variational.hyperparams.state_vardict()
         z_f = hyperparams['factors']['mu'].data
 
@@ -325,7 +328,9 @@ class DeepTFA:
             labeler = lambda b: b.default_label()
         labels = [labeler(b) for b in self._blocks]
         all_labels = [l for l in labels if l is not None]
-        palette = dict(zip(all_labels, utils.compose_palette(len(all_labels))))
+        palette = dict(zip(all_labels,
+                           utils.compose_palette(len(all_labels),
+                                                 colormap=colormap)))
 
         subjects = list(set([block.subject for block in self._blocks]))
         z_fs = [z_f[subjects.index(b.subject)] for b in self._blocks
@@ -352,7 +357,8 @@ class DeepTFA:
             fig.show()
 
     def scatter_subject_embedding(self, labeler=None, filename=None, show=True,
-                                  xlims=None, ylims=None, figsize=(3.75, 2.75)):
+                                  xlims=None, ylims=None, figsize=(3.75, 2.75),
+                                  colormap='Set1'):
         hyperparams = self.variational.hyperparams.state_vardict()
         z_p = hyperparams['subject']['mu'].data
 
@@ -360,7 +366,9 @@ class DeepTFA:
             labeler = lambda b: b.default_label()
         labels = [labeler(b) for b in self._blocks]
         all_labels = [l for l in labels if l is not None]
-        palette = dict(zip(all_labels, utils.compose_palette(len(all_labels))))
+        palette = dict(zip(all_labels,
+                           utils.compose_palette(len(all_labels),
+                                                 colormap=colormap)))
 
         subjects = list(set([block.subject for block in self._blocks]))
         z_ps = torch.stack(
@@ -389,7 +397,8 @@ class DeepTFA:
 
     def scatter_task_embedding(self, t=None, labeler=None, filename=None,
                                show=True, xlims=None, ylims=None,
-                               figsize=(3.75, 2.75)):
+                               figsize=(3.75, 2.75),
+                               colormap='Set1'):
         hyperparams = self.variational.hyperparams.state_vardict()
         z_s = hyperparams['task']['mu'].data
         if t is not None:
@@ -401,7 +410,9 @@ class DeepTFA:
             labeler = lambda b: b.default_label()
         labels = [labeler(b) for b in self._blocks]
         all_labels = [l for l in labels if l is not None]
-        palette = dict(zip(all_labels, utils.compose_palette(len(all_labels))))
+        palette = dict(zip(all_labels,
+                           utils.compose_palette(len(all_labels),
+                                                 colormap=colormap)))
 
         tasks = list(set([block.task for block in self._blocks]))
         z_ss = torch.stack(

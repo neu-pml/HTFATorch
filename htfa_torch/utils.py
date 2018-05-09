@@ -248,9 +248,10 @@ def compose_palette(length, alphas=None, colormap='Set2'):
         colors[:, 3] = alphas
     return colors
 
-def uncertainty_palette(uncertainties, scalars=None):
+def uncertainty_palette(uncertainties, scalars=None, colormap='Set2'):
     alphas = uncertainty_alphas(uncertainties, scalars=scalars)
-    return compose_palette(uncertainties.shape[0], alphas=alphas)
+    return compose_palette(uncertainties.shape[0], alphas=alphas,
+                           colormap=colormap)
 
 def palette_legend(labels, colors):
     patches = [mpatches.Patch(color=colors[i], label=labels[i]) for i in
