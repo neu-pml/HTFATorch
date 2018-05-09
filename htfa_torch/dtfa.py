@@ -64,9 +64,23 @@ class DeepTFA:
         block_subjects = [subjects.index(b.subject) for b in self._blocks]
         block_tasks = [tasks.index(b.task) for b in self._blocks]
 
+        b = np.random.choice(self.num_blocks, 1)[0]
+        self._blocks[b].load()
+        centers, widths, weights = utils.initial_hypermeans(
+            self._blocks[b].activations.numpy().T, self._blocks[b].locations.numpy(),
+            num_factors
+        )
+        hyper_means = {
+            'weights': torch.Tensor(weights),
+            'factor_centers': torch.Tensor(centers),
+            'factor_log_widths': widths,
+        }
+        self._blocks[b].unload()
+
         self.generative = dtfa_models.DeepTFAModel(
             self.voxel_locations, block_subjects, block_tasks,
-            self.num_factors, self.num_blocks, self.num_times, embedding_dim
+            self.num_factors, self.num_blocks, self.num_times, embedding_dim,
+            hyper_means
         )
         self.variational = dtfa_models.DeepTFAGuide(self.num_factors,
                                                     len(subjects), len(tasks),
@@ -375,7 +389,7 @@ class DeepTFA:
         if t is not None:
             z_s = z_s[t]
         else:
-            z_s = z_s.mean(0)
+            z_s = z_s.mean(1)
 
         if labeler is None:
             labeler = lambda b: b.default_label()

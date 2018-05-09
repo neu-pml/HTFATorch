@@ -24,7 +24,7 @@ from . import utils
 
 class DeepTFAEmbedding(tfa_models.Model):
     def __init__(self, num_factors, num_times, block_subjects, block_tasks,
-                 embedding_dim=2):
+                 embedding_dim=2, hyper_means=None):
         super(tfa_models.Model, self).__init__()
 
         self._num_factors = num_factors
@@ -45,6 +45,21 @@ class DeepTFAEmbedding(tfa_models.Model):
             nn.Linear(self._num_factors, self._num_factors * 4),
         )
         self.softplus = nn.Softplus()
+
+        if hyper_means is not None:
+            hyper_means['weights'] = hyper_means['weights'].mean(0)
+            hyper_means['factor_log_widths'] =\
+                torch.Tensor([hyper_means['factor_log_widths']]).\
+                expand(self._num_factors, 1)
+            self.weights_generator[2].bias = nn.Parameter(torch.cat(
+                (hyper_means['weights'], torch.ones(self._num_factors)),
+                dim=-1
+            ).view(self._num_factors * 2))
+            self.factors_generator[2].bias = nn.Parameter(torch.cat(
+                (hyper_means['factor_centers'],
+                 hyper_means['factor_log_widths']),
+                dim=-1
+            ).view(self._num_factors * 4))
 
     # Assumes that all tensors have a particle dimension as their first
     def forward(self, trace, params, guide=probtorch.Trace(), times=None,
@@ -211,7 +226,7 @@ class DeepTFAModel(nn.Module):
     """Generative model for deep topographic factor analysis"""
     def __init__(self, locations, block_subjects, block_tasks,
                  num_factors=tfa_models.NUM_FACTORS, num_blocks=1,
-                 num_times=[1], embedding_dim=2):
+                 num_times=[1], embedding_dim=2, hyper_means=None):
         super(self.__class__, self).__init__()
         self._locations = locations
         self._num_factors = num_factors
@@ -220,7 +235,7 @@ class DeepTFAModel(nn.Module):
 
         self.embedding = DeepTFAEmbedding(self._num_factors, self._num_times,
                                           block_subjects, block_tasks,
-                                          embedding_dim)
+                                          embedding_dim, hyper_means)
 
         self.hyperparams = DeepTFAGenerativeHyperparams(
             self._num_blocks, self._num_times, self._num_factors,
