@@ -54,7 +54,7 @@ class DeepTFA:
         self._templates = [block.filename for block in self._blocks]
         self._tasks = [block.task for block in self._blocks]
 
-        self.weight_normalizer = None
+        self.weight_normalizers = None
 
         # Pull out relevant dimensions: the number of time instants and the
         # number of voxels in each timewise "slice"
@@ -251,13 +251,22 @@ class DeepTFA:
         }
 
     def normalize_weights(self):
-        def weights_generator():
-            for b in range(len(self._blocks)):
-                weights = self.results(b)['weights']['mu'].data
+        def weights_generator(run):
+            run_blocks = [b for b in range(len(self._blocks))
+                          if self._blocks[b].run == run]
+            for rb in run_blocks:
+                weights = self.results(rb)['weights']['mu'].data
                 yield weights.contiguous().view(-1)
-        weights = list(weights_generator())
-        self.weight_normalizer = utils.normalize_tensors(weights)
-        return self.weight_normalizer
+        runs = list(set([b.run for b in self._blocks]))
+        runs.sort()
+        self.weight_normalizers = runs.copy()
+        for (i, run) in enumerate(runs):
+            weights = list(weights_generator(run))
+            idw = utils.normalize_tensors(weights)
+            absw = utils.normalize_tensors(weights, absval=True)
+            self.weight_normalizers[i] = (idw, absw)
+
+        return self.weight_normalizers
 
     def plot_factor_centers(self, block, filename=None, show=True,
                             colormap='cold_white_hot', t=None, labeler=None,
@@ -285,16 +294,21 @@ class DeepTFA:
         else:
             weights = weights.mean(0)
 
+        if self.weight_normalizers is None:
+            self.normalize_weights()
+        runs = list(set([b.run for b in self._blocks]))
+        idnorm, absnorm =\
+            self.weight_normalizers[runs.index(self._blocks[block].run)]
+
         if uncertainty_opacity:
             alphas = utils.uncertainty_alphas(factors_std_dev.data,
                                               scalars=brain_center_std_dev)
         else:
-            alphas = utils.intensity_alphas(torch.abs(weights.data))
-        if self.weight_normalizer is None:
-            self.normalize_weights()
+            alphas = utils.intensity_alphas(torch.abs(weights.data),
+                                            normalizer=absnorm)
+
         palette = utils.scalar_map_palette(weights.data.numpy(), alphas,
-                                           colormap,
-                                           normalizer=self.weight_normalizer)
+                                           colormap, normalizer=idnorm)
 
         plot = niplot.plot_connectome(
             np.eye(self.num_factors),
