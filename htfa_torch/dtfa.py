@@ -226,6 +226,8 @@ class DeepTFA:
 
         weight_params =\
             self.generative.embedding.weights_generator(weights_embed)
+        weight_params = weight_params.view(weight_params.shape[0], 2,
+                                           self.num_factors)
         weight_mus = weight_params[:, 0]
         weight_sigmas = self.generative.embedding.softplus(weight_params[:, 1])
         factor_params =\
@@ -301,7 +303,7 @@ class DeepTFA:
 
         results = self.results(block)
 
-        reconstruction = results['weights'].data @ results['factors']
+        reconstruction = results['weights']['mu'].data @ results['factors']
 
         image = utils.cmu2nii(reconstruction.numpy(),
                               self.voxel_locations.numpy(),
