@@ -14,17 +14,19 @@ try:
         import matplotlib
         matplotlib.use('TkAgg')
 finally:
+    import matplotlib.cm as cm
     import matplotlib.patches as mpatches
     import matplotlib.pyplot as plt
 import numpy as np
 import scipy.io as sio
+import scipy.special as spspecial
 import scipy.stats as stats
-import seaborn as sns
 from sklearn.cluster import KMeans
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
 from torch.nn import Parameter
+import torch.utils.data
 
 import nibabel as nib
 from nilearn.input_data import NiftiMasker
@@ -123,7 +125,7 @@ def nii2cmu(nifti_file, mask_file=None):
     voxel_coordinates = full_fact(image.shape[0:3])[vmask, ::-1] - 1
     voxel_locations = np.array(np.dot(voxel_coordinates, sform[0:3, 0:3])) + sform[:3, 3]
 
-    return {'data': voxel_activations, 'R': voxel_locations}, image
+    return {'data': voxel_activations, 'R': voxel_locations}
 
 def cmu2nii(activations, locations, template):
     image = nib.load(template)
@@ -142,23 +144,50 @@ def cmu2nii(activations, locations, template):
 
     return nib.Nifti1Image(data, affine=sform)
 
-def load_dataset(data_file, mask=None):
+def load_collective_dataset(data_files, mask):
+    datasets = [list(load_dataset(data, mask=mask)) for data in data_files]
+    min_time = min([dataset[0].shape[0] for dataset in datasets])
+    for dataset in datasets:
+        difference = dataset[0].shape[0] - min_time
+        if difference > 0:
+            start_cut = difference // 2
+            end_cut = difference - start_cut
+            length = dataset[0].shape[0]
+            dataset[0] = dataset[0][start_cut:length-end_cut, :]
+
+    activations = [d[0] for d in datasets]
+    locations = [d[1] for d in datasets]
+    names = [d[2] for d in datasets]
+    templates = [d[3] for d in datasets]
+
+    for d in datasets:
+        acts = d[0]
+        locs = d[1]
+        del acts
+        del locs
+
+    return activations, locations, names, templates
+
+def load_dataset(data_file, mask=None, zscore=True):
     name, ext = os.path.splitext(data_file)
-    if ext == '.nii':
-        dataset, image = nii2cmu(data_file, mask_file=mask)
-        template = data_file
-    else:
+    if ext == 'mat':
         dataset = sio.loadmat(data_file)
-        image = template = None
+        template = None
+    else:
+        dataset = nii2cmu(data_file, mask_file=mask)
+        template = data_file
     _, name = os.path.split(name)
     # pull out the voxel activations and locations
-    zscored_data = stats.zscore(dataset['data'], axis=1, ddof=1)
-    activations = torch.Tensor(zscored_data).t()
+    if zscore:
+        data = stats.zscore(dataset['data'], axis=1, ddof=1)
+    else:
+        data = dataset['data']
+    activations = torch.Tensor(data).t()
     locations = torch.Tensor(dataset['R'])
 
     del dataset
 
-    return activations, image, locations, name, template
+    return activations, locations, name, template
 
 def vardict(existing=None):
     vdict = flatdict.FlatDict(delimiter='__')
@@ -176,7 +205,7 @@ def register_vardict(vdict, module, parameter=True):
         if parameter:
             module.register_parameter(k, Parameter(v))
         else:
-            module.register_buffer(k, Variable(v))
+            module.register_buffer(k, v)
 
 def unsqueeze_and_expand(tensor, dim, size, clone=False):
     if clone:
@@ -205,25 +234,24 @@ def gaussian_populator(*dims):
         'sigma': torch.ones(*dims)
     }
 
-def uncertainty_alphas(uncertainties):
+def uncertainty_alphas(uncertainties, scalars=None):
+    if scalars is not None:
+        uncertainties = uncertainties / scalars
     if len(uncertainties.shape) > 1:
-        uncertainties = np.array([
-            [u] for u in np.linalg.norm((uncertainties**-2).numpy(), axis=1)
-        ])
-    else:
-        uncertainties = uncertainties.numpy()
-    return uncertainties / (1.0 + uncertainties)
+        uncertainties = uncertainties.norm(p=2, dim=1)
+    return (1.0 - torch.sigmoid(torch.log(uncertainties))).numpy()
 
-def compose_palette(length, base='husl', alphas=None):
-    palette = np.array(sns.color_palette(base, length))
+def compose_palette(length, alphas=None, colormap='Set2'):
+    scalar_map = cm.ScalarMappable(None, colormap)
+    colors = scalar_map.to_rgba(np.linspace(0, 1, length), norm=False)
     if alphas is not None:
-        return np.concatenate([palette, alphas], axis=1)
-    return palette
+        colors[:, 3] = alphas
+    return colors
 
-def uncertainty_palette(uncertainties):
-    alphas = uncertainty_alphas(uncertainties)
-    return compose_palette(uncertainties.shape[0], base='cubehelix',
-                           alphas=alphas)
+def uncertainty_palette(uncertainties, scalars=None, colormap='Set2'):
+    alphas = uncertainty_alphas(uncertainties, scalars=scalars)
+    return compose_palette(uncertainties.shape[0], alphas=alphas,
+                           colormap=colormap)
 
 def palette_legend(labels, colors):
     patches = [mpatches.Patch(color=colors[i], label=labels[i]) for i in
@@ -236,3 +264,29 @@ def isnan(tensor):
 
 def hasnan(tensor):
     return isnan(tensor).any()
+
+class TFADataset(torch.utils.data.Dataset):
+    def __init__(self, activations):
+        self._activations = activations
+        self._num_subjects = len(self._activations)
+        self.num_times = min([acts.shape[0] for acts in self._activations])
+
+    def __len__(self):
+        return self.num_times
+
+    def __getitem__(self, i):
+        return torch.stack([acts[i] for acts in self._activations], dim=0)
+
+def chunks(chunkable, n):
+    for i in range(0, len(chunkable), n):
+        yield chunkable[i:i+n]
+
+def inverse(func, args):
+    result = {}
+    for arg in args:
+        val = func(arg)
+        if val in result:
+            result[val] += [arg]
+        else:
+            result[val] = [arg]
+    return result
