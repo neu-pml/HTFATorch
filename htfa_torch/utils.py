@@ -15,6 +15,7 @@ try:
         matplotlib.use('TkAgg')
 finally:
     import matplotlib.cm as cm
+    import matplotlib.colors
     import matplotlib.patches as mpatches
     import matplotlib.pyplot as plt
 import numpy as np
@@ -235,18 +236,26 @@ def gaussian_populator(*dims):
     }
 
 def uncertainty_alphas(uncertainties, scalars=None):
-    if scalars is not None:
-        uncertainties = uncertainties / scalars
-    if len(uncertainties.shape) > 1:
-        uncertainties = uncertainties.norm(p=2, dim=1)
-    return (1.0 - torch.sigmoid(torch.log(uncertainties))).numpy()
+    return 1.0 - intensity_alphas(uncertainties, scalars)
 
-def compose_palette(length, alphas=None, colormap='Set2'):
+def intensity_alphas(intensities, scalars=None, normalizer=None):
+    if scalars is not None:
+        intensities = intensities / scalars
+    if len(intensities.shape) > 1:
+        intensities = intensities.norm(p=2, dim=1)
+    if normalizer is None:
+        normalizer = matplotlib.colors.Normalize()
+    return normalizer(intensities.numpy())
+
+def scalar_map_palette(scalars, alphas=None, colormap='Set2'):
     scalar_map = cm.ScalarMappable(None, colormap)
-    colors = scalar_map.to_rgba(np.linspace(0, 1, length), norm=False)
+    colors = scalar_map.to_rgba(scalars, norm=True)
     if alphas is not None:
         colors[:, 3] = alphas
     return colors
+
+def compose_palette(length, alphas=None, colormap='Set2'):
+    return scalar_map_palette(np.linspace(0, 1, length), alphas, colormap)
 
 def uncertainty_palette(uncertainties, scalars=None, colormap='Set2'):
     alphas = uncertainty_alphas(uncertainties, scalars=scalars)
