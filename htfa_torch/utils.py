@@ -238,6 +238,12 @@ def gaussian_populator(*dims):
 def uncertainty_alphas(uncertainties, scalars=None):
     return 1.0 - intensity_alphas(uncertainties, scalars)
 
+def normalize_tensors(seq):
+    flat = torch.cat([t.view(-1) for t in seq], dim=0)
+    result = matplotlib.colors.Normalize()
+    result.autoscale_None(flat.numpy())
+    return result
+
 def intensity_alphas(intensities, scalars=None, normalizer=None):
     if scalars is not None:
         intensities = intensities / scalars
@@ -247,8 +253,8 @@ def intensity_alphas(intensities, scalars=None, normalizer=None):
         normalizer = matplotlib.colors.Normalize()
     return normalizer(intensities.numpy())
 
-def scalar_map_palette(scalars, alphas=None, colormap='Set2'):
-    scalar_map = cm.ScalarMappable(None, colormap)
+def scalar_map_palette(scalars, alphas=None, colormap='Set2', normalizer=None):
+    scalar_map = cm.ScalarMappable(normalizer, colormap)
     colors = scalar_map.to_rgba(scalars, norm=True)
     if alphas is not None:
         colors[:, 3] = alphas
