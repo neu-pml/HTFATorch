@@ -204,6 +204,11 @@ class DeepTFA:
             variational.cpu()
             generative.cpu()
 
+        now = datetime.datetime.now()
+        checkpoint_name = now.strftime(tfa.CHECKPOINT_TAG)
+        logging.info('Saving checkpoint...')
+        self.save_state(path='.', tag=checkpoint_name)
+
         return np.vstack([free_energies])
 
     def results(self, block):
