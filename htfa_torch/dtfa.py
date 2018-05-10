@@ -54,6 +54,8 @@ class DeepTFA:
         self._templates = [block.filename for block in self._blocks]
         self._tasks = [block.task for block in self._blocks]
 
+        self.weight_normalizer = None
+
         # Pull out relevant dimensions: the number of time instants and the
         # number of voxels in each timewise "slice"
         self.num_times = [acts.shape[0] for acts in self.voxel_activations]
@@ -248,6 +250,15 @@ class DeepTFA:
             'factor_log_widths': factor_log_widths.data,
         }
 
+    def normalize_weights(self):
+        def weights_generator():
+            for b in range(len(self._blocks)):
+                weights = self.results(b)['weights']['mu'].data
+                yield weights.contiguous().view(-1)
+        weights = list(weights_generator())
+        self.weight_normalizer = utils.normalize_tensors(weights)
+        return self.weight_normalizer
+
     def plot_factor_centers(self, block, filename=None, show=True,
                             colormap='cold_white_hot', t=None, labeler=None,
                             uncertainty_opacity=False):
@@ -278,9 +289,12 @@ class DeepTFA:
             alphas = utils.uncertainty_alphas(factors_std_dev.data,
                                               scalars=brain_center_std_dev)
         else:
-            alphas = utils.intensity_alphas(weights.data)
+            alphas = utils.intensity_alphas(torch.abs(weights.data))
+        if self.weight_normalizer is None:
+            self.normalize_weights()
         palette = utils.scalar_map_palette(weights.data.numpy(), alphas,
-                                           colormap)
+                                           colormap,
+                                           normalizer=self.weight_normalizer)
 
         plot = niplot.plot_connectome(
             np.eye(self.num_factors),
