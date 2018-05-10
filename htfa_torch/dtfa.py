@@ -262,8 +262,9 @@ class DeepTFA:
         self.weight_normalizers = runs.copy()
         for (i, run) in enumerate(runs):
             weights = list(weights_generator(run))
-            idw = utils.normalize_tensors(weights)
-            absw = utils.normalize_tensors(weights, absval=True)
+            idw = utils.normalize_tensors(weights, percentiles=(10, 90))
+            absw = utils.normalize_tensors(weights, absval=True,
+                                           percentiles=(10, 90))
             self.weight_normalizers[i] = (idw, absw)
 
         return self.weight_normalizers
