@@ -238,8 +238,10 @@ def gaussian_populator(*dims):
 def uncertainty_alphas(uncertainties, scalars=None):
     return 1.0 - intensity_alphas(uncertainties, scalars)
 
-def normalize_tensors(seq):
+def normalize_tensors(seq, absval=False):
     flat = torch.cat([t.view(-1) for t in seq], dim=0)
+    if absval:
+        flat = torch.abs(flat)
     result = matplotlib.colors.Normalize()
     result.autoscale_None(flat.numpy())
     return result
