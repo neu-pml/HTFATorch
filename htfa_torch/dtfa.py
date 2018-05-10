@@ -327,7 +327,7 @@ class DeepTFA:
         if labeler is None:
             labeler = lambda b: b.default_label()
         labels = [labeler(b) for b in self._blocks]
-        all_labels = [l for l in labels if l is not None]
+        all_labels = np.unique([l for l in labels if l is not None])
         palette = dict(zip(all_labels,
                            utils.compose_palette(len(all_labels),
                                                  colormap=colormap)))
@@ -365,7 +365,7 @@ class DeepTFA:
         if labeler is None:
             labeler = lambda b: b.default_label()
         labels = [labeler(b) for b in self._blocks]
-        all_labels = [l for l in labels if l is not None]
+        all_labels = np.unique([l for l in labels if l is not None])
         palette = dict(zip(all_labels,
                            utils.compose_palette(len(all_labels),
                                                  colormap=colormap)))
@@ -409,7 +409,7 @@ class DeepTFA:
         if labeler is None:
             labeler = lambda b: b.default_label()
         labels = [labeler(b) for b in self._blocks]
-        all_labels = [l for l in labels if l is not None]
+        all_labels = np.unique([l for l in labels if l is not None])
         palette = dict(zip(all_labels,
                            utils.compose_palette(len(all_labels),
                                                  colormap=colormap)))
