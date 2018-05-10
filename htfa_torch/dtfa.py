@@ -7,6 +7,8 @@ __email__ = ('j.vandemeent@northeastern.edu',
              'e.sennesh@northeastern.edu',
              'khan.zu@husky.neu.edu')
 
+import collections
+import datetime
 import logging
 import os
 import pickle
@@ -27,7 +29,6 @@ import torch.distributions as dists
 from torch.autograd import Variable
 import torch.nn as nn
 from torch.nn import Parameter
-import torch.utils.data
 
 import probtorch
 
@@ -38,30 +39,52 @@ from . import utils
 
 class DeepTFA:
     """Overall container for a run of Deep TFA"""
-    def __init__(self, data_files, mask, num_factors=tfa_models.NUM_FACTORS,
-                 embedding_dim=2, tasks=[]):
+    def __init__(self, query, mask, num_factors=tfa_models.NUM_FACTORS,
+                 embedding_dim=2):
         self.num_factors = num_factors
-        self.num_subjects = len(data_files)
         self.mask = mask
-        datasets = [utils.load_dataset(data_file, mask=mask)
-                    for data_file in data_files]
-        self.voxel_activations = [dataset[0] for dataset in datasets]
-        self._images = [dataset[1] for dataset in datasets]
-        self.voxel_locations = [dataset[2] for dataset in datasets]
-        self._names = [dataset[3] for dataset in datasets]
-        self._templates = [dataset[4] for dataset in datasets]
-        self._tasks = tasks
+        self._blocks = list(query)
+        for block in self._blocks:
+            block.load()
+            block.unload_locations()
+        self.num_blocks = len(self._blocks)
+        self.voxel_activations = [block.activations for block in self._blocks]
+        self._blocks[-1].load()
+        self.voxel_locations = self._blocks[-1].locations
+        self._templates = [block.filename for block in self._blocks]
+        self._tasks = [block.task for block in self._blocks]
 
         # Pull out relevant dimensions: the number of time instants and the
         # number of voxels in each timewise "slice"
         self.num_times = [acts.shape[0] for acts in self.voxel_activations]
         self.num_voxels = [acts.shape[1] for acts in self.voxel_activations]
 
-        self.generative = dtfa_models.DeepTFAModel(
-            self.voxel_locations, self.voxel_activations, self.num_factors,
-            self.num_subjects, self.num_times, embedding_dim
+        subjects = list(set([b.subject for b in self._blocks]))
+        tasks = list(set([b.task for b in self._blocks]))
+        block_subjects = [subjects.index(b.subject) for b in self._blocks]
+        block_tasks = [tasks.index(b.task) for b in self._blocks]
+
+        b = np.random.choice(self.num_blocks, 1)[0]
+        self._blocks[b].load()
+        centers, widths, weights = utils.initial_hypermeans(
+            self._blocks[b].activations.numpy().T, self._blocks[b].locations.numpy(),
+            num_factors
         )
-        self.variational = dtfa_models.DeepTFAGuide(self.num_subjects,
+        hyper_means = {
+            'weights': torch.Tensor(weights),
+            'factor_centers': torch.Tensor(centers),
+            'factor_log_widths': widths,
+        }
+        self._blocks[b].unload()
+
+        self.generative = dtfa_models.DeepTFAModel(
+            self.voxel_locations, block_subjects, block_tasks,
+            self.num_factors, self.num_blocks, self.num_times, embedding_dim,
+            hyper_means
+        )
+        self.variational = dtfa_models.DeepTFAGuide(self.num_factors,
+                                                    len(subjects), len(tasks),
+                                                    self.num_blocks,
                                                     self.num_times,
                                                     embedding_dim)
 
@@ -72,25 +95,20 @@ class DeepTFA:
                              num_particles=num_particles)
         p = probtorch.Trace()
         self.generative(p, guide=q,
-                        observations=[q for s in range(self.num_subjects)])
+                        observations=[q for b in range(self.num_blocks)])
         return p, q
 
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
               log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES,
-              batch_size=64, use_cuda=True):
+              batch_size=64, use_cuda=True, checkpoint_steps=None,
+              blocks_batch_size=4):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
                             level=log_level)
-        activations = torch.Tensor(self.num_times[0], self.num_voxels[0],
-                                   len(self.voxel_activations))
-        for s in range(self.num_subjects):
-            activations[:, :, s] = self.voxel_activations[s]
+        # S x T x V -> T x S x V
         activations_loader = torch.utils.data.DataLoader(
-            torch.utils.data.TensorDataset(
-                activations,
-                torch.zeros(activations.shape[0])
-            ),
+            utils.TFADataset(self.voxel_activations),
             batch_size=batch_size
         )
         if tfa.CUDA and use_cuda:
@@ -104,130 +122,155 @@ class DeepTFA:
 
         optimizer = torch.optim.Adam(list(variational.parameters()) +\
                                      list(generative.parameters()),
-                                     lr=learning_rate)
+                                     lr=learning_rate, weight_decay=1e-2)
         variational.train()
         generative.train()
 
         free_energies = list(range(num_steps))
-        lls = list(range(num_steps))
+        rv_occurrences = collections.defaultdict(int)
+        measure_occurrences = True
 
         for epoch in range(num_steps):
             start = time.time()
             epoch_free_energies = list(range(len(activations_loader)))
-            epoch_lls = list(range(len(activations_loader)))
 
-            for (batch, (data, _)) in enumerate(activations_loader):
-                activations = [{'Y': Variable(data[:, :, s])}
-                               for s in range(self.num_subjects)]
-                trs = (batch * batch_size, None)
-                trs = (trs[0], trs[0] + activations[0]['Y'].shape[0])
+            for (batch, data) in enumerate(activations_loader):
+                epoch_free_energies[batch] = 0.0
+                block_batches = utils.chunks(list(range(self.num_blocks)),
+                                             n=blocks_batch_size)
+                for block_batch in block_batches:
+                    activations = [{'Y': Variable(data[:, b, :])}
+                                   for b in block_batch]
+                    if tfa.CUDA and use_cuda:
+                        for acts in activations:
+                            acts['Y'] = acts['Y'].cuda()
+                        for b in block_batch:
+                            generative.module.likelihoods[b].voxel_locations =\
+                                self.voxel_locations.cuda()
+                    trs = (batch * batch_size, None)
+                    trs = (trs[0], trs[0] + activations[0]['Y'].shape[0])
 
-                optimizer.zero_grad()
-                q = probtorch.Trace()
-                variational(q, self.generative.embedding, times=trs,
-                            num_particles=num_particles)
-                p = probtorch.Trace()
-                generative(p, times=trs, guide=q, observations=activations)
+                    optimizer.zero_grad()
+                    q = probtorch.Trace()
+                    variational(q, self.generative.embedding, times=trs,
+                                num_particles=num_particles, blocks=block_batch)
+                    p = probtorch.Trace()
+                    generative(p, times=trs, guide=q, observations=activations,
+                               blocks=block_batch)
 
-                epoch_free_energies[batch] =\
-                    tfa.free_energy(q, p, num_particles=num_particles)
-                epoch_lls[batch] =\
-                    tfa.log_likelihood(q, p, num_particles=num_particles)
-                epoch_free_energies[batch].backward()
-                optimizer.step()
+                    def block_rv_weight(node):
+                        result = 1.0
+                        if measure_occurrences:
+                            rv_occurrences[node] += 1
+                        if 'Weights' not in node and 'Y' not in node:
+                            result /= rv_occurrences[node]
+                        return result
+                    free_energy = tfa.hierarchical_free_energy(
+                        q, p,
+                        rv_weight=block_rv_weight,
+                        num_particles=num_particles
+                    )
+
+                    free_energy.backward()
+                    optimizer.step()
+                    epoch_free_energies[batch] += free_energy
+
+                    if tfa.CUDA and use_cuda:
+                        del activations
+                        for b in block_batch:
+                            locs = generative.module.likelihoods[b].voxel_locations
+                            generative.module.likelihoods[b].voxel_locations =\
+                                locs.cpu()
+                            del locs
+                        torch.cuda.empty_cache()
                 if tfa.CUDA and use_cuda:
                     epoch_free_energies[batch] = epoch_free_energies[batch].cpu().data.numpy()
-                    epoch_lls[batch] = epoch_lls[batch].cpu().data.numpy()
-
-
 
             free_energies[epoch] = np.array(epoch_free_energies).sum(0)
             free_energies[epoch] = free_energies[epoch].sum(0)
-            lls[epoch] = np.array(epoch_lls).sum(0)
-            lls[epoch] = lls[epoch].sum(0)
+
+            measure_occurrences = False
 
             end = time.time()
             msg = tfa.EPOCH_MSG % (epoch + 1, (end - start) * 1000, free_energies[epoch])
             logging.info(msg)
+            if checkpoint_steps is not None and epoch % checkpoint_steps == 0:
+                now = datetime.datetime.now()
+                checkpoint_name = now.strftime(tfa.CHECKPOINT_TAG)
+                logging.info('Saving checkpoint...')
+                self.save_state(path='.', tag=checkpoint_name)
 
         if tfa.CUDA and use_cuda:
             variational.cpu()
             generative.cpu()
 
-        return np.vstack([free_energies, lls])
+        now = datetime.datetime.now()
+        checkpoint_name = now.strftime(tfa.CHECKPOINT_TAG)
+        logging.info('Saving checkpoint...')
+        self.save_state(path='.', tag=checkpoint_name)
 
-    def results(self, subject):
+        return np.vstack([free_energies])
+
+    def results(self, block):
         hyperparams = self.variational.hyperparams.state_vardict()
+        subject = self.generative.embedding.subjects[block]
+        task = self.generative.embedding.tasks[block]
 
-        z_f = hyperparams['embedding']['factors']['mu'][subject]
-        z_f_embedded = self.generative.embedding.embedder(z_f)
+        subject_embed = hyperparams['subject']['mu'][subject]
+        subject_embed = subject_embed.expand(
+            self.num_times[block], *subject_embed.shape
+        )
+        task_embed = hyperparams['task']['mu'][task][0:self.num_times[block]]
+        factors_embed = hyperparams['factors']['mu'][subject]
+        weights_embed = torch.cat((subject_embed, task_embed), dim=-1)
 
-        factors = self.generative.embedding.factors_generator(z_f_embedded)
-        factors_shape = (self.num_factors, 4)
-        if len(factors.shape) > 1:
-            factors_shape = (-1,) + factors_shape
-        factors = factors.view(*factors_shape)
-        if len(factors.shape) > 2:
-            centers = factors[:, :, 0:3]
-            log_widths = factors[:, :, 3]
-        else:
-            centers = factors[:, 0:3]
-            log_widths = factors[:, 3]
-
-        z_w = hyperparams['embedding']['weights']['mu'][subject]
-        weights = self.generative.embedding.weights_generator(z_w)
+        weight_params =\
+            self.generative.embedding.weights_generator(weights_embed)
+        weight_mus = weight_params[:, 0]
+        weight_sigmas = self.generative.embedding.softplus(weight_params[:, 1])
+        factor_params =\
+            self.generative.embedding.factors_generator(factors_embed)
+        factor_params = factor_params.view(self.num_factors, 4)
+        factor_centers = factor_params[:, 0:3]
+        factor_log_widths = factor_params[:, 3]
 
         return {
-            'weights': weights[0:self.voxel_activations[subject].shape[0], :],
-            'factors': tfa_models.radial_basis(self.voxel_locations[subject],
-                                               centers.data, log_widths.data),
-            'factor_centers': centers.data,
-            'factor_log_widths': log_widths.data,
+            'weights': {
+                'mu': weight_mus,
+                'sigma': weight_sigmas,
+            },
+            'factors': tfa_models.radial_basis(self.voxel_locations,
+                                               factor_centers.data,
+                                               factor_log_widths.data),
+            'factor_centers': factor_centers.data,
+            'factor_log_widths': factor_log_widths.data,
         }
 
-    def embeddings(self):
+    def plot_factor_centers(self, block, filename=None, show=True,
+                            colormap='Set2'):
+        results = self.results(block)
         hyperparams = self.variational.hyperparams.state_vardict()
+        subject = self.generative.embedding.subjects[block]
 
-        return {
-            'factors': hyperparams['embedding']['factors']['mu'],
-            'weights': hyperparams['embedding']['weights']['mu'],
-        }
+        factor_params = self.generative.embedding.softplus(
+            self.generative.embedding.factors_generator(
+                hyperparams['factors']['sigma'][subject]
+            )
+        )
+        factors_std_dev = factor_params.view(self.num_factors, 4)[:, 0:3]
 
-    def plot_factor_centers(self, subject, filename=None, show=True,
-                            trace=None):
-        hyperparams = self.variational.hyperparams.state_vardict()
-        z_f_std_dev = hyperparams['embedding']['factors']['sigma'][subject]
-
-        if trace:
-            z_f = trace['z_f%d' % subject].value
-            if len(z_f.shape) > 1:
-                if z_f.shape[0] > 1:
-                    z_f_std_dev = z_f.std(0)
-                z_f = z_f.mean(0)
-        else:
-            z_f = hyperparams['embedding']['factors']['mu'][subject]
-
-        z_f_embedded = self.generative.embedding.embedder(z_f)
-
-        factors = self.generative.embedding.factors_generator(z_f_embedded)
-        factors_shape = (self.num_factors, 4)
-        if len(factors.shape) > 1:
-            factors_shape = (-1,) + factors_shape
-        factors = factors.view(*factors_shape)
-        if len(factors.shape) > 2:
-            factor_centers = factors[:, :, 0:3]
-            factor_log_widths = factors[:, :, 3]
-        else:
-            factor_centers = factors[:, 0:3]
-            factor_log_widths = factors[:, 3]
-
-        factor_uncertainties = z_f_std_dev.norm().expand(self.num_factors, 1)
+        _, brain_center_std_dev = utils.brain_centroid(self.voxel_locations)
+        brain_center_std_dev = brain_center_std_dev.expand(
+            self.num_factors, 3
+        )
 
         plot = niplot.plot_connectome(
             np.eye(self.num_factors),
-            factor_centers.data.numpy(),
-            node_color=utils.uncertainty_palette(factor_uncertainties.data),
-            node_size=np.exp(factor_log_widths.data.numpy() - np.log(2))
+            results['factor_centers'].numpy(),
+            node_color=utils.uncertainty_palette(factors_std_dev.data,
+                                                 scalars=brain_center_std_dev,
+                                                 colormap=colormap),
+            node_size=np.exp(results['factor_log_widths'].numpy() - np.log(2))
         )
 
         if filename is not None:
@@ -237,11 +280,11 @@ class DeepTFA:
 
         return plot
 
-    def plot_original_brain(self, subject=None, filename=None, show=True,
+    def plot_original_brain(self, block=None, filename=None, show=True,
                             plot_abs=False, t=0):
-        if subject is None:
-            subject = np.random.choice(self.num_subjects, 1)[0]
-        image = nilearn.image.index_img(self._images[subject], t)
+        if block is None:
+            block = np.random.choice(self.num_blocks, 1)[0]
+        image = nilearn.image.index_img(self._images[block], t)
         plot = niplot.plot_glass_brain(image, plot_abs=plot_abs)
 
         if filename is not None:
@@ -251,25 +294,25 @@ class DeepTFA:
 
         return plot
 
-    def plot_reconstruction(self, subject=None, filename=None, show=True,
+    def plot_reconstruction(self, block=None, filename=None, show=True,
                             plot_abs=False, t=0):
-        if subject is None:
-            subject = np.random.choice(self.num_subjects, 1)[0]
+        if block is None:
+            block = np.random.choice(self.num_blocks, 1)[0]
 
-        results = self.results(subject)
+        results = self.results(block)
 
         reconstruction = results['weights'].data @ results['factors']
 
         image = utils.cmu2nii(reconstruction.numpy(),
-                              self.voxel_locations[subject].numpy(),
-                              self._templates[subject])
+                              self.voxel_locations.numpy(),
+                              self._templates[block])
         image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(image_slice, plot_abs=plot_abs)
 
         logging.info(
             'Reconstruction Error (Frobenius Norm): %.8e',
             np.linalg.norm(
-                (reconstruction - self.voxel_activations[subject]).numpy()
+                (reconstruction - self.voxel_activations[block]).numpy()
             )
         )
 
@@ -280,38 +323,159 @@ class DeepTFA:
 
         return plot
 
-    def scatter_factor_embedding(self, filename=None, show=True):
+    def scatter_factor_embedding(self, labeler=None, filename=None, show=True,
+                                 xlims=None, ylims=None, figsize=(3.75, 2.75),
+                                 colormap='Set1'):
         hyperparams = self.variational.hyperparams.state_vardict()
-        z_f = hyperparams['embedding']['factors']['mu'].data
+        z_f = hyperparams['factors']['mu'].data
 
-        tasks = self._tasks
-        if tasks is None or len(tasks) == 0:
-            tasks = list(range(self.num_subjects))
-        palette = dict(zip(tasks, utils.compose_palette(len(tasks))))
-        subject_colors = np.array([palette[task] for task in tasks])
+        if labeler is None:
+            labeler = lambda b: b.default_label()
+        labels = [labeler(b) for b in self._blocks]
+        all_labels = np.unique([l for l in labels if l is not None])
+        palette = dict(zip(all_labels,
+                           utils.compose_palette(len(all_labels),
+                                                 colormap=colormap)))
 
-        plt.scatter(x=z_f[:, 0], y=z_f[:, 1], c=subject_colors)
+        subjects = list(set([block.subject for block in self._blocks]))
+        z_fs = [z_f[subjects.index(b.subject)] for b in self._blocks
+                if labeler(b) is not None]
+        z_fs = torch.stack(z_fs)
+        block_colors = [palette[labeler(b)] for b in self._blocks
+                        if labeler(b) is not None]
+
+        fig = plt.figure(1, figsize=figsize)
+        ax = fig.add_subplot(111, facecolor='white')
+        fig.axes[0].set_xlabel('$z^F_1$')
+        if xlims is not None:
+            fig.axes[0].set_xlim(*xlims)
+        fig.axes[0].set_ylabel('$z^F_2$')
+        if ylims is not None:
+            fig.axes[0].set_ylim(*ylims)
+        fig.axes[0].set_title('Factor Embeddings')
+        ax.scatter(x=z_fs[:, 0], y=z_fs[:, 1], c=block_colors)
         utils.palette_legend(list(palette.keys()), list(palette.values()))
 
         if filename is not None:
-            plt.savefig(filename)
+            fig.savefig(filename)
         if show:
-            plt.show()
+            fig.show()
 
-    def scatter_weights_embedding(self, t=0, filename=None, show=True):
+    def scatter_subject_embedding(self, labeler=None, filename=None, show=True,
+                                  xlims=None, ylims=None, figsize=(3.75, 2.75),
+                                  colormap='Set1'):
         hyperparams = self.variational.hyperparams.state_vardict()
-        z_f = hyperparams['embedding']['weights']['mu'][:, t, :].data
+        z_p = hyperparams['subject']['mu'].data
 
-        tasks = self._tasks
-        if tasks is None or len(tasks) == 0:
-            tasks = list(range(self.num_subjects))
-        palette = dict(zip(tasks, utils.compose_palette(len(tasks))))
-        subject_colors = np.array([palette[task] for task in tasks])
+        if labeler is None:
+            labeler = lambda b: b.default_label()
+        labels = [labeler(b) for b in self._blocks]
+        all_labels = np.unique([l for l in labels if l is not None])
+        palette = dict(zip(all_labels,
+                           utils.compose_palette(len(all_labels),
+                                                 colormap=colormap)))
 
-        plt.scatter(x=z_f[:, 0], y=z_f[:, 1], c=subject_colors)
+        subjects = list(set([block.subject for block in self._blocks]))
+        z_ps = torch.stack(
+            [z_p[subjects.index(b.subject)] for b in self._blocks
+             if labeler(b) is not None]
+        )
+        block_colors = [palette[labeler(b)] for b in self._blocks
+                        if labeler(b) is not None]
+
+        fig = plt.figure(1, figsize=figsize)
+        ax = fig.add_subplot(111, facecolor='white')
+        fig.axes[0].set_xlabel('$z^P_1$')
+        if xlims is not None:
+            fig.axes[0].set_xlim(*xlims)
+        fig.axes[0].set_ylabel('$z^P_2$')
+        if ylims is not None:
+            fig.axes[0].set_ylim(*ylims)
+        fig.axes[0].set_title('Participant Embeddings')
+        ax.scatter(x=z_ps[:, 0], y=z_ps[:, 1], c=block_colors)
         utils.palette_legend(list(palette.keys()), list(palette.values()))
 
         if filename is not None:
-            plt.savefig(filename)
+            fig.savefig(filename)
         if show:
-            plt.show()
+            fig.show()
+
+    def scatter_task_embedding(self, t=None, labeler=None, filename=None,
+                               show=True, xlims=None, ylims=None,
+                               figsize=(3.75, 2.75),
+                               colormap='Set1'):
+        hyperparams = self.variational.hyperparams.state_vardict()
+        z_s = hyperparams['task']['mu'].data
+        if t is not None:
+            z_s = z_s[t]
+        else:
+            z_s = z_s.mean(1)
+
+        if labeler is None:
+            labeler = lambda b: b.default_label()
+        labels = [labeler(b) for b in self._blocks]
+        all_labels = np.unique([l for l in labels if l is not None])
+        palette = dict(zip(all_labels,
+                           utils.compose_palette(len(all_labels),
+                                                 colormap=colormap)))
+
+        tasks = list(set([block.task for block in self._blocks]))
+        z_ss = torch.stack(
+            [z_s[tasks.index(b.task)] for b in self._blocks
+             if labeler(b) is not None]
+        )
+        block_colors = [palette[labeler(b)] for b in self._blocks
+                        if labeler(b) is not None]
+
+        fig = plt.figure(1, figsize=figsize)
+        ax = fig.add_subplot(111, facecolor='white')
+        fig.axes[0].set_xlabel('$z^S_1$')
+        if xlims is not None:
+            fig.axes[0].set_xlim(*xlims)
+        fig.axes[0].set_ylabel('$z^S_2$')
+        if ylims is not None:
+            fig.axes[0].set_ylim(*ylims)
+        fig.axes[0].set_title('Stimulus Embeddings')
+        ax.scatter(x=z_ss[:, 0], y=z_ss[:, 1], c=block_colors)
+        utils.palette_legend(list(palette.keys()), list(palette.values()))
+
+        if filename is not None:
+            fig.savefig(filename)
+        if show:
+            fig.show()
+
+    def common_name(self):
+        return os.path.commonprefix([os.path.basename(b.filename)
+                                     for b in self._blocks])
+
+    def save_state(self, path='.', tag=''):
+        name = self.common_name() + tag
+        variational_state = self.variational.state_dict()
+        torch.save(variational_state,
+                   path + '/' + name + '.dtfa_guide')
+        torch.save(self.generative.state_dict(),
+                   path + '/' + name + '.dtfa_model')
+
+    def save(self, path='.'):
+        name = self.common_name()
+        torch.save(self.variational.state_dict(),
+                   path + '/' + name + '.dtfa_guide')
+        torch.save(self.generative.state_dict(),
+                   path + '/' + name + '.dtfa_model')
+        with open(path + '/' + name + '.dtfa', 'wb') as pickle_file:
+            pickle.dump(self, pickle_file)
+
+    def load_state(self, basename):
+        model_state = torch.load(basename + '.dtfa_model')
+        self.generative.load_state_dict(model_state)
+
+        guide_state = torch.load(basename + '.dtfa_guide')
+        self.variational.load_state_dict(guide_state)
+
+    @classmethod
+    def load(cls, basename):
+        with open(basename + '.dtfa', 'rb') as pickle_file:
+            dtfa = pickle.load(pickle_file)
+        dtfa.load_state(basename)
+
+        return dtfa

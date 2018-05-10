@@ -35,10 +35,10 @@ def radial_basis(locations, centers, log_widths):
     # S x K x 3 -> S x K x 1 x 3
     centers = centers.unsqueeze(len(centers.shape) - 1)
     # S x K x V x 3
-    delta2s = (locations - centers)**2
+    delta2s = ((locations - centers)**2).sum(len(centers.shape) - 1)
     # S x K  -> S x K x 1
     log_widths = log_widths.unsqueeze(len(log_widths.shape))
-    return torch.exp(-delta2s.sum(len(delta2s.shape) - 1) / torch.exp(log_widths))
+    return torch.exp(-delta2s / torch.exp(log_widths))
 
 class Model(nn.Module):
     def __init__(self):
@@ -55,7 +55,11 @@ class HyperParams(Model):
         utils.register_vardict(vs, self, self._guide)
 
     def state_vardict(self):
-        return utils.vardict(self.state_dict(keep_vars=True))
+        result = utils.vardict(self.state_dict(keep_vars=True))
+        for k, v in result.items():
+            if not isinstance(v, Variable):
+                result[k] = Variable(v)
+        return result
 
 class GuidePrior(Model):
     def __init__(self):
@@ -104,9 +108,9 @@ class TFAGuideHyperParams(HyperParams):
         return utils.vardict(super(self.__class__, self).forward())
 
 class TFAGuidePrior(GuidePrior):
-    def __init__(self, subject=0):
+    def __init__(self, block=0):
         super(TFAGuidePrior, self).__init__()
-        self.subject = subject
+        self.block = block
 
     def forward(self, trace, params, times=None, num_particles=NUM_PARTICLES):
         if times is None:
@@ -127,24 +131,24 @@ class TFAGuidePrior(GuidePrior):
 
         weights = trace.normal(weight_params['mu'],
                                weight_params['sigma'],
-                               name='Weights' + str(self.subject))
+                               name='Weights' + str(self.block))
 
         centers = trace.normal(params['factor_centers']['mu'],
                                params['factor_centers']['sigma'],
-                               name='FactorCenters' + str(self.subject))
+                               name='FactorCenters' + str(self.block))
         log_widths = trace.normal(params['factor_log_widths']['mu'],
                                   params['factor_log_widths']['sigma'],
-                                  name='FactorLogWidths' + str(self.subject))
+                                  name='FactorLogWidths' + str(self.block))
         return weights, centers, log_widths
 
 class TFAGuide(nn.Module):
     """Variational guide for topographic factor analysis"""
-    def __init__(self, means, num_times, num_factors=NUM_FACTORS, subject=0):
+    def __init__(self, means, num_times, num_factors=NUM_FACTORS, block=0):
         super(self.__class__, self).__init__()
-        self.subject = subject
+        self.block = block
 
         self.hyperparams = TFAGuideHyperParams(means, num_times, num_factors)
-        self._prior = TFAGuidePrior(subject=subject)
+        self._prior = TFAGuidePrior(block=block)
 
     def forward(self, trace, times=None, num_particles=NUM_PARTICLES):
         params = self.hyperparams.state_vardict()
@@ -176,10 +180,10 @@ class TFAGenerativeHyperParams(HyperParams):
         return utils.vardict(super(self.__class__, self).forward())
 
 class TFAGenerativePrior(GenerativePrior):
-    def __init__(self, num_times, subject=0):
+    def __init__(self, num_times, block=0):
         super(self.__class__, self).__init__()
         self._num_times = num_times
-        self.subject = subject
+        self.block = block
 
     def forward(self, trace, params, times=None, guide=probtorch.Trace()):
         if times is None:
@@ -192,28 +196,32 @@ class TFAGenerativePrior(GenerativePrior):
 
         weights = trace.normal(weight_params['mu'],
                                weight_params['sigma'],
-                               value=guide['Weights' + str(self.subject)],
-                               name='Weights' + str(self.subject))
+                               value=guide['Weights' + str(self.block)],
+                               name='Weights' + str(self.block))
 
         factor_centers = trace.normal(params['factor_centers']['mu'],
                                       params['factor_centers']['sigma'],
-                                      value=guide['FactorCenters' + str(self.subject)],
-                                      name='FactorCenters' + str(self.subject))
+                                      value=guide['FactorCenters' + str(self.block)],
+                                      name='FactorCenters' + str(self.block))
         factor_log_widths = trace.normal(params['factor_log_widths']['mu'],
                                          params['factor_log_widths']['sigma'],
-                                         value=guide['FactorLogWidths' + str(self.subject)],
-                                         name='FactorLogWidths' + str(self.subject))
+                                         value=guide['FactorLogWidths' + str(self.block)],
+                                         name='FactorLogWidths' + str(self.block))
 
         return weights, factor_centers, factor_log_widths
 
 class TFAGenerativeLikelihood(GenerativeLikelihood):
-    def __init__(self, locations, num_times, voxel_noise=VOXEL_NOISE, subject=0):
+    def __init__(self, locations, num_times, voxel_noise=VOXEL_NOISE, block=0,
+                 register_locations=True):
         super(self.__class__, self).__init__()
 
-        self.register_buffer('voxel_locations', Variable(locations))
+        if register_locations:
+            self.register_buffer('voxel_locations', locations)
+        else:
+            self.voxel_locations = locations
         self._num_times = num_times
         self._voxel_noise = voxel_noise
-        self.subject = subject
+        self.block = block
 
     def forward(self, trace, weights, centers, log_widths, times=None,
                 observations=collections.defaultdict(), voxel_noise=None):
@@ -222,37 +230,35 @@ class TFAGenerativeLikelihood(GenerativeLikelihood):
         if voxel_noise is None:
             voxel_noise = self._voxel_noise
 
-        factors = radial_basis(self.voxel_locations, centers, log_widths)
-        if len(weights.shape) > 2:
-            weights = weights[:, times[0]:times[1], :]
-        else:
-            weights = weights[times[0]:times[1], :]
+        factors = radial_basis(Variable(self.voxel_locations), centers,
+                               log_widths)
 
         activations = trace.normal(weights @ factors,
                                    self._voxel_noise, value=observations['Y'],
-                                   name='Y' + str(self.subject))
+                                   name='Y' + str(self.block))
         return activations
 
 class TFAModel(nn.Module):
     """Generative model for topographic factor analysis"""
     def __init__(self, brain_center, brain_center_std_dev, num_times,
                  locations, num_factors=NUM_FACTORS, voxel_noise=VOXEL_NOISE,
-                 subject=0):
+                 block=0, register_locations=True):
         super(self.__class__, self).__init__()
 
         self._num_times = num_times
         self._num_factors = num_factors
         self._locations = locations
-        self.subject = subject
+        self.block = block
 
         self._hyperparams = TFAGenerativeHyperParams(brain_center,
                                                      brain_center_std_dev,
                                                      self._num_factors)
-        self._prior = TFAGenerativePrior(self._num_times, subject=self.subject)
+        self._prior = TFAGenerativePrior(self._num_times, block=self.block)
         self._likelihood = TFAGenerativeLikelihood(self._locations,
                                                    self._num_times,
                                                    voxel_noise,
-                                                   subject=self.subject)
+                                                   block=self.block,
+                                                   register_locations=register_locations)
 
     def forward(self, trace, times=None, guide=probtorch.Trace(),
                 observations=collections.defaultdict()):
