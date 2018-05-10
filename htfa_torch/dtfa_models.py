@@ -148,13 +148,15 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
             },
             'subject': {
                 'mu': torch.zeros(self.num_subjects, self.embedding_dim),
-                'sigma': torch.ones(self.num_subjects, self.embedding_dim),
+                'sigma': torch.ones(self.num_subjects, self.embedding_dim) *\
+                         tfa_models.SOURCE_WEIGHT_STD_DEV,
             },
             'task': {
                 'mu': torch.zeros(self.num_tasks, self.num_times,
                                   self.embedding_dim),
                 'sigma': torch.ones(self.num_tasks, self.num_times,
-                                    self.embedding_dim),
+                                    self.embedding_dim) *\
+                         tfa_models.SOURCE_WEIGHT_STD_DEV,
             }
         })
 
