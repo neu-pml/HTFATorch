@@ -249,7 +249,10 @@ class DeepTFA:
         }
 
     def plot_factor_centers(self, block, filename=None, show=True,
-                            colormap='Set2'):
+                            colormap='cold_white_hot', t=None, labeler=None,
+                            uncertainty_opacity=False):
+        if labeler is None:
+            labeler = lambda b: b.task
         results = self.results(block)
         hyperparams = self.variational.hyperparams.state_vardict()
         subject = self.generative.embedding.subjects[block]
@@ -265,14 +268,28 @@ class DeepTFA:
         brain_center_std_dev = brain_center_std_dev.expand(
             self.num_factors, 3
         )
+        weights = results['weights']['mu']
+        if t is not None:
+            weights = weights[t]
+        else:
+            weights = weights.mean(0)
+
+        if uncertainty_opacity:
+            alphas = utils.uncertainty_alphas(factors_std_dev.data,
+                                              scalars=brain_center_std_dev)
+        else:
+            alphas = utils.intensity_alphas(weights.data)
+        palette = utils.scalar_map_palette(weights.data.numpy(), alphas,
+                                           colormap)
 
         plot = niplot.plot_connectome(
             np.eye(self.num_factors),
             results['factor_centers'].numpy(),
-            node_color=utils.uncertainty_palette(factors_std_dev.data,
-                                                 scalars=brain_center_std_dev,
-                                                 colormap=colormap),
-            node_size=np.exp(results['factor_log_widths'].numpy() - np.log(2))
+            node_color=palette,
+            node_size=torch.exp(results['factor_log_widths']).numpy(),
+            title="Block %d (Participant %d, Run %d, Stimulus %s)" %\
+                  (block, self._blocks[block].subject, self._blocks[block].run,
+                   labeler(self._blocks[block]))
         )
 
         if filename is not None:
