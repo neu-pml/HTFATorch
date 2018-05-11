@@ -15,6 +15,7 @@ try:
         matplotlib.use('TkAgg')
 finally:
     import matplotlib.cm as cm
+    import matplotlib.colors
     import matplotlib.patches as mpatches
     import matplotlib.pyplot as plt
 import numpy as np
@@ -235,18 +236,45 @@ def gaussian_populator(*dims):
     }
 
 def uncertainty_alphas(uncertainties, scalars=None):
-    if scalars is not None:
-        uncertainties = uncertainties / scalars
-    if len(uncertainties.shape) > 1:
-        uncertainties = uncertainties.norm(p=2, dim=1)
-    return (1.0 - torch.sigmoid(torch.log(uncertainties))).numpy()
+    return np.float64(1.0) - intensity_alphas(uncertainties, scalars)
 
-def compose_palette(length, alphas=None, colormap='Set2'):
-    scalar_map = cm.ScalarMappable(None, colormap)
-    colors = scalar_map.to_rgba(np.linspace(0, 1, length), norm=False)
+def normalize_tensors(seq, absval=False, percentiles=None):
+    flat = torch.cat([t.view(-1) for t in seq], dim=0)
+    if absval:
+        flat = torch.abs(flat)
+    flat = flat.numpy()
+    if percentiles is not None:
+        left, right = percentiles
+        result = matplotlib.colors.Normalize(np.percentile(flat, left),
+                                             np.percentile(flat, right),
+                                             clip=True)
+    else:
+        result = matplotlib.colors.Normalize(clip=True)
+        result.autoscale_None(flat)
+
+    return result
+
+def intensity_alphas(intensities, scalars=None, normalizer=None):
+    if scalars is not None:
+        intensities = intensities / scalars
+    if len(intensities.shape) > 1:
+        intensities = intensities.norm(p=2, dim=1)
+    if normalizer is None:
+        normalizer = matplotlib.colors.Normalize()
+    result = normalizer(intensities.numpy())
+    if normalizer.clip:
+        result = np.clip(result, 0.0, 1.0)
+    return result
+
+def scalar_map_palette(scalars, alphas=None, colormap='Set2', normalizer=None):
+    scalar_map = cm.ScalarMappable(normalizer, colormap)
+    colors = scalar_map.to_rgba(scalars, norm=True)
     if alphas is not None:
         colors[:, 3] = alphas
     return colors
+
+def compose_palette(length, alphas=None, colormap='Set2'):
+    return scalar_map_palette(np.linspace(0, 1, length), alphas, colormap)
 
 def uncertainty_palette(uncertainties, scalars=None, colormap='Set2'):
     alphas = uncertainty_alphas(uncertainties, scalars=scalars)

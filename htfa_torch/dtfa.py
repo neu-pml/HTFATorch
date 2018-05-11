@@ -54,6 +54,8 @@ class DeepTFA:
         self._templates = [block.filename for block in self._blocks]
         self._tasks = [block.task for block in self._blocks]
 
+        self.weight_normalizers = None
+
         # Pull out relevant dimensions: the number of time instants and the
         # number of voxels in each timewise "slice"
         self.num_times = [acts.shape[0] for acts in self.voxel_activations]
@@ -226,6 +228,8 @@ class DeepTFA:
 
         weight_params =\
             self.generative.embedding.weights_generator(weights_embed)
+        weight_params = weight_params.view(weight_params.shape[0], 2,
+                                           self.num_factors)
         weight_mus = weight_params[:, 0]
         weight_sigmas = self.generative.embedding.softplus(weight_params[:, 1])
         factor_params =\
@@ -246,8 +250,31 @@ class DeepTFA:
             'factor_log_widths': factor_log_widths.data,
         }
 
+    def normalize_weights(self):
+        def weights_generator(run, subject):
+            run_blocks = [b for b in range(len(self._blocks))
+                          if self._blocks[b].run == run and
+                             self._blocks[b].subject == subject]
+            for rb in run_blocks:
+                weights = self.results(rb)['weights']['mu'].data
+                yield weights.contiguous().view(-1)
+        runs = list(set([(b.run, b.subject) for b in self._blocks]))
+        runs.sort(key=lambda p: p[0])
+        self.weight_normalizers = runs.copy()
+        for (i, (run, subject)) in enumerate(runs):
+            weights = list(weights_generator(run, subject))
+            idw = utils.normalize_tensors(weights, percentiles=(10, 90))
+            absw = utils.normalize_tensors(weights, absval=True,
+                                           percentiles=(30, 70))
+            self.weight_normalizers[i] = (idw, absw)
+
+        return self.weight_normalizers
+
     def plot_factor_centers(self, block, filename=None, show=True,
-                            colormap='Set2'):
+                            colormap='cold_white_hot', t=None, labeler=None,
+                            uncertainty_opacity=False):
+        if labeler is None:
+            labeler = lambda b: b.task
         results = self.results(block)
         hyperparams = self.variational.hyperparams.state_vardict()
         subject = self.generative.embedding.subjects[block]
@@ -263,14 +290,43 @@ class DeepTFA:
         brain_center_std_dev = brain_center_std_dev.expand(
             self.num_factors, 3
         )
+        weights = results['weights']['mu']
+        if t is not None:
+            weights = weights[t]
+        else:
+            weights = weights.mean(0)
+
+        if self.weight_normalizers is None:
+            self.normalize_weights()
+        runs = list(set([(b.run, b.subject) for b in self._blocks]))
+        subject_run = (self._blocks[block].run, self._blocks[block].subject)
+        idnorm, absnorm = self.weight_normalizers[runs.index(subject_run)]
+
+        if uncertainty_opacity:
+            alphas = utils.uncertainty_alphas(factors_std_dev.data,
+                                              scalars=brain_center_std_dev)
+        else:
+            alphas = utils.intensity_alphas(torch.abs(weights.data),
+                                            normalizer=absnorm)
+
+        palette = utils.scalar_map_palette(weights.data.numpy(), alphas,
+                                           colormap, normalizer=idnorm)
+
+        centers_palette = utils.scalar_map_palette(weights.data.numpy(), None,
+                                                   colormap, normalizer=idnorm)
+        centers_sizes = np.repeat([50], self.num_factors)
+        sizes = torch.exp(results['factor_log_widths']).numpy()
+
+        centers = results['factor_centers'].numpy()
 
         plot = niplot.plot_connectome(
-            np.eye(self.num_factors),
-            results['factor_centers'].numpy(),
-            node_color=utils.uncertainty_palette(factors_std_dev.data,
-                                                 scalars=brain_center_std_dev,
-                                                 colormap=colormap),
-            node_size=np.exp(results['factor_log_widths'].numpy() - np.log(2))
+            np.eye(self.num_factors * 2),
+            np.vstack([centers, centers]),
+            node_color=np.vstack([palette, centers_palette]),
+            node_size=np.vstack([sizes, centers_sizes]),
+            title="Block %d (Participant %d, Run %d, Stimulus: %s)" %\
+                  (block, self._blocks[block].subject, self._blocks[block].run,
+                   labeler(self._blocks[block]))
         )
 
         if filename is not None:
@@ -281,11 +337,21 @@ class DeepTFA:
         return plot
 
     def plot_original_brain(self, block=None, filename=None, show=True,
-                            plot_abs=False, t=0):
+                            plot_abs=False, t=0, labeler=None):
+        if labeler is None:
+            labeler = lambda b: b.task
         if block is None:
             block = np.random.choice(self.num_blocks, 1)[0]
-        image = nilearn.image.index_img(self._images[block], t)
-        plot = niplot.plot_glass_brain(image, plot_abs=plot_abs)
+        image = utils.cmu2nii(self.voxel_activations[block].numpy(),
+                              self.voxel_locations.numpy(),
+                              self._templates[block])
+        image_slice = nilearn.image.index_img(image, t)
+        plot = niplot.plot_glass_brain(
+            image_slice, plot_abs=plot_abs,
+            title="Block %d (Participant %d, Run %d, Stimulus: %s)" %\
+                  (block, self._blocks[block].subject, self._blocks[block].run,
+                   labeler(self._blocks[block]))
+        )
 
         if filename is not None:
             plot.savefig(filename)
@@ -295,25 +361,33 @@ class DeepTFA:
         return plot
 
     def plot_reconstruction(self, block=None, filename=None, show=True,
-                            plot_abs=False, t=0):
+                            plot_abs=False, t=0, labeler=None):
+        if labeler is None:
+            labeler = lambda b: b.task
         if block is None:
             block = np.random.choice(self.num_blocks, 1)[0]
 
         results = self.results(block)
 
-        reconstruction = results['weights'].data @ results['factors']
+        reconstruction = results['weights']['mu'].data @ results['factors']
 
         image = utils.cmu2nii(reconstruction.numpy(),
                               self.voxel_locations.numpy(),
                               self._templates[block])
         image_slice = nilearn.image.index_img(image, t)
-        plot = niplot.plot_glass_brain(image_slice, plot_abs=plot_abs)
+        plot = niplot.plot_glass_brain(
+            image_slice, plot_abs=plot_abs,
+            title="Block %d (Participant %d, Run %d, Stimulus: %s)" %\
+                  (block, self._blocks[block].subject, self._blocks[block].run,
+                   labeler(self._blocks[block]))
+        )
 
         logging.info(
-            'Reconstruction Error (Frobenius Norm): %.8e',
+            'Reconstruction Error (Frobenius Norm): %.8e out of %.8e',
             np.linalg.norm(
-                (reconstruction - self.voxel_activations[block]).numpy()
-            )
+                (self.voxel_activations[block] - reconstruction).numpy()
+            ),
+            np.linalg.norm(self.voxel_activations[block].numpy())
         )
 
         if filename is not None:
