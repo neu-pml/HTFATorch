@@ -52,8 +52,11 @@ class HierarchicalTopographicFactorAnalysis:
         self.num_blocks = len(self._blocks)
         self.voxel_activations = [block.activations for block in self._blocks]
         self.voxel_locations = self._blocks[0].locations
+        self.task_list = []
         for block in self._blocks:
             block.unload_locations()
+            self.task_list.append(block.task)
+        self.task_list = np.unique(self.task_list)
         self._templates = [block.filename for block in self._blocks]
 
         # Pull out relevant dimensions: the number of time instants and the
@@ -387,30 +390,57 @@ class HierarchicalTopographicFactorAnalysis:
 
 
 
-    def decoding_accuracy(self):
+    def decoding_accuracy(self,restvtask=False):
         """
         :return: accuracy: a dict containing decoding accuracies for each task [activity,isfc,mixed]
         """
         W = self.enc.hyperparams.block__weights__mu.data
-        keys = ['rest','task']
-        group = {key: [] for key in keys}
-        accuracy = {key:[] for key in keys}
-        isfc_accuracy = {key:[] for key in keys}
-        mixed_accuracy = {key:[] for key in keys}
-        for n in range(len(self._blocks)):
-            if self._blocks[n].task == 'rest':
-                group['rest'].append(W[n,:,:])
-            else:
-                group['task'].append(W[n,:,:])
-        group['rest'] = np.rollaxis(np.dstack(group['rest']),-1)
-        group['task'] = np.rollaxis(np.dstack(group['task']),-1)
+        if restvtask:
+            keys = ['rest','task']
+            group = {key: [] for key in keys}
+            accuracy = {key:[] for key in keys}
 
-        for key in keys:
-            G1 = group[key][:int(group[key].shape[0]/2),:,:]
-            G2 = group[key][int(group[key].shape[0]/2):,:,:]
-            accuracy[key].append(utils.get_decoding_accuracy(G1,G2,5))
-            accuracy[key].append(utils.get_isfc_decoding_accuracy(G1,G2,5))
-            accuracy[key].append(utils.get_mixed_decoding_accuracy(G1,G2,5))
+            for key in keys:
+                for n in range(self.num_blocks):
+                    if key in self._blocks[n].task:
+                        group[key].append(W[n, :, :])
+                    else:
+                        group['task'].append(W[n,:,:])
+                group[key] = np.rollaxis(np.dstack(group[key]), -1)
+                if group[key].shape[0] < 2:
+                    raise ValueError('not enough subjects for the task: ' + key)
+                else:
+                    G1 = group[key][:int(group[key].shape[0] / 2), :, :]
+                    G2 = group[key][int(group[key].shape[0] / 2):, :, :]
+                    accuracy[key].append(utils.get_decoding_accuracy(G1, G2, 5))
+                    accuracy[key].append(utils.get_isfc_decoding_accuracy(G1, G2, 5))
+                    accuracy[key].append(utils.get_mixed_decoding_accuracy(G1, G2, 5))
+        else:
+            keys = self.task_list
+            group = {key: [] for key in keys}
+            accuracy = {key: [] for key in keys}
+            for key in keys:
+                for n in range(self.num_blocks):
+                    if key == self._blocks[n].task:
+                        group[key].append(W[n, :, :])
+                group[key] = np.rollaxis(np.dstack(group[key]), -1)
+                if group[key].shape[0] < 2:
+                    raise ValueError('not enough subjects for the task: ' + key)
+
+                else:
+                    G1 = group[key][:int(group[key].shape[0] / 2), :, :]
+                    G2 = group[key][int(group[key].shape[0] / 2):, :, :]
+                    accuracy[key].append(utils.get_decoding_accuracy(G1, G2, 5))
+                    accuracy[key].append(utils.get_isfc_decoding_accuracy(G1, G2, 5))
+                    accuracy[key].append(utils.get_mixed_decoding_accuracy(G1, G2, 5))
+
+        # for n in range(len(self._blocks)):
+        #     if self._blocks[n].task == 'rest':
+        #         group['rest'].append(W[n,:,:])
+        #     else:
+        #         group['task'].append(W[n,:,:])
+        # group['rest'] = np.rollaxis(np.dstack(group['rest']),-1)
+        # group['task'] = np.rollaxis(np.dstack(group['task']),-1)
 
         return accuracy
 
