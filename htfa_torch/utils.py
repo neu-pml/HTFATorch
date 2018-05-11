@@ -20,6 +20,7 @@ finally:
     import matplotlib.pyplot as plt
 import numpy as np
 import scipy.io as sio
+import scipy.spatial.distance as sd
 import scipy.special as spspecial
 import scipy.stats as stats
 from sklearn.cluster import KMeans
@@ -189,6 +190,141 @@ def load_dataset(data_file, mask=None, zscore=True):
     del dataset
 
     return activations, locations, name, template
+
+def generate_group_activities(group_data,window_size = 10):
+    """
+    :param group_data: n_subjects x n_times x n_voxels (or factors) activation data for all subjects
+    :return: activation_vectors: times (depending on window size) x n_voxels (or factors) vectors of mean activation
+    """
+    n_times = group_data.shape[1]
+    n_nodes = group_data.shape[2]
+    n_windows = n_times-window_size+1
+    activation_vectors = np.empty(shape = (n_windows,n_nodes))
+    for w in range(0,n_windows):
+        window = group_data[:,w:w+window_size,:]
+        activation_vectors[w,:] = window.numpy().mean(axis=(0,1))
+
+    return activation_vectors
+
+def get_correlation_matrix(pattern_G1,pattern_G2):
+
+    activity_correlation_matrix = np.empty((pattern_G1.shape[0], pattern_G2.shape[0]))
+    for i in range(pattern_G1.shape[0]):
+        for j in range(pattern_G2.shape[0]):
+            activity_correlation_matrix[i, j] = stats.pearsonr(pattern_G1[i], pattern_G2[j])[0]
+
+    return activity_correlation_matrix
+
+def get_decoding_accuracy(G1,G2,window_size=5):
+    """
+    :param G1: Split Half Group G1 (group_size x n_times x n_nodes)
+    :param G2: Split Half Group G2 (group_size x n_times x n_nodes
+    :return: time labels of G1 as predicted by max corr with G2
+    """
+    activity_pattern_G1 = generate_group_activities(torch.Tensor(G1), window_size=window_size)
+    activity_pattern_G2 = generate_group_activities(torch.Tensor(G2), window_size=window_size)
+    activity_correlation_matrix = get_correlation_matrix(activity_pattern_G1,activity_pattern_G2)
+    time_labels = np.argmax(activity_correlation_matrix, axis=1)
+
+    decoding_accuracy = np.sum(time_labels == np.arange(activity_pattern_G1.shape[0]))
+    decoding_accuracy = decoding_accuracy/activity_pattern_G1.shape[0]
+
+    return decoding_accuracy
+
+def get_isfc_decoding_accuracy(G1,G2,window_size=5):
+    """
+    :param G1: Split Half Group G1 (group_size x n_times x n_nodes)
+    :param G2: Split Half Group G2 (group_size x n_times x n_nodes
+    :return: time labels of G1 as predicted by max corr with G2
+    """
+    isfc_pattern_G1 = dynamic_ISFC(G1, windowsize=window_size)
+    isfc_pattern_G2 = dynamic_ISFC(G2, windowsize = window_size)
+    activity_correlation_matrix = get_correlation_matrix(isfc_pattern_G1,isfc_pattern_G2)
+    time_labels = np.argmax(activity_correlation_matrix, axis=1)
+
+    decoding_accuracy = np.sum(time_labels == np.arange(isfc_pattern_G1.shape[0]))
+    decoding_accuracy = decoding_accuracy/isfc_pattern_G1.shape[0]
+
+    return decoding_accuracy
+
+
+def get_mixed_decoding_accuracy(G1,G2,window_size=5,mixing_prop=0.5):
+    """
+    :param G1: Split Half Group G1 (group_size x n_times x n_nodes)
+    :param G2: Split Half Group G2 (group_size x n_times x n_nodes
+    :return: time labels of G1 as predicted by max corr with G2
+    """
+    isfc_pattern_G1 = dynamic_ISFC(G1, windowsize=window_size)
+    isfc_pattern_G2 = dynamic_ISFC(G2, windowsize = window_size)
+    isfc_correlation_matrix = get_correlation_matrix(isfc_pattern_G1,isfc_pattern_G2)
+    activity_pattern_G1 = generate_group_activities(torch.Tensor(G1), window_size=window_size)
+    activity_pattern_G2 = generate_group_activities(torch.Tensor(G2), window_size=window_size)
+    activity_correlation_matrix = get_correlation_matrix(activity_pattern_G1,activity_pattern_G2)
+
+    activity_correlation_matrix = mixing_prop*activity_correlation_matrix +\
+                                  (1-mixing_prop)*isfc_correlation_matrix
+    time_labels = np.argmax(activity_correlation_matrix, axis=1)
+
+    decoding_accuracy = np.sum(time_labels == np.arange(isfc_pattern_G1.shape[0]))
+    decoding_accuracy = decoding_accuracy/isfc_pattern_G1.shape[0]
+
+    return decoding_accuracy
+
+
+def dynamic_ISFC(data, windowsize=0):
+        """
+        :param data: n_subjects x n_times x n_nodes
+        :param windowsize: number of observations to include in each sliding window (set to 0 or don't specify if all
+                           timepoints should be used)
+        :return: number-of-features by number-of-features isfc matrix
+
+        reference: http://www.nature.com/articles/ncomms12141
+        code based on https://github.com/brainiak/brainiak/blob/master/examples/factoranalysis/htfa_tutorial.ipynb
+        """
+
+        def rows(x):
+            return x.shape[0]
+
+        def cols(x):
+            return x.shape[1]
+
+        def r2z(r):
+            return 0.5 * (np.log(1 + r) - np.log(1 - r))
+
+        def z2r(z):
+            return (np.exp(2 * z) - 1) / (np.exp(2 * z) + 1)
+
+        def vectorize(m):
+            np.fill_diagonal(m, 0)
+            return sd.squareform(m)
+        assert len(data) > 1
+
+        ns = data.shape[1]
+        vs = data.shape[2]
+
+        n = np.min(ns)
+        if windowsize == 0:
+            windowsize = n
+
+        assert len(np.unique(vs)) == 1
+        v = vs
+
+        isfc_mat = np.zeros([n - windowsize + 1, int((v ** 2 - v) / 2)])
+        for n in range(0, n - windowsize + 1):
+            next_inds = range(n, n + windowsize)
+            for i in range(0, data.shape[0]):
+                mean_other_data = np.zeros([len(next_inds), v])
+                for j in range(0, data.shape[0]):
+                    if i == j:
+                        continue
+                    mean_other_data = mean_other_data + data[j,next_inds, :]
+                mean_other_data /= (data.shape[0] - 1)
+                next_corrs = np.array(r2z(1 - sd.cdist(data[i,next_inds, :].T, mean_other_data.T, 'correlation')))
+                isfc_mat[n, :] = isfc_mat[n, :] + vectorize(next_corrs + next_corrs.T)
+            isfc_mat[n, :] = z2r(isfc_mat[n, :] / (2 * data.shape[0]))
+
+        isfc_mat[np.where(np.isnan(isfc_mat))] = 0
+        return isfc_mat
 
 def vardict(existing=None):
     vdict = flatdict.FlatDict(delimiter='__')
