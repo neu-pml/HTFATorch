@@ -52,10 +52,7 @@ class HierarchicalTopographicFactorAnalysis:
         self.num_blocks = len(self._blocks)
         self.voxel_activations = [block.activations for block in self._blocks]
         self.voxel_locations = self._blocks[0].locations
-        self.task_list = []
-        for block in self._blocks:
-            block.unload_locations()
-            self.task_list.append(block.task)
+        self.task_list = [block.task for block in self._blocks]
         self.task_list = np.unique(self.task_list)
         self._templates = [block.filename for block in self._blocks]
 
@@ -390,7 +387,7 @@ class HierarchicalTopographicFactorAnalysis:
 
 
 
-    def decoding_accuracy(self,restvtask=False):
+    def decoding_accuracy(self,restvtask=False,window_size=5):
         """
         :return: accuracy: a dict containing decoding accuracies for each task [activity,isfc,mixed]
         """
@@ -412,9 +409,9 @@ class HierarchicalTopographicFactorAnalysis:
                 else:
                     G1 = group[key][:int(group[key].shape[0] / 2), :, :]
                     G2 = group[key][int(group[key].shape[0] / 2):, :, :]
-                    accuracy[key].append(utils.get_decoding_accuracy(G1, G2, 5))
-                    accuracy[key].append(utils.get_isfc_decoding_accuracy(G1, G2, 5))
-                    accuracy[key].append(utils.get_mixed_decoding_accuracy(G1, G2, 5))
+                    accuracy[key].append(utils.get_decoding_accuracy(G1, G2, window_size))
+                    accuracy[key].append(utils.get_isfc_decoding_accuracy(G1, G2, window_size))
+                    accuracy[key].append(utils.get_mixed_decoding_accuracy(G1, G2, window_size))
         else:
             keys = self.task_list
             group = {key: [] for key in keys}
@@ -430,18 +427,9 @@ class HierarchicalTopographicFactorAnalysis:
                 else:
                     G1 = group[key][:int(group[key].shape[0] / 2), :, :]
                     G2 = group[key][int(group[key].shape[0] / 2):, :, :]
-                    accuracy[key].append(utils.get_decoding_accuracy(G1, G2, 5))
-                    accuracy[key].append(utils.get_isfc_decoding_accuracy(G1, G2, 5))
-                    accuracy[key].append(utils.get_mixed_decoding_accuracy(G1, G2, 5))
-
-        # for n in range(len(self._blocks)):
-        #     if self._blocks[n].task == 'rest':
-        #         group['rest'].append(W[n,:,:])
-        #     else:
-        #         group['task'].append(W[n,:,:])
-        # group['rest'] = np.rollaxis(np.dstack(group['rest']),-1)
-        # group['task'] = np.rollaxis(np.dstack(group['task']),-1)
-
+                    accuracy[key].append(utils.get_decoding_accuracy(G1, G2, window_size))
+                    accuracy[key].append(utils.get_isfc_decoding_accuracy(G1, G2, window_size))
+                    accuracy[key].append(utils.get_mixed_decoding_accuracy(G1, G2, window_size))
         return accuracy
 
 
