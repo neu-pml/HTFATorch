@@ -84,20 +84,21 @@ class DeepTFAEmbedding(tfa_models.Model):
 
         if ('z^P_%d' % subject) not in trace:
             subject_embed = trace.normal(subject_params['mu'],
-                                         subject_params['sigma'],
+                                         self.softplus(subject_params['sigma']),
                                          value=guide['z^P_%d' % subject],
                                          name='z^P_%d' % subject)
         else:
             subject_embed = trace['z^P_%d' % subject].value
         if ('z^S_%d' % task) not in trace:
-            task_embed = trace.normal(task_params['mu'], task_params['sigma'],
+            task_embed = trace.normal(task_params['mu'],
+                                      self.softplus(task_params['sigma']),
                                       value=guide['z^S_%d' % task],
                                       name='z^S_%d' % task)
         else:
             task_embed = trace['z^S_%d' % task].value
         if ('z^F_%d' % subject) not in trace:
             factors_embed = trace.normal(factor_params['mu'],
-                                         factor_params['sigma'],
+                                         self.softplus(factor_params['sigma']),
                                          value=guide['z^F_%d' % subject],
                                          name='z^F_%d' % subject)
         else:
