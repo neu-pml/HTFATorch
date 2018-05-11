@@ -251,20 +251,21 @@ class DeepTFA:
         }
 
     def normalize_weights(self):
-        def weights_generator(run):
+        def weights_generator(run, subject):
             run_blocks = [b for b in range(len(self._blocks))
-                          if self._blocks[b].run == run]
+                          if self._blocks[b].run == run and
+                             self._blocks[b].subject == subject]
             for rb in run_blocks:
                 weights = self.results(rb)['weights']['mu'].data
                 yield weights.contiguous().view(-1)
-        runs = list(set([b.run for b in self._blocks]))
-        runs.sort()
+        runs = list(set([(b.run, b.subject) for b in self._blocks]))
+        runs.sort(key=lambda p: p[0])
         self.weight_normalizers = runs.copy()
-        for (i, run) in enumerate(runs):
-            weights = list(weights_generator(run))
+        for (i, (run, subject)) in enumerate(runs):
+            weights = list(weights_generator(run, subject))
             idw = utils.normalize_tensors(weights, percentiles=(10, 90))
             absw = utils.normalize_tensors(weights, absval=True,
-                                           percentiles=(10, 90))
+                                           percentiles=(30, 70))
             self.weight_normalizers[i] = (idw, absw)
 
         return self.weight_normalizers
@@ -297,9 +298,9 @@ class DeepTFA:
 
         if self.weight_normalizers is None:
             self.normalize_weights()
-        runs = list(set([b.run for b in self._blocks]))
-        idnorm, absnorm =\
-            self.weight_normalizers[runs.index(self._blocks[block].run)]
+        runs = list(set([(b.run, b.subject) for b in self._blocks]))
+        subject_run = (self._blocks[block].run, self._blocks[block].subject)
+        idnorm, absnorm = self.weight_normalizers[runs.index(subject_run)]
 
         if uncertainty_opacity:
             alphas = utils.uncertainty_alphas(factors_std_dev.data,
