@@ -312,12 +312,19 @@ class DeepTFA:
         palette = utils.scalar_map_palette(weights.data.numpy(), alphas,
                                            colormap, normalizer=idnorm)
 
+        centers_palette = utils.scalar_map_palette(weights.data.numpy(), None,
+                                                   colormap, normalizer=idnorm)
+        centers_sizes = np.repeat([50], self.num_factors)
+        sizes = torch.exp(results['factor_log_widths']).numpy()
+
+        centers = results['factor_centers'].numpy()
+
         plot = niplot.plot_connectome(
-            np.eye(self.num_factors),
-            results['factor_centers'].numpy(),
-            node_color=palette,
-            node_size=torch.exp(results['factor_log_widths']).numpy(),
-            title="Block %d (Participant %d, Run %d, Stimulus %s)" %\
+            np.eye(self.num_factors * 2),
+            np.vstack([centers, centers]),
+            node_color=np.vstack([palette, centers_palette]),
+            node_size=np.vstack([sizes, centers_sizes]),
+            title="Block %d (Participant %d, Run %d, Stimulus: %s)" %\
                   (block, self._blocks[block].subject, self._blocks[block].run,
                    labeler(self._blocks[block]))
         )
