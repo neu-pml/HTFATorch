@@ -4,6 +4,7 @@ __author__ = 'Eli Sennesh', 'Zulqarnain Khan'
 __email__ = 'e.sennesh@northeastern.edu', 'khan.zu@husky.neu.edu'
 
 import collections
+import datetime
 import logging
 import os
 import pickle
@@ -67,7 +68,8 @@ class HierarchicalTopographicFactorAnalysis:
 
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
               log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES,
-              batch_size=64, use_cuda=True, blocks_batch_size=4):
+              batch_size=64, use_cuda=True, blocks_batch_size=4,
+              checkpoint_steps=None):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
@@ -158,10 +160,20 @@ class HierarchicalTopographicFactorAnalysis:
             end = time.time()
             msg = tfa.EPOCH_MSG % (epoch + 1, (end - start) * 1000, free_energies[epoch])
             logging.info(msg)
+            if checkpoint_steps is not None and epoch % checkpoint_steps == 0:
+                now = datetime.datetime.now()
+                checkpoint_name = now.strftime(tfa.CHECKPOINT_TAG)
+                logging.info('Saving checkpoint...')
+                self.save_state(path='.', tag=checkpoint_name)
 
         if tfa.CUDA and use_cuda:
             dec.cpu()
             enc.cpu()
+
+        now = datetime.datetime.now()
+        checkpoint_name = now.strftime(tfa.CHECKPOINT_TAG)
+        logging.info('Saving checkpoint...')
+        self.save_state(path='.', tag=checkpoint_name)
 
         return np.vstack([free_energies])
 
@@ -302,6 +314,25 @@ class HierarchicalTopographicFactorAnalysis:
 
         return plot
 
+    def common_name(self):
+        return os.path.commonprefix([os.path.basename(b.filename)
+                                     for b in self._blocks])
+
+    def save_state(self, path='.', tag=''):
+        name = self.common_name() + tag
+        variational_state = self.enc.state_dict()
+        torch.save(variational_state,
+                   path + '/' + name + '.htfa_guide')
+        torch.save(self.dec.state_dict(),
+                   path + '/' + name + '.htfa_model')
+
+    def load_state(self, basename):
+        model_state = torch.load(basename + '.htfa_model')
+        self.dec.load_state_dict(model_state)
+
+        guide_state = torch.load(basename + '.htfa_guide')
+        self.enc.load_state_dict(guide_state)
+
     def scatter_factor_embedding(self, labeler=None, filename=None, show=True,
                                  xlims=None, ylims=None, figsize=None,embedding=TSNE):
 
@@ -431,6 +462,3 @@ class HierarchicalTopographicFactorAnalysis:
                     accuracy[key].append(utils.get_isfc_decoding_accuracy(G1, G2, window_size))
                     accuracy[key].append(utils.get_mixed_decoding_accuracy(G1, G2, window_size))
         return accuracy
-
-
-
