@@ -22,6 +22,7 @@ import nilearn.image
 import nilearn.plotting as niplot
 import numpy as np
 import scipy.io as sio
+from scipy.stats import pearsonr
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
@@ -51,8 +52,8 @@ class HierarchicalTopographicFactorAnalysis:
         self.num_blocks = len(self._blocks)
         self.voxel_activations = [block.activations for block in self._blocks]
         self.voxel_locations = self._blocks[0].locations
-        for block in self._blocks:
-            block.unload_locations()
+        self.task_list = [block.task for block in self._blocks]
+        self.task_list = np.unique(self.task_list)
         self._templates = [block.filename for block in self._blocks]
 
         # Pull out relevant dimensions: the number of time instants and the
@@ -383,3 +384,53 @@ class HierarchicalTopographicFactorAnalysis:
             fig.savefig(filename)
         if show:
             plt.show()
+
+
+
+    def decoding_accuracy(self,restvtask=False,window_size=5):
+        """
+        :return: accuracy: a dict containing decoding accuracies for each task [activity,isfc,mixed]
+        """
+        W = self.enc.hyperparams.block__weights__mu.data
+        if restvtask:
+            keys = ['rest','task']
+            group = {key: [] for key in keys}
+            accuracy = {key:[] for key in keys}
+
+            for key in keys:
+                for n in range(self.num_blocks):
+                    if key in self._blocks[n].task:
+                        group[key].append(W[n, :, :])
+                    else:
+                        group['task'].append(W[n,:,:])
+                group[key] = np.rollaxis(np.dstack(group[key]), -1)
+                if group[key].shape[0] < 2:
+                    raise ValueError('not enough subjects for the task: ' + key)
+                else:
+                    G1 = group[key][:int(group[key].shape[0] / 2), :, :]
+                    G2 = group[key][int(group[key].shape[0] / 2):, :, :]
+                    accuracy[key].append(utils.get_decoding_accuracy(G1, G2, window_size))
+                    accuracy[key].append(utils.get_isfc_decoding_accuracy(G1, G2, window_size))
+                    accuracy[key].append(utils.get_mixed_decoding_accuracy(G1, G2, window_size))
+        else:
+            keys = self.task_list
+            group = {key: [] for key in keys}
+            accuracy = {key: [] for key in keys}
+            for key in keys:
+                for n in range(self.num_blocks):
+                    if key == self._blocks[n].task:
+                        group[key].append(W[n, :, :])
+                group[key] = np.rollaxis(np.dstack(group[key]), -1)
+                if group[key].shape[0] < 2:
+                    raise ValueError('not enough subjects for the task: ' + key)
+
+                else:
+                    G1 = group[key][:int(group[key].shape[0] / 2), :, :]
+                    G2 = group[key][int(group[key].shape[0] / 2):, :, :]
+                    accuracy[key].append(utils.get_decoding_accuracy(G1, G2, window_size))
+                    accuracy[key].append(utils.get_isfc_decoding_accuracy(G1, G2, window_size))
+                    accuracy[key].append(utils.get_mixed_decoding_accuracy(G1, G2, window_size))
+        return accuracy
+
+
+
