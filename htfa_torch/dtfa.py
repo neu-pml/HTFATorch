@@ -337,11 +337,21 @@ class DeepTFA:
         return plot
 
     def plot_original_brain(self, block=None, filename=None, show=True,
-                            plot_abs=False, t=0):
+                            plot_abs=False, t=0, labeler=None):
+        if labeler is None:
+            labeler = lambda b: b.task
         if block is None:
             block = np.random.choice(self.num_blocks, 1)[0]
-        image = nilearn.image.index_img(self._images[block], t)
-        plot = niplot.plot_glass_brain(image, plot_abs=plot_abs)
+        image = utils.cmu2nii(self.voxel_activations[block].numpy(),
+                              self.voxel_locations.numpy(),
+                              self._templates[block])
+        image_slice = nilearn.image.index_img(image, t)
+        plot = niplot.plot_glass_brain(
+            image_slice, plot_abs=plot_abs,
+            title="Block %d (Participant %d, Run %d, Stimulus: %s)" %\
+                  (block, self._blocks[block].subject, self._blocks[block].run,
+                   labeler(self._blocks[block]))
+        )
 
         if filename is not None:
             plot.savefig(filename)
