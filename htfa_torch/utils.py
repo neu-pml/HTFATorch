@@ -236,7 +236,7 @@ def gaussian_populator(*dims):
     }
 
 def uncertainty_alphas(uncertainties, scalars=None):
-    return 1.0 - intensity_alphas(uncertainties, scalars)
+    return np.float64(1.0) - intensity_alphas(uncertainties, scalars)
 
 def normalize_tensors(seq, absval=False, percentiles=None):
     flat = torch.cat([t.view(-1) for t in seq], dim=0)
@@ -249,7 +249,7 @@ def normalize_tensors(seq, absval=False, percentiles=None):
                                              np.percentile(flat, right),
                                              clip=True)
     else:
-        result = matplotlib.colors.Normalize()
+        result = matplotlib.colors.Normalize(clip=True)
         result.autoscale_None(flat)
 
     return result
@@ -261,7 +261,10 @@ def intensity_alphas(intensities, scalars=None, normalizer=None):
         intensities = intensities.norm(p=2, dim=1)
     if normalizer is None:
         normalizer = matplotlib.colors.Normalize()
-    return normalizer(intensities.numpy())
+    result = normalizer(intensities.numpy())
+    if normalizer.clip:
+        result = np.clip(result, 0.0, 1.0)
+    return result
 
 def scalar_map_palette(scalars, alphas=None, colormap='Set2', normalizer=None):
     scalar_map = cm.ScalarMappable(normalizer, colormap)
