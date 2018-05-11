@@ -189,6 +189,43 @@ def load_dataset(data_file, mask=None, zscore=True):
 
     return activations, locations, name, template
 
+def generate_group_activities(group_data,window_size = 10):
+    """
+    :param group_data: n_subjects x n_times x n_voxels (or factors) activation data for all subjects
+    :return: activation_vectors: times (depending on window size) x n_voxels (or factors) vectors of mean activation
+    """
+    n_times = group_data.shape[1]
+    n_nodes = group_data.shape[2]
+    n_windows = n_times-window_size+1
+    activation_vectors = np.empty(shape = (n_windows,n_nodes))
+    for w in range(0,n_windows):
+        window = group_data[:,w:w+window_size,:]
+        activation_vectors[w,:] = window.numpy().mean(axis=(0,1))
+
+    return activation_vectors
+
+def get_decoding_accuracy(G1,G2):
+    """
+    :param G1: Split Half Group G1 (group_size x n_times x n_nodes)
+    :param G2: Split Half Group G2 (group_size x n_times x n_nodes
+    :return: time labels of G1 as predicted by max corr with G2
+    """
+    activity_pattern_G1 = generate_group_activities(torch.Tensor(G1), 5)
+    activity_pattern_G2 = generate_group_activities(torch.Tensor(G2), 5)
+
+    activity_correlation_matrix = np.empty((activity_pattern_G1.shape[0], activity_pattern_G2.shape[0]))
+    for i in range(activity_pattern_G1.shape[0]):
+        for j in range(activity_pattern_G2.shape[0]):
+            activity_correlation_matrix[i, j] = stats.pearsonr(activity_pattern_G1[i], activity_pattern_G2[j])[0]
+    time_labels = np.argmax(activity_correlation_matrix, axis=1)
+
+    decoding_accuracy = np.sum(time_labels == np.arange(activity_pattern_G1.shape[0]))
+    decoding_accuracy = decoding_accuracy/activity_pattern_G1.shape[0]
+
+    return decoding_accuracy
+
+
+
 def vardict(existing=None):
     vdict = flatdict.FlatDict(delimiter='__')
     if existing:
