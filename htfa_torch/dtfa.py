@@ -253,7 +253,7 @@ class DeepTFA:
     def normalize_weights(self):
         def weights_generator(run, subject):
             run_blocks = [b for b in range(len(self._blocks))
-                          if self._blocks[b].run == run and
+                          if self._blocks[b].run == run and\
                              self._blocks[b].subject == subject]
             for rb in run_blocks:
                 weights = self.results(rb)['weights']['mu'].data
