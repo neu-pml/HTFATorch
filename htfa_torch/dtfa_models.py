@@ -24,7 +24,8 @@ from . import utils
 
 class DeepTFAEmbedding(tfa_models.Model):
     def __init__(self, num_factors, num_times, block_subjects, block_tasks,
-                 embedding_dim=2, hyper_means=None):
+                 brain_center, brain_center_std_dev, embedding_dim=2,
+                 hyper_means=None):
         super(tfa_models.Model, self).__init__()
 
         self._num_factors = num_factors
@@ -46,6 +47,20 @@ class DeepTFAEmbedding(tfa_models.Model):
         )
         self.softplus = nn.Softplus()
 
+        self.prior = utils.vardict({
+            'centers': {
+                'mu': Variable(brain_center, requires_grad=True),
+                'sigma': Variable(brain_center_std_dev, requires_grad=True),
+            },
+            'log_widths': {
+                'mu': Variable(torch.ones(self._num_factors),
+                               requires_grad=True),
+                'sigma': Variable(torch.ones(self._num_factors) *\
+                                  tfa_models.SOURCE_LOG_WIDTH_STD_DEV,
+                                  requires_grad=True),
+            },
+        })
+
         if hyper_means is not None:
             hyper_means['weights'] = hyper_means['weights'].mean(0)
             hyper_means['factor_log_widths'] =\
@@ -60,6 +75,9 @@ class DeepTFAEmbedding(tfa_models.Model):
                  hyper_means['factor_log_widths']),
                 dim=-1
             ).view(self._num_factors * 4))
+
+        utils.register_vardict(self.prior, self, parameter=False)
+        self.prior = utils.vardict(self.state_dict(keep_vars=True))
 
     # Assumes that all tensors have a particle dimension as their first
     def forward(self, trace, params, guide=probtorch.Trace(), times=None,
@@ -129,6 +147,22 @@ class DeepTFAEmbedding(tfa_models.Model):
             weights = weights[0]
             factor_centers = factor_centers[0]
             factor_log_widths = factor_log_widths[0]
+
+        prior = utils.vardict(self.state_dict(keep_vars=True))
+
+        for k, v in prior['centers'].items():
+            prior['centers'][k] = v.expand(factor_centers.shape[0], *v.shape)
+        trace.normal(prior['centers']['mu'],
+                     prior['centers']['sigma'],
+                     value=factor_centers,
+                     name='factor_centers%d' % block)
+        for k, v in prior['log_widths'].items():
+            prior['log_widths'][k] = v.expand(factor_log_widths.shape[0],
+                                              *v.shape)
+        trace.normal(prior['log_widths']['mu'],
+                     prior['log_widths']['sigma'],
+                     value=factor_log_widths,
+                     name='factor_log_widths%d' % block)
 
         return weights, factor_centers, factor_log_widths
 
@@ -236,9 +270,11 @@ class DeepTFAModel(nn.Module):
         self._num_blocks = num_blocks
         self._num_times = num_times
 
+        center, center_std_dev = utils.brain_centroid(self._locations)
         self.embedding = DeepTFAEmbedding(self._num_factors, self._num_times,
                                           block_subjects, block_tasks,
-                                          embedding_dim, hyper_means)
+                                          center, center_std_dev, embedding_dim,
+                                          hyper_means)
 
         self.hyperparams = DeepTFAGenerativeHyperparams(
             self._num_blocks, self._num_times, self._num_factors,
