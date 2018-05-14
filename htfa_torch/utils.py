@@ -326,13 +326,11 @@ def get_kl_decoding_accuracy(G1, G2, window_size=5,hist=True):
     means_G2 = generate_group_activities(torch.Tensor(G2), window_size=window_size)
     cov_G1 = get_covariance(G1, window_size=window_size)
     cov_G2 = get_covariance(G2, window_size=window_size)
-    #
-    kl = np.empty(shape=(means_G1.shape[1],means_G2.shape[1]))
+    kl = np.empty(shape=(means_G1.shape[0],means_G2.shape[0]))
     for t in range(means_G1.shape[0]):
         for t2 in range(means_G2.shape[0]):
             kl[t,t2] = calculate_kl(means_G1[t,:],cov_G1[t,:,:],means_G2[t2,:],cov_G2[t2,:,:])
     time_labels = np.argmin(kl, axis=1)
-
     decoding_accuracy = []
     if hist:
         for i in range(5):
@@ -345,7 +343,6 @@ def get_kl_decoding_accuracy(G1, G2, window_size=5,hist=True):
     decoding_accuracy = np.array(decoding_accuracy)/means_G1.shape[0]
 
     return decoding_accuracy
-
 
 
 def dynamic_ISFC(data, windowsize=5):
