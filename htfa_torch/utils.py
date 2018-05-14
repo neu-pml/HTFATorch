@@ -25,6 +25,8 @@ import scipy.special as spspecial
 import scipy.stats as stats
 from sklearn.cluster import KMeans
 import torch
+from torch import distributions
+import probtorch
 from torch.autograd import Variable
 import torch.nn as nn
 from torch.nn import Parameter
@@ -206,6 +208,34 @@ def generate_group_activities(group_data,window_size = 10):
 
     return activation_vectors
 
+
+def get_covariance(group_data, window_size=5):
+    """
+    :param data: n_subjects x n_times x n_nodes
+    :param windowsize: number of observations to include in each sliding window (set to 0 or don't specify if all
+                           timepoints should be used)
+    :return: n_subjets x number-of-features by number-of-features covariance matrix
+
+    """
+    n_times = group_data.shape[1]
+    n_nodes = group_data.shape[2]
+    n_windows = n_times - window_size + 1
+    cov = np.empty(shape=(n_windows, n_nodes, n_nodes))
+    for w in range(0, n_windows):
+        window = group_data[:, w:w + window_size, :]
+        window = np.mean(window,axis=1)
+        cov[w, :, :] = np.cov(window.T)
+
+    return cov
+
+def calculate_kl(mean1,cov1,mean2,cov2):
+    cov1 = cov1 + 1e-3*np.eye(15)
+    cov2 = cov2 + 1e-3*np.eye(15)
+    d = len(mean1)
+    cov2inv = np.linalg.inv(cov2)
+    kl  = np.log(np.linalg.det(cov2)) - np.log(np.linalg.det(cov1)) - d + np.trace(np.dot(cov2inv,cov1)) + \
+          (mean2-mean1).T.dot(cov2inv).dot(mean2-mean1)
+    return kl/2
 def get_correlation_matrix(pattern_G1,pattern_G2):
 
     activity_correlation_matrix = np.empty((pattern_G1.shape[0], pattern_G2.shape[0]))
@@ -215,7 +245,7 @@ def get_correlation_matrix(pattern_G1,pattern_G2):
 
     return activity_correlation_matrix
 
-def get_decoding_accuracy(G1,G2,window_size=5):
+def get_decoding_accuracy(G1,G2,window_size=5,hist=True):
     """
     :param G1: Split Half Group G1 (group_size x n_times x n_nodes)
     :param G2: Split Half Group G2 (group_size x n_times x n_nodes
@@ -225,13 +255,20 @@ def get_decoding_accuracy(G1,G2,window_size=5):
     activity_pattern_G2 = generate_group_activities(torch.Tensor(G2), window_size=window_size)
     activity_correlation_matrix = get_correlation_matrix(activity_pattern_G1,activity_pattern_G2)
     time_labels = np.argmax(activity_correlation_matrix, axis=1)
-
-    decoding_accuracy = np.sum(time_labels == np.arange(activity_pattern_G1.shape[0]))
-    decoding_accuracy = decoding_accuracy/activity_pattern_G1.shape[0]
+    decoding_accuracy=[]
+    if hist:
+        for i in range(5):
+            temp = np.sum(time_labels+i == np.arange(activity_pattern_G1.shape[0]))
+            decoding_accuracy.append(temp)
+            temp = np.sum(time_labels-i == np.arange(activity_pattern_G1.shape[0]))
+            decoding_accuracy.append(temp)
+    else:
+        decoding_accuracy = np.sum(time_labels == np.arange(activity_pattern_G1.shape[0]))
+    decoding_accuracy = np.array(decoding_accuracy)/activity_pattern_G1.shape[0]
 
     return decoding_accuracy
 
-def get_isfc_decoding_accuracy(G1,G2,window_size=5):
+def get_isfc_decoding_accuracy(G1,G2,window_size=5,hist=True):
     """
     :param G1: Split Half Group G1 (group_size x n_times x n_nodes)
     :param G2: Split Half Group G2 (group_size x n_times x n_nodes
@@ -241,14 +278,21 @@ def get_isfc_decoding_accuracy(G1,G2,window_size=5):
     isfc_pattern_G2 = dynamic_ISFC(G2, windowsize = window_size)
     activity_correlation_matrix = get_correlation_matrix(isfc_pattern_G1,isfc_pattern_G2)
     time_labels = np.argmax(activity_correlation_matrix, axis=1)
-
-    decoding_accuracy = np.sum(time_labels == np.arange(isfc_pattern_G1.shape[0]))
-    decoding_accuracy = decoding_accuracy/isfc_pattern_G1.shape[0]
+    decoding_accuracy = []
+    if hist:
+        for i in range(5):
+            temp = np.sum(time_labels+i == np.arange(isfc_pattern_G1.shape[0]))
+            decoding_accuracy.append(temp)
+            temp = np.sum(time_labels-i == np.arange(isfc_pattern_G1.shape[0]))
+            decoding_accuracy.append(temp)
+    else:
+        decoding_accuracy = np.sum(time_labels == np.arange(isfc_pattern_G1.shape[0]))
+    decoding_accuracy = np.array(decoding_accuracy)/isfc_pattern_G1.shape[0]
 
     return decoding_accuracy
 
 
-def get_mixed_decoding_accuracy(G1,G2,window_size=5,mixing_prop=0.5):
+def get_mixed_decoding_accuracy(G1,G2,window_size=5,mixing_prop=0.5,hist=True):
     """
     :param G1: Split Half Group G1 (group_size x n_times x n_nodes)
     :param G2: Split Half Group G2 (group_size x n_times x n_nodes
@@ -264,14 +308,47 @@ def get_mixed_decoding_accuracy(G1,G2,window_size=5,mixing_prop=0.5):
     activity_correlation_matrix = mixing_prop*activity_correlation_matrix +\
                                   (1-mixing_prop)*isfc_correlation_matrix
     time_labels = np.argmax(activity_correlation_matrix, axis=1)
+    decoding_accuracy = []
+    if hist:
+        for i in range(5):
+            temp = np.sum(time_labels+i == np.arange(isfc_pattern_G1.shape[0]))
+            decoding_accuracy.append(temp)
+            temp = np.sum(time_labels-i == np.arange(isfc_pattern_G1.shape[0]))
+            decoding_accuracy.append(temp)
+    else:
+        decoding_accuracy = np.sum(time_labels == np.arange(isfc_pattern_G1.shape[0]))
+    decoding_accuracy = np.array(decoding_accuracy)/isfc_pattern_G1.shape[0]
 
-    decoding_accuracy = np.sum(time_labels == np.arange(isfc_pattern_G1.shape[0]))
-    decoding_accuracy = decoding_accuracy/isfc_pattern_G1.shape[0]
+    return decoding_accuracy
+
+def get_kl_decoding_accuracy(G1, G2, window_size=5,hist=True):
+    means_G1 = generate_group_activities(torch.Tensor(G1), window_size=window_size)
+    means_G2 = generate_group_activities(torch.Tensor(G2), window_size=window_size)
+    cov_G1 = get_covariance(G1, window_size=window_size)
+    cov_G2 = get_covariance(G2, window_size=window_size)
+    #
+    kl = np.empty(shape=(means_G1.shape[1],means_G2.shape[1]))
+    for t in range(means_G1.shape[0]):
+        for t2 in range(means_G2.shape[0]):
+            kl[t,t2] = calculate_kl(means_G1[t,:],cov_G1[t,:,:],means_G2[t2,:],cov_G2[t2,:,:])
+    time_labels = np.argmin(kl, axis=1)
+
+    decoding_accuracy = []
+    if hist:
+        for i in range(5):
+            temp = np.sum(time_labels+i == np.arange(means_G1.shape[0]))
+            decoding_accuracy.append(temp)
+            temp = np.sum(time_labels-i == np.arange(means_G1.shape[0]))
+            decoding_accuracy.append(temp)
+    else:
+        decoding_accuracy = np.sum(time_labels == np.arange(means_G1.shape[0]))
+    decoding_accuracy = np.array(decoding_accuracy)/means_G1.shape[0]
 
     return decoding_accuracy
 
 
-def dynamic_ISFC(data, windowsize=0):
+
+def dynamic_ISFC(data, windowsize=5):
         """
         :param data: n_subjects x n_times x n_nodes
         :param windowsize: number of observations to include in each sliding window (set to 0 or don't specify if all
@@ -281,13 +358,6 @@ def dynamic_ISFC(data, windowsize=0):
         reference: http://www.nature.com/articles/ncomms12141
         code based on https://github.com/brainiak/brainiak/blob/master/examples/factoranalysis/htfa_tutorial.ipynb
         """
-
-        def rows(x):
-            return x.shape[0]
-
-        def cols(x):
-            return x.shape[1]
-
         def r2z(r):
             return 0.5 * (np.log(1 + r) - np.log(1 - r))
 

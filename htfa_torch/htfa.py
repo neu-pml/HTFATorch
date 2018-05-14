@@ -443,6 +443,7 @@ class HierarchicalTopographicFactorAnalysis:
                     accuracy[key].append(utils.get_decoding_accuracy(G1, G2, window_size))
                     accuracy[key].append(utils.get_isfc_decoding_accuracy(G1, G2, window_size))
                     accuracy[key].append(utils.get_mixed_decoding_accuracy(G1, G2, window_size))
+                    accuracy[key].append(utils.get_kl_decoding_accuracy(G1,G2, window_size))
         else:
             keys = self.task_list
             group = {key: [] for key in keys}
@@ -461,4 +462,5 @@ class HierarchicalTopographicFactorAnalysis:
                     accuracy[key].append(utils.get_decoding_accuracy(G1, G2, window_size))
                     accuracy[key].append(utils.get_isfc_decoding_accuracy(G1, G2, window_size))
                     accuracy[key].append(utils.get_mixed_decoding_accuracy(G1, G2, window_size))
+                    accuracy[key].append(utils.get_kl_decoding_accuracy(G1,G2, window_size))
         return accuracy
