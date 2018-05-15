@@ -229,8 +229,8 @@ def get_covariance(group_data, window_size=5):
     return cov
 
 def calculate_kl(mean1,cov1,mean2,cov2):
-    cov1 = cov1 + 1e-3*np.eye(15)
-    cov2 = cov2 + 1e-3*np.eye(15)
+    cov1 = cov1 + 1e-3*np.eye(cov1.shape[0])
+    cov2 = cov2 + 1e-3*np.eye(cov2.shape[0])
     d = len(mean1)
     cov2inv = np.linalg.inv(cov2)
     kl  = np.log(np.linalg.det(cov2)) - np.log(np.linalg.det(cov1)) - d + np.trace(np.dot(cov2inv,cov1)) + \
