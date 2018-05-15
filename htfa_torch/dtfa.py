@@ -270,7 +270,7 @@ class DeepTFA:
 
     def plot_factor_centers(self, block, filename=None, show=True,
                             colormap='cold_white_hot', t=None, labeler=None,
-                            uncertainty_opacity=False, plot_abs=False):
+                            uncertainty_opacity=False):
         if labeler is None:
             labeler = lambda b: b.task
         results = self.results(block)
@@ -322,7 +322,6 @@ class DeepTFA:
             np.vstack([centers, centers]),
             node_color=np.vstack([palette, centers_palette]),
             node_size=np.vstack([sizes, centers_sizes]),
-            plot_abs=plot_abs,
             title="Block %d (Participant %d, Run %d, Stimulus: %s)" %\
                   (block, self._blocks[block].subject, self._blocks[block].run,
                    labeler(self._blocks[block]))
