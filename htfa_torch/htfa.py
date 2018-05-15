@@ -334,11 +334,14 @@ class HierarchicalTopographicFactorAnalysis:
         self.enc.load_state_dict(guide_state)
 
     def scatter_factor_embedding(self, labeler=None, filename=None, show=True,
-                                 xlims=None, ylims=None, figsize=None,embedding=TSNE):
-
+                                 xlims=None, ylims=None, figsize=None,
+                                 embedding=TSNE):
         factor_centers_map = self.enc.hyperparams.block__factor_centers__mu.data.numpy()
         factor_widths_map = self.enc.hyperparams.block__factor_log_widths__mu.data.numpy()
-        factors_map = np.concatenate((np.expand_dims(factor_widths_map, 2), factor_centers_map), axis=2)
+        factors_map = np.concatenate(
+            (np.expand_dims(factor_widths_map, 2), factor_centers_map),
+            axis=2
+        )
         factors_map = np.reshape(factors_map, newshape=(self.num_blocks, self.num_factors * 4))
         X = StandardScaler().fit_transform(factors_map)
         if embedding == 'TSNE':
@@ -361,10 +364,10 @@ class HierarchicalTopographicFactorAnalysis:
 
         fig = plt.figure(1, figsize=figsize)
         ax = fig.add_subplot(111, facecolor='white')
-        fig.axes[0].set_xlabel('Embedded Dimension_1')
+        fig.axes[0].set_xlabel('$z^F_1$')
         if xlims is not None:
             fig.axes[0].set_xlim(*xlims)
-        fig.axes[0].set_ylabel('Embedded Dimension_2')
+        fig.axes[0].set_ylabel('$z^F_2$')
         if ylims is not None:
             fig.axes[0].set_ylim(*ylims)
         fig.axes[0].set_title('Factor Embeddings')
@@ -377,10 +380,12 @@ class HierarchicalTopographicFactorAnalysis:
             plt.show()
 
     def scatter_weight_embedding(self, labeler=None, filename=None, show=True,
-                                 xlims=None, ylims=None, figsize=None,embedding='TSNE'):
-
+                                 xlims=None, ylims=None, figsize=None,
+                                 embedding='TSNE'):
         weight_map = self.enc.hyperparams.block__weights__mu.data.numpy()
-        weight_map = np.reshape(weight_map, newshape=(self.num_blocks, self.num_factors * weight_map.shape[1]))
+        weight_map = np.reshape(weight_map,
+                                newshape=(self.num_blocks,
+                                          self.num_factors * weight_map.shape[1]))
         X = StandardScaler().fit_transform(weight_map)
         if embedding == 'TSNE':
             z_w = TSNE(n_components=2).fit_transform(X)
@@ -401,10 +406,10 @@ class HierarchicalTopographicFactorAnalysis:
 
         fig = plt.figure(1, figsize=figsize)
         ax = fig.add_subplot(111, facecolor='white')
-        fig.axes[0].set_xlabel('Embedded Dimension_1')
+        fig.axes[0].set_xlabel('$z^W_1$')
         if xlims is not None:
             fig.axes[0].set_xlim(*xlims)
-        fig.axes[0].set_ylabel('Embedded Dimension_2')
+        fig.axes[0].set_ylabel('$z^W_2$')
         if ylims is not None:
             fig.axes[0].set_ylim(*ylims)
         fig.axes[0].set_title('Weight Embeddings')
@@ -416,15 +421,13 @@ class HierarchicalTopographicFactorAnalysis:
         if show:
             plt.show()
 
-
-
-    def decoding_accuracy(self,restvtask=False,window_size=5):
+    def decoding_accuracy(self, restvtask=False, window_size=5):
         """
         :return: accuracy: a dict containing decoding accuracies for each task [activity,isfc,mixed]
         """
         W = self.enc.hyperparams.block__weights__mu.data
         if restvtask:
-            keys = ['rest','task']
+            keys = ['rest', 'task']
             group = {key: [] for key in keys}
             accuracy = {key:[] for key in keys}
 
@@ -433,7 +436,7 @@ class HierarchicalTopographicFactorAnalysis:
                     if key in self._blocks[n].task:
                         group[key].append(W[n, :, :])
                     else:
-                        group['task'].append(W[n,:,:])
+                        group['task'].append(W[n, :, :])
                 group[key] = np.rollaxis(np.dstack(group[key]), -1)
                 if group[key].shape[0] < 2:
                     raise ValueError('not enough subjects for the task: ' + key)
@@ -443,7 +446,7 @@ class HierarchicalTopographicFactorAnalysis:
                     accuracy[key].append(utils.get_decoding_accuracy(G1, G2, window_size))
                     accuracy[key].append(utils.get_isfc_decoding_accuracy(G1, G2, window_size))
                     accuracy[key].append(utils.get_mixed_decoding_accuracy(G1, G2, window_size))
-                    accuracy[key].append(utils.get_kl_decoding_accuracy(G1,G2, window_size))
+                    accuracy[key].append(utils.get_kl_decoding_accuracy(G1, G2, window_size))
         else:
             keys = self.task_list
             group = {key: [] for key in keys}
@@ -462,5 +465,5 @@ class HierarchicalTopographicFactorAnalysis:
                     accuracy[key].append(utils.get_decoding_accuracy(G1, G2, window_size))
                     accuracy[key].append(utils.get_isfc_decoding_accuracy(G1, G2, window_size))
                     accuracy[key].append(utils.get_mixed_decoding_accuracy(G1, G2, window_size))
-                    accuracy[key].append(utils.get_kl_decoding_accuracy(G1,G2, window_size))
+                    accuracy[key].append(utils.get_kl_decoding_accuracy(G1, G2, window_size))
         return accuracy
