@@ -50,7 +50,7 @@ class DeepTFA:
         self.num_blocks = len(self._blocks)
         self.voxel_activations = [block.activations for block in self._blocks]
         self._blocks[-1].load()
-        self.voxel_locations = self._blocks[-1].locations
+        self.voxel_locations = self._blocks[-1].locations.pin_memory()
         self._templates = [block.filename for block in self._blocks]
         self._tasks = [block.task for block in self._blocks]
 
@@ -111,7 +111,8 @@ class DeepTFA:
         # S x T x V -> T x S x V
         activations_loader = torch.utils.data.DataLoader(
             utils.TFADataset(self.voxel_activations),
-            batch_size=batch_size
+            batch_size=batch_size,
+            pin_memory=True,
         )
         if tfa.CUDA and use_cuda:
             variational = torch.nn.DataParallel(self.variational)
