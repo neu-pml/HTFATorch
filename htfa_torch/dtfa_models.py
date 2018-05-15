@@ -62,21 +62,6 @@ class DeepTFAEmbedding(tfa_models.Model):
                 dim=-1
             ).view(self._num_factors * 4))
 
-        self.prior = utils.vardict({
-            'centers': {
-                'mu': brain_center,
-                'sigma': brain_center_std_dev,
-            },
-            'log_widths': {
-                'mu': torch.ones(self._num_factors),
-                'sigma': torch.ones(self._num_factors) *\
-                         tfa_models.SOURCE_LOG_WIDTH_STD_DEV,
-            },
-        })
-
-        utils.register_vardict(self.prior, self, parameter=False)
-        self.prior = utils.vardict(self.state_dict(keep_vars=True))
-
     # Assumes that all tensors have a particle dimension as their first
     def forward(self, trace, params, guide=probtorch.Trace(), times=None,
                 block=0, particles=False):
@@ -145,22 +130,6 @@ class DeepTFAEmbedding(tfa_models.Model):
             weights = weights[0]
             factor_centers = factor_centers[0]
             factor_log_widths = factor_log_widths[0]
-
-        prior = utils.vardict(self.state_dict(keep_vars=True))
-
-        for k, v in prior['centers'].items():
-            prior['centers'][k] = Variable(v.expand(factor_centers.shape[0], *v.shape))
-        #trace.normal(prior['centers']['mu'],
-        #             prior['centers']['sigma'],
-        #             value=factor_centers,
-        #             name='factor_centers%d' % block)
-        for k, v in prior['log_widths'].items():
-            prior['log_widths'][k] = Variable(v.expand(factor_log_widths.shape[0],
-                                                       *v.shape))
-        #trace.normal(prior['log_widths']['mu'],
-        #             prior['log_widths']['sigma'],
-        #             value=factor_log_widths,
-        #             name='factor_log_widths%d' % block)
 
         return weights, factor_centers, factor_log_widths
 
