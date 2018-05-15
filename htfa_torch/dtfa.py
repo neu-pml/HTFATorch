@@ -119,6 +119,7 @@ class DeepTFA:
             generative = torch.nn.DataParallel(self.generative)
             variational.cuda()
             generative.cuda()
+            cuda_locations = self.voxel_locations.cuda()
         else:
             variational = self.variational
             generative = self.generative
@@ -142,14 +143,12 @@ class DeepTFA:
                 block_batches = utils.chunks(list(range(self.num_blocks)),
                                              n=blocks_batch_size)
                 for block_batch in block_batches:
-                    activations = [{'Y': Variable(data[:, b, :])}
+                    activations = [{'Y': Variable(data.cuda()[:, b, :])}
                                    for b in block_batch]
                     if tfa.CUDA and use_cuda:
-                        for acts in activations:
-                            acts['Y'] = acts['Y'].cuda()
                         for b in block_batch:
                             generative.module.likelihoods[b].voxel_locations =\
-                                self.voxel_locations.cuda()
+                                cuda_locations
                     trs = (batch * batch_size, None)
                     trs = (trs[0], trs[0] + activations[0]['Y'].shape[0])
 
@@ -181,10 +180,8 @@ class DeepTFA:
                     if tfa.CUDA and use_cuda:
                         del activations
                         for b in block_batch:
-                            locs = generative.module.likelihoods[b].voxel_locations
                             generative.module.likelihoods[b].voxel_locations =\
-                                locs.cpu()
-                            del locs
+                                self.voxel_locations
                         torch.cuda.empty_cache()
                 if tfa.CUDA and use_cuda:
                     epoch_free_energies[batch] = epoch_free_energies[batch].cpu().data.numpy()
