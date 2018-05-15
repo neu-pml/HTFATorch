@@ -59,6 +59,7 @@ class DeepTFA:
         self._tasks = [block.task for block in self._blocks]
 
         self.weight_normalizers = None
+        self.activation_normalizers = None
 
         # Pull out relevant dimensions: the number of time instants and the
         # number of voxels in each timewise "slice"
@@ -258,6 +259,15 @@ class DeepTFA:
             'factor_log_widths': factor_log_widths.data,
         }
 
+    def normalize_activations(self):
+        self.activation_normalizers = [[] for block in self._blocks]
+        for block in range(len(self._blocks)):
+            self.activation_normalizers[block] = max(
+                -self.voxel_activations[block].min(),
+                self.voxel_activations[block].max()
+            )
+        return self.activation_normalizers
+
     def plot_factor_centers(self, block, filename=None, show=True, t=None,
                             labeler=None):
         if labeler is None:
@@ -286,7 +296,7 @@ class DeepTFA:
         return plot
 
     def plot_original_brain(self, block=None, filename=None, show=True,
-                            plot_abs=False, t=0, labeler=None):
+                            plot_abs=False, t=0, labeler=None, **kwargs):
         if labeler is None:
             labeler = lambda b: b.task
         if block is None:
@@ -299,7 +309,8 @@ class DeepTFA:
             image_slice, plot_abs=plot_abs,
             title="Block %d (Participant %d, Run %d, Stimulus: %s)" %\
                   (block, self._blocks[block].subject, self._blocks[block].run,
-                   labeler(self._blocks[block]))
+                   labeler(self._blocks[block])),
+            **kwargs,
         )
 
         if filename is not None:
@@ -310,11 +321,13 @@ class DeepTFA:
         return plot
 
     def plot_reconstruction(self, block=None, filename=None, show=True,
-                            plot_abs=False, t=0, labeler=None):
+                            plot_abs=False, t=0, labeler=None, **kwargs):
         if labeler is None:
             labeler = lambda b: b.task
         if block is None:
             block = np.random.choice(self.num_blocks, 1)[0]
+        if self.activation_normalizers is None:
+            self.normalize_activations()
 
         results = self.results(block)
 
@@ -328,7 +341,10 @@ class DeepTFA:
             image_slice, plot_abs=plot_abs,
             title="Block %d (Participant %d, Run %d, Stimulus: %s)" %\
                   (block, self._blocks[block].subject, self._blocks[block].run,
-                   labeler(self._blocks[block]))
+                   labeler(self._blocks[block])),
+            vmin=-self.activation_normalizers[block],
+            vmax=self.activation_normalizers[block],
+            **kwargs,
         )
 
         logging.info(
