@@ -150,17 +150,17 @@ class DeepTFAEmbedding(tfa_models.Model):
 
         for k, v in prior['centers'].items():
             prior['centers'][k] = Variable(v.expand(factor_centers.shape[0], *v.shape))
-        trace.normal(prior['centers']['mu'],
-                     prior['centers']['sigma'],
-                     value=factor_centers,
-                     name='factor_centers%d' % block)
+        #trace.normal(prior['centers']['mu'],
+        #             prior['centers']['sigma'],
+        #             value=factor_centers,
+        #             name='factor_centers%d' % block)
         for k, v in prior['log_widths'].items():
             prior['log_widths'][k] = Variable(v.expand(factor_log_widths.shape[0],
                                                        *v.shape))
-        trace.normal(prior['log_widths']['mu'],
-                     prior['log_widths']['sigma'],
-                     value=factor_log_widths,
-                     name='factor_log_widths%d' % block)
+        #trace.normal(prior['log_widths']['mu'],
+        #             prior['log_widths']['sigma'],
+        #             value=factor_log_widths,
+        #             name='factor_log_widths%d' % block)
 
         return weights, factor_centers, factor_log_widths
 
