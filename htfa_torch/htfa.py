@@ -89,6 +89,9 @@ class HierarchicalTopographicFactorAnalysis:
             dec = self.dec
         optimizer = torch.optim.Adam(list(self.enc.parameters()),
                                      lr=learning_rate)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, factor=1e-1, min_lr=5e-5
+        )
         enc.train()
         dec.train()
 
@@ -153,6 +156,7 @@ class HierarchicalTopographicFactorAnalysis:
 
             free_energies[epoch] = np.array(epoch_free_energies).sum(0)
             free_energies[epoch] = free_energies[epoch].sum(0)
+            scheduler.step(free_energies[epoch])
 
             measure_occurrences = False
 
