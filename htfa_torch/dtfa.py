@@ -502,3 +502,38 @@ class DeepTFA:
         dtfa.load_state(basename)
 
         return dtfa
+
+    def decoding_accuracy(self, labeler=lambda x: x, window_size=5):
+        """
+        :return: accuracy: a dict containing decoding accuracies for each task [activity,isfc,mixed]
+        """
+        tasks = [labeler(b.task) for b in self._blocks]
+
+        group = {task: [] for task in tasks}
+        accuracy = {task: {'decoding': [], 'isfc': [], 'mixed': [], 'kl': []}
+                    for task in tasks}
+
+        for (b, block) in enumerate(self._blocks):
+            factorization = self.results(b)
+            group[labeler(block.task)].append(factorization['weights']['mu'])
+
+        for task in tasks:
+            group[task] = np.rollaxis(np.dstack(group[task]), -1)
+            if group[task].shape[0] < 2:
+                raise ValueError('Not enough subjects for task %s' % task)
+            group1 = group[task][:group[task].shape[0] // 2]
+            group2 = group[task][group[task].shape[0] // 2:]
+            accuracy[task]['decoding'].append(
+                utils.get_decoding_accuracy(group1, group2, window_size)
+            )
+            accuracy[task]['isfc'].append(
+                utils.get_isfc_decoding_accuracy(group1, group2, window_size)
+            )
+            accuracy[task]['mixed_decoding'].append(
+                utils.get_mixed_decoding_accuracy(group1, group2, window_size)
+            )
+            accuracy[task]['kl'].append(
+                utils.get_kl_decoding_accuracy(group1, group2, window_size)
+            )
+
+        return accuracy
