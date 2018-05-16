@@ -29,6 +29,7 @@ import torch.distributions as dists
 from torch.autograd import Variable
 import torch.nn as nn
 from torch.nn import Parameter
+import torch.optim.lr_scheduler
 
 import probtorch
 
@@ -50,7 +51,10 @@ class DeepTFA:
         self.num_blocks = len(self._blocks)
         self.voxel_activations = [block.activations for block in self._blocks]
         self._blocks[-1].load()
-        self.voxel_locations = self._blocks[-1].locations.pin_memory()
+        if tfa.CUDA:
+            self.voxel_locations = self._blocks[-1].locations.pin_memory()
+        else:
+            self.voxel_locations = self._blocks[-1].locations
         self._templates = [block.filename for block in self._blocks]
         self._tasks = [block.task for block in self._blocks]
 
@@ -126,7 +130,10 @@ class DeepTFA:
 
         optimizer = torch.optim.Adam(list(variational.parameters()) +\
                                      list(generative.parameters()),
-                                     lr=learning_rate, weight_decay=1e-2)
+                                     lr=learning_rate)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, factor=1e-1, min_lr=5e-5
+        )
         variational.train()
         generative.train()
 
@@ -143,12 +150,13 @@ class DeepTFA:
                 block_batches = utils.chunks(list(range(self.num_blocks)),
                                              n=blocks_batch_size)
                 for block_batch in block_batches:
-                    activations = [{'Y': Variable(data.cuda()[:, b, :])}
-                                   for b in block_batch]
                     if tfa.CUDA and use_cuda:
+                        data = data.cuda()
                         for b in block_batch:
                             generative.module.likelihoods[b].voxel_locations =\
                                 cuda_locations
+                    activations = [{'Y': Variable(data[:, b, :])}
+                                   for b in block_batch]
                     trs = (batch * batch_size, None)
                     trs = (trs[0], trs[0] + activations[0]['Y'].shape[0])
 
@@ -164,8 +172,7 @@ class DeepTFA:
                         result = 1.0
                         if measure_occurrences:
                             rv_occurrences[node] += 1
-                        if 'Weights' not in node and 'Y' not in node:
-                            result /= rv_occurrences[node]
+                        result /= rv_occurrences[node]
                         return result
                     free_energy = tfa.hierarchical_free_energy(
                         q, p,
@@ -185,9 +192,12 @@ class DeepTFA:
                         torch.cuda.empty_cache()
                 if tfa.CUDA and use_cuda:
                     epoch_free_energies[batch] = epoch_free_energies[batch].cpu().data.numpy()
+                else:
+                    epoch_free_energies[batch] = epoch_free_energies[batch].data.numpy()
 
             free_energies[epoch] = np.array(epoch_free_energies).sum(0)
             free_energies[epoch] = free_energies[epoch].sum(0)
+            scheduler.step(free_energies[epoch])
 
             measure_occurrences = False
 
