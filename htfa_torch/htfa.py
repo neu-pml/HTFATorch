@@ -202,46 +202,42 @@ class HierarchicalTopographicFactorAnalysis:
             for b in range(self.num_blocks):
                 hyp.plot(self.voxel_locations.numpy(), 'k.')
 
-    def plot_factor_centers(self, block=None, filename=None, show=True,
-                            trace=None):
-        hyperparams = self.results()
+    def plot_factor_centers(self, block=None, filename=None, show=True, t=None,
+                            labeler=None):
+        if labeler is None:
+            labeler = lambda b: b.task
+        hyperparams = self.enc.hyperparams.state_vardict()
 
-        if trace:
-            if block is not None:
-                factor_centers = trace['FactorCenters%d' % block].value
-                factor_log_widths = trace['FactorLogWidths%d' % block].value
-                factor_uncertainties = hyperparams['block']['factor_centers']['sigma'][block]
-            else:
-                factor_centers = trace['template_factor_centers'].value
-                factor_log_widths = trace['template_factor_log_widths'].value
-                factor_uncertainties =\
-                    hyperparams['template']['factor_centers']['sigma']
-            if len(factor_centers.shape) > 2:
-                factor_centers = factor_centers.mean(0)
-                factor_log_widths = factor_log_widths.mean(0)
-            if len(factor_uncertainties.shape) > 2:
-                factor_uncertainties = factor_uncertainties.mean(0)
+        if block is not None:
+            factor_centers =\
+                hyperparams['block']['factor_centers']['mu'][block]
+            factor_log_widths =\
+                hyperparams['block']['factor_log_widths']['mu'][block]
+            weights = hyperparams['block']['weights']['mu'][block]
         else:
-            if block is not None:
-                factor_centers =\
-                    hyperparams['block']['factor_centers']['mu'][block]
-                factor_log_widths =\
-                    hyperparams['block']['factor_log_widths']['mu'][block]
-                factor_uncertainties =\
-                    hyperparams['block']['factor_centers']['sigma'][block]
-            else:
-                factor_centers =\
-                    hyperparams['template']['factor_centers']['mu']
-                factor_log_widths =\
-                    hyperparams['template']['factor_log_widths']['mu']
-                factor_uncertainties =\
-                    hyperparams['template']['factor_centers']['sigma']
+            factor_centers =\
+                hyperparams['template']['factor_centers']['mu']
+            factor_log_widths =\
+                hyperparams['template']['factor_log_widths']['mu']
+            weights = hyperparams['block']['weights']['mu'].mean(0)
+
+        if block is not None:
+            title = "Block %d (Participant %d, Run %d, Stimulus: %s)" %\
+                  (block, self._blocks[block].subject, self._blocks[block].run,
+                   labeler(self._blocks[block]))
+        else:
+            title = 'Average block'
+
+        centers_sizes = np.repeat([50], self.num_factors)
+        sizes = torch.exp(factor_log_widths.data).numpy()
+
+        centers = factor_centers.data.numpy()
 
         plot = niplot.plot_connectome(
-            np.eye(self.num_factors),
-            factor_centers.data.numpy(),
-            node_color=utils.uncertainty_palette(factor_uncertainties.data),
-            node_size=np.exp(factor_log_widths.data.numpy() - np.log(2))
+            np.eye(self.num_factors * 2),
+            np.vstack([centers, centers]),
+            node_size=np.vstack([sizes, centers_sizes]),
+            title=title
         )
 
         if filename is not None:
@@ -301,13 +297,15 @@ class HierarchicalTopographicFactorAnalysis:
                               self.voxel_locations.numpy(),
                               self._templates[block])
         image_slice = nilearn.image.index_img(image, t)
-        plot = niplot.plot_glass_brain(image_slice, plot_abs=plot_abs)
+        plot = niplot.plot_glass_brain(image_slice, plot_abs=plot_abs,
+                                       colorbar=True)
 
         logging.info(
-            'Reconstruction Error (Frobenius Norm): %.8e',
+            'Reconstruction Error (Frobenius Norm): %.8e out of %.8e',
             np.linalg.norm(
                 (reconstruction - self.voxel_activations[block]).numpy()
-            )
+            ),
+            np.linalg.norm(self.voxel_activations[block].numpy())
         )
 
         if filename is not None:
