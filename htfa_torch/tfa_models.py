@@ -197,7 +197,7 @@ class TFAGenerativePrior(GenerativePrior):
         weights = trace.normal(weight_params['mu'],
                                weight_params['sigma'],
                                value=guide['Weights' + str(self.block)],
-                               name='Weights' + str(self.block))
+                               name='Weights%dt%d-%d' % (self.block, times[0], times[1]))
 
         factor_centers = trace.normal(params['factor_centers']['mu'],
                                       params['factor_centers']['sigma'],
@@ -236,7 +236,7 @@ class TFAGenerativeLikelihood(GenerativeLikelihood):
 
         activations = trace.normal(weights @ factors,
                                    self._voxel_noise, value=observations['Y'],
-                                   name='Y' + str(self.block))
+                                   name='Y%dt%d-%d' % (self.block, times[0], times[1]))
         return activations
 
 class TFAModel(nn.Module):
