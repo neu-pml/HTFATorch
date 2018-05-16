@@ -130,7 +130,7 @@ class DeepTFA:
 
         optimizer = torch.optim.Adam(list(variational.parameters()) +\
                                      list(generative.parameters()),
-                                     lr=learning_rate, weight_decay=1e-2)
+                                     lr=learning_rate)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, factor=1e-1, min_lr=5e-5
         )
