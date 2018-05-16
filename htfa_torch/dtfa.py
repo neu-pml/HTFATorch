@@ -60,6 +60,7 @@ class DeepTFA:
 
         self.weight_normalizers = None
         self.activation_normalizers = None
+        self.normalize_activations()
 
         # Pull out relevant dimensions: the number of time instants and the
         # number of voxels in each timewise "slice"
@@ -108,7 +109,7 @@ class DeepTFA:
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
               log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES,
               batch_size=64, use_cuda=True, checkpoint_steps=None,
-              blocks_batch_size=4, patience=5):
+              blocks_batch_size=4, patience=10):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
@@ -133,7 +134,8 @@ class DeepTFA:
                                      list(generative.parameters()),
                                      lr=learning_rate)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, factor=1e-1, min_lr=5e-5, patience=patience
+            optimizer, factor=1e-1, min_lr=5e-5, patience=patience,
+            verbose=True
         )
         variational.train()
         generative.train()
@@ -300,15 +302,20 @@ class DeepTFA:
             labeler = lambda b: b.task
         if block is None:
             block = np.random.choice(self.num_blocks, 1)[0]
+        if self.activation_normalizers is None:
+            self.normalize_activations()
+
         image = utils.cmu2nii(self.voxel_activations[block].numpy(),
                               self.voxel_locations.numpy(),
                               self._templates[block])
         image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(
-            image_slice, plot_abs=plot_abs,
+            image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
             title="Block %d (Participant %d, Run %d, Stimulus: %s)" %\
                   (block, self._blocks[block].subject, self._blocks[block].run,
                    labeler(self._blocks[block])),
+            vmin=-self.activation_normalizers[block],
+            vmax=self.activation_normalizers[block],
             **kwargs,
         )
 
@@ -337,7 +344,7 @@ class DeepTFA:
                               self._templates[block])
         image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(
-            image_slice, plot_abs=plot_abs,
+            image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
             title="Block %d (Participant %d, Run %d, Stimulus: %s)" %\
                   (block, self._blocks[block].subject, self._blocks[block].run,
                    labeler(self._blocks[block])),
