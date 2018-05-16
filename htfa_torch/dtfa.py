@@ -107,7 +107,7 @@ class DeepTFA:
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
               log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES,
               batch_size=64, use_cuda=True, checkpoint_steps=None,
-              blocks_batch_size=4):
+              blocks_batch_size=4, patience=5):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
@@ -132,7 +132,7 @@ class DeepTFA:
                                      list(generative.parameters()),
                                      lr=learning_rate)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, factor=1e-1, min_lr=5e-5
+            optimizer, factor=1e-1, min_lr=5e-5, patience=patience
         )
         variational.train()
         generative.train()
@@ -258,70 +258,12 @@ class DeepTFA:
             'factor_log_widths': factor_log_widths.data,
         }
 
-    def normalize_weights(self):
-        def weights_generator(run, subject):
-            run_blocks = [b for b in range(len(self._blocks))
-                          if self._blocks[b].run == run and\
-                             self._blocks[b].subject == subject]
-            for rb in run_blocks:
-                weights = self.results(rb)['weights']['mu'].data
-                yield weights.contiguous().view(-1)
-        runs = list(set([(b.run, b.subject) for b in self._blocks]))
-        runs.sort(key=lambda p: p[0])
-        self.weight_normalizers = runs.copy()
-        for (i, (run, subject)) in enumerate(runs):
-            weights = list(weights_generator(run, subject))
-            idw = utils.normalize_tensors(weights, percentiles=(10, 90))
-            absw = utils.normalize_tensors(weights, absval=True,
-                                           percentiles=(30, 70))
-            self.weight_normalizers[i] = (idw, absw)
-
-        return self.weight_normalizers
-
-    def plot_factor_centers(self, block, filename=None, show=True,
-                            colormap='cold_white_hot', t=None, labeler=None,
-                            uncertainty_opacity=False):
+    def plot_factor_centers(self, block, filename=None, show=True, t=None,
+                            labeler=None):
         if labeler is None:
             labeler = lambda b: b.task
         results = self.results(block)
-        hyperparams = self.variational.hyperparams.state_vardict()
-        subject = self.generative.embedding.subjects[block]
 
-        factor_params = self.generative.embedding.softplus(
-            self.generative.embedding.factors_generator(
-                hyperparams['factors']['sigma'][subject]
-            )
-        )
-        factors_std_dev = factor_params.view(self.num_factors, 4)[:, 0:3]
-
-        _, brain_center_std_dev = utils.brain_centroid(self.voxel_locations)
-        brain_center_std_dev = brain_center_std_dev.expand(
-            self.num_factors, 3
-        )
-        weights = results['weights']['mu']
-        if t is not None:
-            weights = weights[t]
-        else:
-            weights = weights.mean(0)
-
-        if self.weight_normalizers is None:
-            self.normalize_weights()
-        runs = list(set([(b.run, b.subject) for b in self._blocks]))
-        subject_run = (self._blocks[block].run, self._blocks[block].subject)
-        idnorm, absnorm = self.weight_normalizers[runs.index(subject_run)]
-
-        if uncertainty_opacity:
-            alphas = utils.uncertainty_alphas(factors_std_dev.data,
-                                              scalars=brain_center_std_dev)
-        else:
-            alphas = utils.intensity_alphas(torch.abs(weights.data),
-                                            normalizer=absnorm)
-
-        palette = utils.scalar_map_palette(weights.data.numpy(), alphas,
-                                           colormap, normalizer=idnorm)
-
-        centers_palette = utils.scalar_map_palette(weights.data.numpy(), None,
-                                                   colormap, normalizer=idnorm)
         centers_sizes = np.repeat([50], self.num_factors)
         sizes = torch.exp(results['factor_log_widths']).numpy()
 
@@ -330,7 +272,6 @@ class DeepTFA:
         plot = niplot.plot_connectome(
             np.eye(self.num_factors * 2),
             np.vstack([centers, centers]),
-            node_color=np.vstack([palette, centers_palette]),
             node_size=np.vstack([sizes, centers_sizes]),
             title="Block %d (Participant %d, Run %d, Stimulus: %s)" %\
                   (block, self._blocks[block].subject, self._blocks[block].run,
