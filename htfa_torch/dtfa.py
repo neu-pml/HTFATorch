@@ -261,12 +261,20 @@ class DeepTFA:
         }
 
     def normalize_activations(self):
-        self.activation_normalizers = [[] for block in self._blocks]
+        subject_runs = list(set([(block.subject, block.run)
+                                 for block in self._blocks]))
+        subject_run_normalizers = {sr: 0 for sr in subject_runs}
+
         for block in range(len(self._blocks)):
-            self.activation_normalizers[block] = max(
-                -self.voxel_activations[block].min(),
-                self.voxel_activations[block].max()
+            sr = (self._blocks[block].subject, self._blocks[block].run)
+            subject_run_normalizers[sr] = max(
+                subject_run_normalizers[sr],
+                torch.abs(self.voxel_activations[block]).max()
             )
+
+        self.activation_normalizers =\
+            [subject_run_normalizers[(block.subject, block.run)]
+             for block in self._blocks]
         return self.activation_normalizers
 
     def plot_factor_centers(self, block, filename=None, show=True, t=None,
