@@ -52,14 +52,14 @@ class DeepTFAEmbedding(tfa_models.Model):
             hyper_means['factor_log_widths'] =\
                 torch.Tensor([hyper_means['factor_log_widths']]).\
                 expand(self._num_factors, 1)
-            self.weights_generator[2].bias = nn.Parameter(torch.cat(
+            self.weights_generator[2].bias = nn.Parameter(torch.stack(
                 (hyper_means['weights'], torch.ones(self._num_factors)),
-                dim=-1
+                dim=1
             ).view(self._num_factors * 2))
             self.factors_generator[2].bias = nn.Parameter(torch.cat(
                 (hyper_means['factor_centers'],
                  hyper_means['factor_log_widths']),
-                dim=-1
+                dim=1
             ).view(self._num_factors * 4))
 
     # Assumes that all tensors have a particle dimension as their first
@@ -113,10 +113,10 @@ class DeepTFAEmbedding(tfa_models.Model):
             dim=-1)
 
         weight_params = self.weights_generator(weights_embed)
-        weight_params = weight_params.view(-1, weight_params.shape[1], 2,
-                                           self._num_factors)
-        weights = trace.normal(weight_params[:, :, 0],
-                               self.softplus(weight_params[:, :, 1]),
+        weight_params = weight_params.view(-1, times[1] - times[0],
+                                           self._num_factors, 2)
+        weights = trace.normal(weight_params[:, :, :, 0],
+                               self.softplus(weight_params[:, :, :, 1]),
                                value=guide['W_%d' % block],
                                name='W_%d' % block)
 
