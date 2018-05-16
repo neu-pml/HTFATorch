@@ -230,8 +230,9 @@ class TFAGenerativeLikelihood(GenerativeLikelihood):
         if voxel_noise is None:
             voxel_noise = self._voxel_noise
 
-        factors = radial_basis(Variable(self.voxel_locations), centers,
-                               log_widths)
+        factors = radial_basis(Variable(self.voxel_locations,
+                                        requires_grad=True),
+                               centers, log_widths)
 
         activations = trace.normal(weights @ factors,
                                    self._voxel_noise, value=observations['Y'],
