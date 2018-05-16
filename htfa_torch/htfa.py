@@ -128,8 +128,7 @@ class HierarchicalTopographicFactorAnalysis:
                         result = 1.0
                         if measure_occurrences:
                             rv_occurrences[node] += 1
-                        if 'Weights' not in node and 'Y' not in node:
-                            result /= rv_occurrences[node]
+                        result /= rv_occurrences[node]
                         return result
                     free_energy = tfa.hierarchical_free_energy(
                         q, p,
