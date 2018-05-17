@@ -35,14 +35,17 @@ class DeepTFAEmbedding(tfa_models.Model):
         self.subjects = block_subjects
         self.tasks = block_tasks
 
-        self.weights_generator = nn.Sequential(
+        self.weights_mu_generator = nn.Sequential(
             nn.Linear(self._embedding_dim * 2, self._num_factors),
-            nn.Sigmoid(),
-            nn.Linear(self._num_factors, self._num_factors * 2),
+            nn.Tanh(),
+        )
+        self.weights_sigma_generator = nn.Sequential(
+            nn.Linear(self._embedding_dim * 2, self._num_factors),
+            nn.Tanh(),
         )
         self.factors_generator = nn.Sequential(
             nn.Linear(self._embedding_dim, self._num_factors),
-            nn.Sigmoid(),
+            nn.Tanh(),
             nn.Linear(self._num_factors, self._num_factors * 4),
         )
         self.softplus = nn.Softplus()
@@ -52,10 +55,12 @@ class DeepTFAEmbedding(tfa_models.Model):
             hyper_means['factor_log_widths'] =\
                 torch.Tensor([hyper_means['factor_log_widths']]).\
                 expand(self._num_factors, 1)
-            self.weights_generator[2].bias = nn.Parameter(torch.stack(
-                (hyper_means['weights'], torch.ones(self._num_factors)),
-                dim=1
-            ).view(self._num_factors * 2))
+            self.weights_mu_generator[0].bias = nn.Parameter(
+                hyper_means['weights']
+            )
+            self.weights_sigma_generator[0].bias = nn.Parameter(
+                torch.ones(self._num_factors)
+            )
             self.factors_generator[2].bias = nn.Parameter(torch.cat(
                 (hyper_means['factor_centers'],
                  hyper_means['factor_log_widths']),
@@ -112,11 +117,10 @@ class DeepTFAEmbedding(tfa_models.Model):
              task_embed),
             dim=-1)
 
-        weight_params = self.weights_generator(weights_embed)
-        weight_params = weight_params.view(-1, times[1] - times[0],
-                                           self._num_factors, 2)
-        weights = trace.normal(weight_params[:, :, :, 0],
-                               self.softplus(weight_params[:, :, :, 1]),
+        weight_mus = self.weights_mu_generator(weights_embed)
+        weight_sigmas = self.weights_sigma_generator(weights_embed)
+        weights = trace.normal(weight_mus,
+                               self.softplus(weight_sigmas),
                                value=guide['W_%dt%d-%d' % (block, times[0], times[1])],
                                name='W_%dt%d-%d' % (block, times[0], times[1]))
 
@@ -150,15 +154,13 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
             },
             'subject': {
                 'mu': torch.zeros(self.num_subjects, self.embedding_dim),
-                'sigma': torch.ones(self.num_subjects, self.embedding_dim) *\
-                         tfa_models.SOURCE_WEIGHT_STD_DEV,
+                'sigma': torch.ones(self.num_subjects, self.embedding_dim),
             },
             'task': {
                 'mu': torch.zeros(self.num_tasks, self.num_times,
                                   self.embedding_dim),
                 'sigma': torch.ones(self.num_tasks, self.num_times,
-                                    self.embedding_dim) *\
-                         tfa_models.SOURCE_WEIGHT_STD_DEV,
+                                    self.embedding_dim),
             }
         })
 
