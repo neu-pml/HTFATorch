@@ -57,6 +57,8 @@ class HierarchicalTopographicFactorAnalysis:
         self.task_list = np.unique(self.task_list)
         self._templates = [block.filename for block in self._blocks]
 
+        self.activation_normalizers = None
+
         # Pull out relevant dimensions: the number of time instants and the
         # number of voxels in each timewise "slice"
         self.num_times = [acts.shape[0] for acts in self.voxel_activations]
@@ -195,6 +197,23 @@ class HierarchicalTopographicFactorAnalysis:
         """Return the inferred variational parameters"""
         return self.enc.hyperparams.state_vardict()
 
+    def normalize_activations(self):
+        subject_runs = list(set([(block.subject, block.run)
+                                 for block in self._blocks]))
+        subject_run_normalizers = {sr: 0 for sr in subject_runs}
+
+        for block in range(len(self._blocks)):
+            sr = (self._blocks[block].subject, self._blocks[block].run)
+            subject_run_normalizers[sr] = max(
+                subject_run_normalizers[sr],
+                torch.abs(self.voxel_activations[block]).max()
+            )
+
+        self.activation_normalizers =\
+            [subject_run_normalizers[(block.subject, block.run)]
+             for block in self._blocks]
+        return self.activation_normalizers
+
     def plot_voxels(self, block=None):
         if block:
             hyp.plot(self.voxel_locations.numpy(), 'k.')
@@ -213,7 +232,6 @@ class HierarchicalTopographicFactorAnalysis:
                 hyperparams['block']['factor_centers']['mu'][block]
             factor_log_widths =\
                 hyperparams['block']['factor_log_widths']['mu'][block]
-            weights = hyperparams['block']['weights']['mu'][block]
         else:
             factor_centers =\
                 hyperparams['template']['factor_centers']['mu']
@@ -260,8 +278,15 @@ class HierarchicalTopographicFactorAnalysis:
                             plot_abs=False, t=0):
         if block is None:
             block = np.random.choice(self.num_blocks, 1)[0]
+        if self.activation_normalizers is None:
+            self.normalize_activations()
+
         image = nilearn.image.index_img(nib.load(self._templates[block]), t)
-        plot = niplot.plot_glass_brain(image, plot_abs=plot_abs)
+        plot = niplot.plot_glass_brain(
+            image, plot_abs=plot_abs, colorbar=True,
+            vmin=-self.activation_normalizers[block],
+            vmax=self.activation_normalizers[block],
+        )
 
         if filename is not None:
             plot.savefig(filename)
@@ -273,6 +298,8 @@ class HierarchicalTopographicFactorAnalysis:
     def plot_reconstruction(self, block=None, filename=None, show=True,
                             plot_abs=False, t=0):
         results = self.results()
+        if self.activation_normalizers is None:
+            self.normalize_activations()
 
         if block is not None:
             weights = results['block']['weights']['mu'][block]
@@ -297,8 +324,11 @@ class HierarchicalTopographicFactorAnalysis:
                               self.voxel_locations.numpy(),
                               self._templates[block])
         image_slice = nilearn.image.index_img(image, t)
-        plot = niplot.plot_glass_brain(image_slice, plot_abs=plot_abs,
-                                       colorbar=True)
+        plot = niplot.plot_glass_brain(
+            image_slice, plot_abs=plot_abs, colorbar=True,
+            vmin=-self.activation_normalizers[block],
+            vmax=self.activation_normalizers[block],
+        )
 
         logging.info(
             'Reconstruction Error (Frobenius Norm): %.8e out of %.8e',
