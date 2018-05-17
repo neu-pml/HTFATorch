@@ -421,7 +421,7 @@ class HierarchicalTopographicFactorAnalysis:
             fig.savefig(filename)
         if show:
             plt.show()
-
+            
     def decoding_accuracy(self, restvtask=False, window_size=5):
         """
         :return: accuracy: a dict containing decoding accuracies for each task [activity,isfc,mixed]
@@ -450,6 +450,7 @@ class HierarchicalTopographicFactorAnalysis:
                     accuracy[key].append(utils.get_kl_decoding_accuracy(G1, G2, window_size))
         else:
             keys = self.task_list
+            print(keys)
             group = {key: [] for key in keys}
             accuracy = {key: [] for key in keys}
             for key in keys:
@@ -467,4 +468,42 @@ class HierarchicalTopographicFactorAnalysis:
                     accuracy[key].append(utils.get_isfc_decoding_accuracy(G1, G2, window_size))
                     accuracy[key].append(utils.get_mixed_decoding_accuracy(G1, G2, window_size))
                     accuracy[key].append(utils.get_kl_decoding_accuracy(G1, G2, window_size))
+        return accuracy
+
+    def voxel_decoding_accuracy(self,restvtask=False,window_size=5):
+        times = self.num_times
+        if restvtask:
+            keys = ['rest', 'task']
+            group = {key: [] for key in keys}
+            accuracy = {key:[] for key in keys}
+
+            for key in keys:
+                for n in range(self.num_blocks):
+                    if key in self._blocks[n].task:
+                        group[key].append(self._blocks[n].activations[:times[n],:])
+                    else:
+                        group['task'].append(self._blocks[n].activations[:times[n],:])
+                group[key] = np.rollaxis(np.dstack(group[key]), -1)
+                if len(group[key]) < 2:
+                    raise ValueError('not enough subjects for the task: ' + key)
+                else:
+                    G1 = group[key][:int(group[key].shape[0] / 2), :, :]
+                    G2 = group[key][int(group[key].shape[0] / 2):, :, :]
+                    accuracy[key].append(utils.get_decoding_accuracy(G1, G2, window_size))
+        else:
+            keys = self.task_list
+            group = {key: [] for key in keys}
+            accuracy = {key: [] for key in keys}
+            for key in keys:
+                for n in range(self.num_blocks):
+                    if key == self._blocks[n].task:
+                        group[key].append(self._blocks[n].activations[:times[n],:])
+                group[key] = np.rollaxis(np.dstack(group[key]), -1)
+                if group[key].shape[0] < 2:
+                    raise ValueError('not enough subjects for the task: ' + key)
+
+                else:
+                    G1 = group[key][:int(group[key].shape[0] / 2), :, :]
+                    G2 = group[key][int(group[key].shape[0] / 2):, :, :]
+                    accuracy[key].append(utils.get_decoding_accuracy(G1, G2, window_size))
         return accuracy
