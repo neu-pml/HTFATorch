@@ -215,7 +215,6 @@ def get_covariance(group_data, window_size=5):
     :param windowsize: number of observations to include in each sliding window (set to 0 or don't specify if all
                            timepoints should be used)
     :return: n_subjets x number-of-features by number-of-features covariance matrix
-
     """
     n_times = group_data.shape[1]
     n_nodes = group_data.shape[2]
@@ -260,8 +259,9 @@ def get_decoding_accuracy(G1,G2,window_size=5,hist=True):
         for i in range(5):
             temp = np.sum(time_labels+i == np.arange(activity_pattern_G1.shape[0]))
             decoding_accuracy.append(temp)
-            temp = np.sum(time_labels-i == np.arange(activity_pattern_G1.shape[0]))
-            decoding_accuracy.append(temp)
+            if i!=0:
+                temp = np.sum(time_labels-i == np.arange(activity_pattern_G1.shape[0]))
+                decoding_accuracy.append(temp)
     else:
         decoding_accuracy = np.sum(time_labels == np.arange(activity_pattern_G1.shape[0]))
     decoding_accuracy = np.array(decoding_accuracy)/activity_pattern_G1.shape[0]
@@ -283,8 +283,9 @@ def get_isfc_decoding_accuracy(G1,G2,window_size=5,hist=True):
         for i in range(5):
             temp = np.sum(time_labels+i == np.arange(isfc_pattern_G1.shape[0]))
             decoding_accuracy.append(temp)
-            temp = np.sum(time_labels-i == np.arange(isfc_pattern_G1.shape[0]))
-            decoding_accuracy.append(temp)
+            if i!=0:
+                temp = np.sum(time_labels-i == np.arange(isfc_pattern_G1.shape[0]))
+                decoding_accuracy.append(temp)
     else:
         decoding_accuracy = np.sum(time_labels == np.arange(isfc_pattern_G1.shape[0]))
     decoding_accuracy = np.array(decoding_accuracy)/isfc_pattern_G1.shape[0]
@@ -313,8 +314,9 @@ def get_mixed_decoding_accuracy(G1,G2,window_size=5,mixing_prop=0.5,hist=True):
         for i in range(5):
             temp = np.sum(time_labels+i == np.arange(isfc_pattern_G1.shape[0]))
             decoding_accuracy.append(temp)
-            temp = np.sum(time_labels-i == np.arange(isfc_pattern_G1.shape[0]))
-            decoding_accuracy.append(temp)
+            if i!=0:
+                temp = np.sum(time_labels-i == np.arange(isfc_pattern_G1.shape[0]))
+                decoding_accuracy.append(temp)
     else:
         decoding_accuracy = np.sum(time_labels == np.arange(isfc_pattern_G1.shape[0]))
     decoding_accuracy = np.array(decoding_accuracy)/isfc_pattern_G1.shape[0]
@@ -336,8 +338,9 @@ def get_kl_decoding_accuracy(G1, G2, window_size=5,hist=True):
         for i in range(5):
             temp = np.sum(time_labels+i == np.arange(means_G1.shape[0]))
             decoding_accuracy.append(temp)
-            temp = np.sum(time_labels-i == np.arange(means_G1.shape[0]))
-            decoding_accuracy.append(temp)
+            if i!=0:
+                temp = np.sum(time_labels-i == np.arange(means_G1.shape[0]))
+                decoding_accuracy.append(temp)
     else:
         decoding_accuracy = np.sum(time_labels == np.arange(means_G1.shape[0]))
     decoding_accuracy = np.array(decoding_accuracy)/means_G1.shape[0]
@@ -351,7 +354,6 @@ def dynamic_ISFC(data, windowsize=5):
         :param windowsize: number of observations to include in each sliding window (set to 0 or don't specify if all
                            timepoints should be used)
         :return: number-of-features by number-of-features isfc matrix
-
         reference: http://www.nature.com/articles/ncomms12141
         code based on https://github.com/brainiak/brainiak/blob/master/examples/factoranalysis/htfa_tutorial.ipynb
         """
@@ -392,7 +394,7 @@ def dynamic_ISFC(data, windowsize=5):
 
         isfc_mat[np.where(np.isnan(isfc_mat))] = 0
         return isfc_mat
-
+        
 def vardict(existing=None):
     vdict = flatdict.FlatDict(delimiter='__')
     if existing:
