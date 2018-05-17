@@ -117,8 +117,8 @@ class DeepTFAEmbedding(tfa_models.Model):
                                            self._num_factors, 2)
         weights = trace.normal(weight_params[:, :, :, 0],
                                self.softplus(weight_params[:, :, :, 1]),
-                               value=guide['W_%d' % block],
-                               name='W_%d' % block)
+                               value=guide['W_%dt%d-%d' % (block, times[0], times[1])],
+                               name='W_%dt%d-%d' % (block, times[0], times[1]))
 
         factors = self.factors_generator(factors_embed)
         factors = factors.view(-1, self._num_factors, 4)
