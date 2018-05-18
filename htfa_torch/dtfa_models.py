@@ -51,15 +51,15 @@ class DeepTFAEmbedding(tfa_models.Model):
         self.softplus = nn.Softplus()
 
         if hyper_means is not None:
-            hyper_means['weights'] = hyper_means['weights'].mean(0)
+            hyper_means['weights'] = hyper_means['weights'][0]
             hyper_means['factor_log_widths'] =\
                 torch.Tensor([hyper_means['factor_log_widths']]).\
                 expand(self._num_factors, 1)
-            self.weights_mu_generator[0].bias = nn.Parameter(
+            self.weights_mu_generator[-1].bias = nn.Parameter(
                 hyper_means['weights']
             )
-            self.weights_sigma_generator[0].bias = nn.Parameter(
-                torch.ones(self._num_factors)
+            self.weights_sigma_generator[-1].bias = nn.Parameter(
+                torch.ones(self._num_factors) * tfa_models.SOURCE_WEIGHT_STD_DEV
             )
             self.factors_generator[2].bias = nn.Parameter(torch.cat(
                 (hyper_means['factor_centers'],
