@@ -239,11 +239,11 @@ class DeepTFA:
 
         weight_mus = self.generative.embedding.weights_mu_generator(weights_embed)
         weight_sigmas = self.generative.embedding.weights_sigma_generator(weights_embed)
-        factor_params =\
-            self.generative.embedding.factors_generator(factors_embed)
-        factor_params = factor_params.view(self.num_factors, 4)
-        factor_centers = factor_params[:, 0:3]
-        factor_log_widths = factor_params[:, 3]
+        factor_centers =\
+            self.generative.embedding.factor_centers_generator(factors_embed)
+        factor_centers = factor_centers.view(self.num_factors, 3)
+        factor_log_widths =\
+            self.generative.embedding.factor_log_widths_generator(factors_embed)
 
         return {
             'weights': {
