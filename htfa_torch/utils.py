@@ -387,7 +387,7 @@ def dynamic_ISFC(data, windowsize=5):
 
         isfc_mat[np.where(np.isnan(isfc_mat))] = 0
         return isfc_mat
-        
+
 def vardict(existing=None):
     vdict = flatdict.FlatDict(delimiter='__')
     if existing:
