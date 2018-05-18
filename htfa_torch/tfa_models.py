@@ -224,11 +224,9 @@ class TFAGenerativeLikelihood(GenerativeLikelihood):
         self.block = block
 
     def forward(self, trace, weights, centers, log_widths, times=None,
-                observations=collections.defaultdict(), voxel_noise=None):
+                observations=collections.defaultdict()):
         if times is None:
             times = (0, self._num_times)
-        if voxel_noise is None:
-            voxel_noise = self._voxel_noise
 
         factors = radial_basis(Variable(self.voxel_locations,
                                         requires_grad=True),

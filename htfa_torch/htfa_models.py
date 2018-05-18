@@ -58,10 +58,6 @@ class HTFAGuideHyperParams(tfa_models.HyperParams):
                 'sigma': torch.ones(self._num_blocks, self._num_times,
                                     self._num_factors),
             },
-            'voxel_noise': {
-                'mu': torch.ones(self._num_blocks),
-                'sigma': torch.sqrt(torch.rand(self._num_blocks))
-            }
         })
 
         super(self.__class__, self).__init__(params, guide=True)
@@ -95,15 +91,6 @@ class HTFAGuideSubjectPrior(tfa_models.GuidePrior):
         # We only expand the parameters for which we're actually going to sample
         # values in this very method, and thus want to expand to get multiple
         # particles.
-        voxel_noise_params = params['block']['voxel_noise']
-        if num_particles and num_particles > 0:
-            voxel_noise_params = utils.unsqueeze_and_expand_vardict(
-                params['block']['voxel_noise'], 0, num_particles, True
-            )
-        voxel_noise = trace.normal(voxel_noise_params['mu'],
-                                   voxel_noise_params['sigma'],
-                                   name='voxel_noise')
-
         if blocks is None:
             blocks = list(range(self._num_blocks))
 
@@ -125,14 +112,14 @@ class HTFAGuideSubjectPrior(tfa_models.GuidePrior):
             factor_centers += [fc]
             factor_log_widths += [flw]
 
-        return weights, factor_centers, factor_log_widths, voxel_noise
+        return weights, factor_centers, factor_log_widths
 
 class HTFAGuide(nn.Module):
     """Variational guide for hierarchical topographic factor analysis"""
     def __init__(self, query, num_factors=tfa_models.NUM_FACTORS):
         super(self.__class__, self).__init__()
         self._num_blocks = len(query)
-        self._num_times = niidb.query_min_time(query)
+        self._num_times = niidb.query_max_time(query)
 
         b = np.random.choice(self._num_blocks, 1)[0]
         query[b].load()
@@ -190,7 +177,6 @@ class HTFAGenerativeHyperParams(tfa_models.HyperParams):
                 'sigma': tfa_models.SOURCE_WEIGHT_STD_DEV *\
                          torch.ones(self._num_blocks, self._num_factors)
             },
-            'voxel_noise': utils.gaussian_populator(self._num_blocks)
         }
         super(self.__class__, self).__init__(params, guide=False)
 
@@ -217,11 +203,6 @@ class HTFAGenerativeSubjectPrior(tfa_models.GenerativePrior):
 
     def forward(self, trace, params, template, times=None, blocks=None,
                 guide=probtorch.Trace()):
-        voxel_noise = trace.normal(params['block']['voxel_noise']['mu'],
-                                   params['block']['voxel_noise']['sigma'],
-                                   value=guide['voxel_noise'],
-                                   name='voxel_noise')
-
         if blocks is None:
             blocks = list(range(self._num_blocks))
 
@@ -249,7 +230,7 @@ class HTFAGenerativeSubjectPrior(tfa_models.GenerativePrior):
             factor_centers += [fc]
             factor_log_widths += [flw]
 
-        return weights, factor_centers, factor_log_widths, voxel_noise
+        return weights, factor_centers, factor_log_widths
 
 class HTFAModel(nn.Module):
     """Generative model for hierarchical topographic factor analysis"""
@@ -288,11 +269,10 @@ class HTFAModel(nn.Module):
         params = self._hyperparams.state_vardict()
 
         template = self._template_prior(trace, params, guide=guide)
-        weights, centers, log_widths, voxel_noise = self._subject_prior(
+        weights, centers, log_widths = self._subject_prior(
             trace, params, template, times=times, blocks=blocks, guide=guide
         )
 
         return [self.likelihoods[b](trace, weights[i], centers[i], log_widths[i],
-                                    times=times, observations=observations[i],
-                                    voxel_noise=voxel_noise)
+                                    times=times, observations=observations[i])
                 for (i, b) in enumerate(blocks)]
