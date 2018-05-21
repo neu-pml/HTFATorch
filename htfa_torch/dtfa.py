@@ -553,7 +553,8 @@ class DeepTFA:
                 raise ValueError('Not enough subjects for task %s' % task)
             group1 = group[task][:group[task].shape[0] // 2]
             group2 = group[task][group[task].shape[0] // 2:]
-            node_accuracy, node_correlation = utils.get_decoding_accuracy(group1.data.numpy(), group2.data.numpy(), window_size)
+            node_accuracy, node_correlation = utils.get_decoding_accuracy(group1.data.numpy(),
+                                                                          group2.data.numpy(), window_size)
             accuracy[task]['node'].append(node_accuracy)
             isfc_accuracy, isfc_correlation =  utils.get_isfc_decoding_accuracy(group1.data.numpy(),
                                                                                    group2.data.numpy(), window_size)
