@@ -266,7 +266,7 @@ def get_decoding_accuracy(G1,G2,window_size=5,hist=True):
         decoding_accuracy = np.sum(time_labels == np.arange(activity_pattern_G1.shape[0]))
     decoding_accuracy = np.array(decoding_accuracy)/activity_pattern_G1.shape[0]
 
-    return decoding_accuracy
+    return decoding_accuracy,activity_correlation_matrix
 
 def get_isfc_decoding_accuracy(G1,G2,window_size=5,hist=True):
     """
@@ -290,36 +290,29 @@ def get_isfc_decoding_accuracy(G1,G2,window_size=5,hist=True):
         decoding_accuracy = np.sum(time_labels == np.arange(isfc_pattern_G1.shape[0]))
     decoding_accuracy = np.array(decoding_accuracy)/isfc_pattern_G1.shape[0]
 
-    return decoding_accuracy
+    return decoding_accuracy,activity_correlation_matrix
 
 
-def get_mixed_decoding_accuracy(G1,G2,window_size=5,mixing_prop=0.5,hist=True):
+def get_mixed_decoding_accuracy(isfc_correlation_matrix,activity_correlation_matrix,mixing_prop=0.5,hist=True):
     """
     :param G1: Split Half Group G1 (group_size x n_times x n_nodes)
     :param G2: Split Half Group G2 (group_size x n_times x n_nodes
     :return: time labels of G1 as predicted by max corr with G2
     """
-    isfc_pattern_G1 = dynamic_ISFC(G1, windowsize=window_size)
-    isfc_pattern_G2 = dynamic_ISFC(G2, windowsize = window_size)
-    isfc_correlation_matrix = get_correlation_matrix(isfc_pattern_G1,isfc_pattern_G2)
-    activity_pattern_G1 = generate_group_activities(torch.Tensor(G1), window_size=window_size)
-    activity_pattern_G2 = generate_group_activities(torch.Tensor(G2), window_size=window_size)
-    activity_correlation_matrix = get_correlation_matrix(activity_pattern_G1,activity_pattern_G2)
-
     activity_correlation_matrix = mixing_prop*activity_correlation_matrix +\
                                   (1-mixing_prop)*isfc_correlation_matrix
     time_labels = np.argmax(activity_correlation_matrix, axis=1)
     decoding_accuracy = []
     if hist:
         for i in range(5):
-            temp = np.sum(time_labels+i == np.arange(isfc_pattern_G1.shape[0]))
+            temp = np.sum(time_labels+i == np.arange(activity_correlation_matrix.shape[0]))
             decoding_accuracy.append(temp)
             if i!=0:
-                temp = np.sum(time_labels-i == np.arange(isfc_pattern_G1.shape[0]))
+                temp = np.sum(time_labels-i == np.arange(activity_correlation_matrix.shape[0]))
                 decoding_accuracy.append(temp)
     else:
-        decoding_accuracy = np.sum(time_labels == np.arange(isfc_pattern_G1.shape[0]))
-    decoding_accuracy = np.array(decoding_accuracy)/isfc_pattern_G1.shape[0]
+        decoding_accuracy = np.sum(time_labels == np.arange(activity_correlation_matrix.shape[0]))
+    decoding_accuracy = np.array(decoding_accuracy)/activity_correlation_matrix.shape[0]
 
     return decoding_accuracy
 
@@ -365,7 +358,7 @@ def dynamic_ISFC(data, windowsize=5):
 
         def vectorize(m):
             np.fill_diagonal(m, 0)
-            return sd.squareform(m)
+            return sd.squareform(m,checks=False)
         assert len(data) > 1
 
         ns = data.shape[1]
@@ -378,8 +371,8 @@ def dynamic_ISFC(data, windowsize=5):
         assert len(np.unique(vs)) == 1
         v = vs
 
-        isfc_mat = np.zeros([n - windowsize + 1, int((v ** 2 - v) / 2)])
-        for n in range(0, n - windowsize + 1):
+        isfc_mat = np.zeros([ns - windowsize + 1, int((v ** 2 - v) / 2)])
+        for n in range(0, ns - windowsize + 1):
             next_inds = range(n, n + windowsize)
             for i in range(0, data.shape[0]):
                 mean_other_data = np.zeros([len(next_inds), v])
