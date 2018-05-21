@@ -457,12 +457,15 @@ class HierarchicalTopographicFactorAnalysis:
         :return: accuracy: a dict containing decoding accuracies for each task [activity,isfc,mixed]
         """
         W = self.enc.hyperparams.block__weights__mu.data
+
         if restvtask:
             keys = ['rest', 'task']
             group = {key: [] for key in keys}
-            accuracy = {key:[] for key in keys}
-
+            # accuracy = {key:[] for key in keys}
+            accuracy = {task: {'node': [], 'isfc': [], 'mixed': [], 'kl': []}
+                        for task in keys}
             for key in keys:
+                print(key)
                 for n in range(self.num_blocks):
                     if key in self._blocks[n].task:
                         group[key].append(W[n, :, :])
@@ -474,16 +477,18 @@ class HierarchicalTopographicFactorAnalysis:
                 else:
                     G1 = group[key][:int(group[key].shape[0] / 2), :, :]
                     G2 = group[key][int(group[key].shape[0] / 2):, :, :]
-                    accuracy[key].append(utils.get_decoding_accuracy(G1, G2, window_size))
-                    accuracy[key].append(utils.get_isfc_decoding_accuracy(G1, G2, window_size))
-                    accuracy[key].append(utils.get_mixed_decoding_accuracy(G1, G2, window_size))
-                    accuracy[key].append(utils.get_kl_decoding_accuracy(G1, G2, window_size))
+                    accuracy[key]['node'].append(utils.get_decoding_accuracy(G1, G2, window_size))
+                    accuracy[key]['isfc'].append(utils.get_isfc_decoding_accuracy(G1, G2, window_size))
+                    accuracy[key]['mixed'].append(utils.get_mixed_decoding_accuracy(G1, G2, window_size))
+                    accuracy[key]['kl'].append(utils.get_kl_decoding_accuracy(G1, G2, window_size))
         else:
             keys = self.task_list
-            print(keys)
             group = {key: [] for key in keys}
-            accuracy = {key: [] for key in keys}
+            # accuracy = {key: [] for key in keys}
+            accuracy = {task: {'node': [], 'isfc': [], 'mixed': [], 'kl': []}
+                        for task in keys}
             for key in keys:
+                print(key)
                 for n in range(self.num_blocks):
                     if key == self._blocks[n].task:
                         group[key].append(W[n, :, :])
@@ -494,10 +499,10 @@ class HierarchicalTopographicFactorAnalysis:
                 else:
                     G1 = group[key][:int(group[key].shape[0] / 2), :, :]
                     G2 = group[key][int(group[key].shape[0] / 2):, :, :]
-                    accuracy[key].append(utils.get_decoding_accuracy(G1, G2, window_size))
-                    accuracy[key].append(utils.get_isfc_decoding_accuracy(G1, G2, window_size))
-                    accuracy[key].append(utils.get_mixed_decoding_accuracy(G1, G2, window_size))
-                    accuracy[key].append(utils.get_kl_decoding_accuracy(G1, G2, window_size))
+                    accuracy[key]['node'].append(utils.get_decoding_accuracy(G1, G2, window_size))
+                    accuracy[key]['isfc'].append(utils.get_isfc_decoding_accuracy(G1, G2, window_size))
+                    accuracy[key]['mixed'].append(utils.get_mixed_decoding_accuracy(G1, G2, window_size))
+                    accuracy[key]['kl'].append(utils.get_kl_decoding_accuracy(G1, G2, window_size))
         return accuracy
 
     def voxel_decoding_accuracy(self,restvtask=False,window_size=5):
@@ -506,8 +511,8 @@ class HierarchicalTopographicFactorAnalysis:
             keys = ['rest', 'task']
             group = {key: [] for key in keys}
             accuracy = {key:[] for key in keys}
-
             for key in keys:
+                print (key)
                 for n in range(self.num_blocks):
                     if key in self._blocks[n].task:
                         group[key].append(self._blocks[n].activations[:times[n],:])
@@ -525,6 +530,7 @@ class HierarchicalTopographicFactorAnalysis:
             group = {key: [] for key in keys}
             accuracy = {key: [] for key in keys}
             for key in keys:
+                print (key)
                 for n in range(self.num_blocks):
                     if key == self._blocks[n].task:
                         group[key].append(self._blocks[n].activations[:times[n],:])
