@@ -481,7 +481,7 @@ class HierarchicalTopographicFactorAnalysis:
                     accuracy[key]['node'].append(node_accuracy)
                     isfc_accuracy, isfc_correlation = utils.get_isfc_decoding_accuracy(G1, G2, window_size)
                     accuracy[key]['isfc'].append(isfc_accuracy)
-                    accuracy[key]['mixed'].append(node_correlation,isfc_correlation)
+                    accuracy[key]['mixed'].append(utils.get_mixed_decoding_accuracy(node_correlation,isfc_correlation))
                     accuracy[key]['kl'].append(utils.get_kl_decoding_accuracy(G1, G2, window_size))
         else:
             keys = self.task_list
@@ -505,7 +505,7 @@ class HierarchicalTopographicFactorAnalysis:
                     accuracy[key]['node'].append(node_accuracy)
                     isfc_accuracy, isfc_correlation = utils.get_isfc_decoding_accuracy(G1, G2, window_size)
                     accuracy[key]['isfc'].append(isfc_accuracy)
-                    accuracy[key]['mixed'].append(node_correlation, isfc_correlation)
+                    accuracy[key]['mixed'].append(utils.get_mixed_decoding_accuracy(node_correlation,isfc_correlation))
                     accuracy[key]['kl'].append(utils.get_kl_decoding_accuracy(G1, G2, window_size))
         return accuracy
 
@@ -545,5 +545,5 @@ class HierarchicalTopographicFactorAnalysis:
                 else:
                     G1 = group[key][:int(group[key].shape[0] / 2), :, :]
                     G2 = group[key][int(group[key].shape[0] / 2):, :, :]
-                    accuracy[key].append(utils.get_decoding_accuracy(G1, G2, window_size))
+                    accuracy[key].append(utils.get_decoding_accuracy(G1, G2, window_size)[0])
         return accuracy
