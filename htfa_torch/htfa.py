@@ -155,6 +155,8 @@ class HierarchicalTopographicFactorAnalysis:
                         torch.cuda.empty_cache()
                 if tfa.CUDA and use_cuda:
                     epoch_free_energies[batch] = epoch_free_energies[batch].cpu().data.numpy()
+                else:
+                    epoch_free_energies[batch] = epoch_free_energies[batch].data.numpy()
 
             free_energies[epoch] = np.array(epoch_free_energies).sum(0)
             free_energies[epoch] = free_energies[epoch].sum(0)
