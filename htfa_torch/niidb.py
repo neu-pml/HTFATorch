@@ -114,6 +114,18 @@ class FMriActivationsDb:
             return wrapped_table_method
         return attr
 
+def query_max_time(qiter):
+    result = -1
+    for block in qiter:
+        load = block.activations is None
+        if load:
+            block.load()
+        if result < 0 or block.end_time > result:
+            result = block.end_time
+        if load:
+            block.unload()
+    return result
+
 def query_min_time(qiter):
     result = -1
     for block in qiter:

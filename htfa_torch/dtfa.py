@@ -237,16 +237,13 @@ class DeepTFA:
         factors_embed = hyperparams['factors']['mu'][subject]
         weights_embed = torch.cat((subject_embed, task_embed), dim=-1)
 
-        weight_params =\
-            self.generative.embedding.weights_generator(weights_embed)
-        weight_params = weight_params.view(self.num_times[block], self.num_factors, 2)
-        weight_mus = weight_params[:, :, 0]
-        weight_sigmas = self.generative.embedding.softplus(weight_params[:, :, 1])
-        factor_params =\
-            self.generative.embedding.factors_generator(factors_embed)
-        factor_params = factor_params.view(self.num_factors, 4)
-        factor_centers = factor_params[:, 0:3]
-        factor_log_widths = factor_params[:, 3]
+        weight_mus = self.generative.embedding.weights_mu_generator(weights_embed)
+        weight_sigmas = self.generative.embedding.weights_sigma_generator(weights_embed)
+        factor_centers =\
+            self.generative.embedding.factor_centers_generator(factors_embed)
+        factor_centers = factor_centers.view(self.num_factors, 3)
+        factor_log_widths =\
+            self.generative.embedding.factor_log_widths_generator(factors_embed)
 
         return {
             'weights': {

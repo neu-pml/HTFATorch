@@ -193,9 +193,35 @@ class HierarchicalTopographicFactorAnalysis:
         with open(filename, 'rb') as file:
             return pickle.load(file)
 
-    def results(self):
-        """Return the inferred variational parameters"""
-        return self.enc.hyperparams.state_vardict()
+    def results(self, block=None):
+        """Return the inferred posterior parameters and reconstruction
+           components"""
+        hyperparams = self.enc.hyperparams.state_vardict()
+
+        if block is not None:
+            centers = hyperparams['block']['factor_centers']['mu'][block].data
+            log_widths = hyperparams['block']['factor_log_widths']['mu'][block].data
+            weights = hyperparams['block']['weights']['mu'][block].data
+
+            result = {
+                'factors': tfa_models.radial_basis(self.voxel_locations,
+                                                   centers, log_widths),
+                'factor_centers': centers,
+                'factor_log_widths': log_widths,
+                'weights': weights,
+            }
+        else:
+            centers = hyperparams['template']['factor_centers']['mu'].data
+            log_widths = hyperparams['template']['factor_log_widths']['mu'].data
+
+            result = {
+                'factors': tfa_models.radial_basis(self.voxel_locations,
+                                                   centers, log_widths),
+                'factor_centers': centers,
+                'factor_log_widths': log_widths,
+            }
+
+        return result
 
     def normalize_activations(self):
         subject_runs = list(set([(block.subject, block.run)
@@ -237,7 +263,6 @@ class HierarchicalTopographicFactorAnalysis:
                 hyperparams['template']['factor_centers']['mu']
             factor_log_widths =\
                 hyperparams['template']['factor_log_widths']['mu']
-            weights = hyperparams['block']['weights']['mu'].mean(0)
 
         if block is not None:
             title = "Block %d (Participant %d, Run %d, Stimulus: %s)" %\
@@ -281,9 +306,12 @@ class HierarchicalTopographicFactorAnalysis:
         if self.activation_normalizers is None:
             self.normalize_activations()
 
-        image = nilearn.image.index_img(nib.load(self._templates[block]), t)
+        image = utils.cmu2nii(self.voxel_activations[block].numpy(),
+                              self.voxel_locations.numpy(),
+                              self._templates[block])
+        image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(
-            image, plot_abs=plot_abs, colorbar=True,
+            image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
             vmin=-self.activation_normalizers[block],
             vmax=self.activation_normalizers[block],
         )
@@ -301,31 +329,28 @@ class HierarchicalTopographicFactorAnalysis:
         if self.activation_normalizers is None:
             self.normalize_activations()
 
+        results = self.results(block)
+        factor_centers = results['factor_centers']
+        factor_log_widths = results['factor_log_widths']
         if block is not None:
-            weights = results['block']['weights']['mu'][block]
-            factor_centers = results['block']['factor_centers']['mu'][block]
-            factor_log_widths =\
-                results['block']['factor_log_widths']['mu'][block]
+            weights = results['weights']
         else:
-            factor_centers = results['template']['factor_centers']['mu']
-            factor_log_widths =\
-                results['template']['factor_log_widths']['mu']
             block = np.random.choice(self.num_blocks, 1)[0]
-            weights = results['block']['weights']['mu'][block]
+            weights = self.enc.hyperparams.state_vardict()['block']['weights']['mu'][block]
 
         factors = tfa_models.radial_basis(
-            self.voxel_locations, factor_centers.data,
-            factor_log_widths.data
+            self.voxel_locations, factor_centers,
+            factor_log_widths
         )
         times = (0, self.voxel_activations[block].shape[0])
-        reconstruction = weights[times[0]:times[1], :].data @ factors
+        reconstruction = weights[times[0]:times[1], :] @ factors
 
         image = utils.cmu2nii(reconstruction.numpy(),
                               self.voxel_locations.numpy(),
                               self._templates[block])
         image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(
-            image_slice, plot_abs=plot_abs, colorbar=True,
+            image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
             vmin=-self.activation_normalizers[block],
             vmax=self.activation_normalizers[block],
         )
@@ -451,7 +476,7 @@ class HierarchicalTopographicFactorAnalysis:
             fig.savefig(filename)
         if show:
             plt.show()
-            
+
     def decoding_accuracy(self, restvtask=False, window_size=5):
         """
         :return: accuracy: a dict containing decoding accuracies for each task [activity,isfc,mixed]
