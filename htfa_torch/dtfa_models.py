@@ -194,49 +194,52 @@ class DeepTFAModel(nn.Module):
     """Generative model for deep topographic factor analysis"""
     def __init__(self, locations, block_subjects, block_tasks,
                  num_factors=tfa_models.NUM_FACTORS, num_blocks=1,
-                 num_times=[1], embedding_dim=2, hyper_means=None):
+                 num_times=[1], embedding_dim=2):
         super(self.__class__, self).__init__()
         self._locations = locations
         self._num_factors = num_factors
         self._num_blocks = num_blocks
         self._num_times = num_times
-
-        center, center_std_dev = utils.brain_centroid(self._locations)
-        self.embedding = DeepTFAEmbedding(self._num_factors, self._num_times,
-                                          block_subjects, block_tasks,
-                                          center, center_std_dev, embedding_dim,
-                                          hyper_means)
+        self.block_subjects = block_subjects
+        self.block_tasks = block_tasks
 
         self.hyperparams = DeepTFAGenerativeHyperparams(
-            self._num_blocks, self._num_times, self._num_factors,
-            len(set(block_subjects)), len(set(block_tasks)),
+            len(set(block_subjects)), len(set(block_tasks)), self._num_times,
             embedding_dim
         )
-
-        self.likelihoods = [tfa_models.TFAGenerativeLikelihood(
-            self._locations, self._num_times[b], tfa_models.VOXEL_NOISE,
-            block=b, register_locations=False
-        ) for b in range(self._num_blocks)]
-        for b, block_likelihood in enumerate(self.likelihoods):
-            self.add_module('_likelihood' + str(b), block_likelihood)
+        self.htfa_model = htfa_models.HTFAModel(locations, self._num_blocks,
+                                                self._num_times,
+                                                self._num_factors)
 
     def forward(self, trace, times=None, guide=probtorch.Trace(),
                 observations=[], blocks=None):
         params = self.hyperparams.state_vardict()
-        for k, v in params.items():
-            params[k] = v.expand(1, *v.shape)
         if blocks is None:
             blocks = list(range(self._num_blocks))
-        activations = [b for b in blocks]
 
-        for (i, b) in enumerate(blocks):
-            weights, centers, log_widths = self.embedding(
-                trace, params, guide=guide, times=times,
-                block=b, particles=True
-            )
-            activations[i] = self.likelihoods[b](
-                trace, weights, centers, log_widths,
-                observations=observations[i]
-            )
+        for b in blocks:
+            subject = self.block_subjects[b]
+            task = self.block_tasks[b]
+            if times is None:
+                ts = (0, self._num_times[b])
+            else:
+                ts = times
 
-        return activations
+            if ('z^F_%d' % subject) not in trace:
+                trace.normal(params['factors']['mu'][subject],
+                             params['factors']['sigma'][subject],
+                             value=guide['z^F_%d' % subject],
+                             name='z^F_%d' % subject)
+            if ('z^P_%d' % subject) not in trace:
+                trace.normal(params['subject']['mu'][subject],
+                             params['subject']['sigma'][subject],
+                             value=guide['z^P_%d' % subject],
+                             name='z^P_%d' % subject)
+            if ('z^S_%dt%d_%d' % (task, ts[0], ts[1])) not in trace:
+                trace.normal(params['task']['mu'][task, ts[0]:ts[1]],
+                             params['task']['sigma'][task, ts[0]:ts[1]],
+                             value=guide['z^S_%dt%d_%d' % (task, ts[0], ts[1])],
+                             name='z^S_%dt%d_%d' % (task, ts[0], ts[1]))
+
+        return self.htfa_model(trace, times, guide, blocks=blocks,
+                               observations=observations)
