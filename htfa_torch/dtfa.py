@@ -87,24 +87,13 @@ class DeepTFA:
 
         self.generative = dtfa_models.DeepTFAModel(
             self.voxel_locations, block_subjects, block_tasks,
-            self.num_factors, self.num_blocks, self.num_times, embedding_dim,
-            hyper_means
+            self.num_factors, self.num_blocks, self.num_times, embedding_dim
         )
         self.variational = dtfa_models.DeepTFAGuide(self.num_factors,
-                                                    len(subjects), len(tasks),
+                                                    block_subjects, block_tasks,
                                                     self.num_blocks,
                                                     self.num_times,
-                                                    embedding_dim)
-
-    def sample(self, posterior_predictive=False, num_particles=1):
-        q = probtorch.Trace()
-        if posterior_predictive:
-            self.variational(q, self.generative.embedding,
-                             num_particles=num_particles)
-        p = probtorch.Trace()
-        self.generative(p, guide=q,
-                        observations=[q for b in range(self.num_blocks)])
-        return p, q
+                                                    embedding_dim, hyper_means)
 
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
               log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES,
@@ -130,8 +119,7 @@ class DeepTFA:
             variational = self.variational
             generative = self.generative
 
-        optimizer = torch.optim.Adam(list(variational.parameters()) +\
-                                     list(generative.parameters()),
+        optimizer = torch.optim.Adam(list(variational.parameters()),
                                      lr=learning_rate)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, factor=1e-1, min_lr=5e-5, patience=patience,
@@ -156,7 +144,8 @@ class DeepTFA:
                     if tfa.CUDA and use_cuda:
                         data = data.cuda()
                         for b in block_batch:
-                            generative.module.likelihoods[b].voxel_locations =\
+                            htfa_model = generative.module.htfa_model
+                            htfa_model.likelihoods[b].voxel_locations =\
                                 cuda_locations
                     activations = [{'Y': Variable(data[:, b, :])}
                                    for b in block_batch]
@@ -165,8 +154,8 @@ class DeepTFA:
 
                     optimizer.zero_grad()
                     q = probtorch.Trace()
-                    variational(q, self.generative.embedding, times=trs,
-                                num_particles=num_particles, blocks=block_batch)
+                    variational(q, times=trs, num_particles=num_particles,
+                                blocks=block_batch)
                     p = probtorch.Trace()
                     generative(p, times=trs, guide=q, observations=activations,
                                blocks=block_batch)
@@ -190,7 +179,7 @@ class DeepTFA:
                     if tfa.CUDA and use_cuda:
                         del activations
                         for b in block_batch:
-                            generative.module.likelihoods[b].voxel_locations =\
+                            htfa_model.likelihoods[b].voxel_locations =\
                                 self.voxel_locations
                         torch.cuda.empty_cache()
                 if tfa.CUDA and use_cuda:
@@ -226,8 +215,8 @@ class DeepTFA:
 
     def results(self, block):
         hyperparams = self.variational.hyperparams.state_vardict()
-        subject = self.generative.embedding.subjects[block]
-        task = self.generative.embedding.tasks[block]
+        subject = self.generative.block_subjects[block]
+        task = self.generative.block_tasks[block]
 
         subject_embed = hyperparams['subject']['mu'][subject]
         subject_embed = subject_embed.expand(
@@ -237,19 +226,15 @@ class DeepTFA:
         factors_embed = hyperparams['factors']['mu'][subject]
         weights_embed = torch.cat((subject_embed, task_embed), dim=-1)
 
-        weight_mus = self.generative.embedding.weights_mu_generator(weights_embed)
-        weight_sigmas = self.generative.embedding.weights_sigma_generator(weights_embed)
-        factor_centers =\
-            self.generative.embedding.factor_centers_generator(factors_embed)
-        factor_centers = factor_centers.view(self.num_factors, 3)
-        factor_log_widths =\
-            self.generative.embedding.factor_log_widths_generator(factors_embed)
+        weights = self.variational.weights_embedding(weights_embed)
+        factor_params = self.variational.factors_embedding(factors_embed).view(
+            self.num_factors, 4
+        )
+        factor_centers = factor_params[:, :3]
+        factor_log_widths = factor_params[:, 3:].contiguous().view(self.num_factors)
 
         return {
-            'weights': {
-                'mu': weight_mus,
-                'sigma': weight_sigmas,
-            },
+            'weights': weights.data,
             'factors': tfa_models.radial_basis(self.voxel_locations,
                                                factor_centers.data,
                                                factor_log_widths.data),
@@ -342,7 +327,7 @@ class DeepTFA:
 
         results = self.results(block)
 
-        reconstruction = results['weights']['mu'].data @ results['factors']
+        reconstruction = results['weights'] @ results['factors']
 
         image = utils.cmu2nii(reconstruction.numpy(),
                               self.voxel_locations.numpy(),
