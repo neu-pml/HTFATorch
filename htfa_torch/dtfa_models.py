@@ -23,13 +23,10 @@ from . import tfa_models
 from . import utils
 
 class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
-    def __init__(self, num_blocks, num_times, num_factors, num_subjects,
-                 num_tasks, embedding_dim=2):
-        self.num_blocks = num_blocks
+    def __init__(self, num_subjects, num_tasks, num_times, embedding_dim=2):
         self.num_subjects = num_subjects
         self.num_tasks = num_tasks
         self.num_times = max(num_times)
-        self._num_factors = num_factors
         self.embedding_dim = embedding_dim
 
         params = utils.vardict({
@@ -75,7 +72,18 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
                                   self.embedding_dim),
                 'sigma': torch.ones(self.num_tasks, self.num_times,
                                     self.embedding_dim),
-            }
+            },
+            'template': {
+                'centers': {
+                    'mu': torch.zeros(self._num_factors, 3),
+                    'sigma': torch.ones(self._num_factors, 3),
+                },
+                'log_widths': {
+                    'mu': torch.ones(self._num_factors),
+                    'sigma': torch.ones(self._num_factors) *\
+                             tfa_models.SOURCE_LOG_WIDTH_STD_DEV
+                }
+            },
         })
 
         super(self.__class__, self).__init__(params, guide=True)
