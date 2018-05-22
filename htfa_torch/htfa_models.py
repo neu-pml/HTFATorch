@@ -234,7 +234,7 @@ class HTFAGenerativeSubjectPrior(tfa_models.GenerativePrior):
 
 class HTFAModel(nn.Module):
     """Generative model for hierarchical topographic factor analysis"""
-    def __init__(self, query, num_blocks, num_times,
+    def __init__(self, locations, num_blocks, num_times,
                  num_factors=tfa_models.NUM_FACTORS):
         super(self.__class__, self).__init__()
 
@@ -242,9 +242,7 @@ class HTFAModel(nn.Module):
         self._num_blocks = num_blocks
         self._num_times = num_times
 
-        b = np.random.choice(self._num_blocks, 1)[0]
-        query[b].load()
-        center, center_sigma = utils.brain_centroid(query[b].locations)
+        center, center_sigma = utils.brain_centroid(locations)
 
         self._hyperparams = HTFAGenerativeHyperParams(center, center_sigma,
                                                       self._num_blocks,
@@ -253,10 +251,8 @@ class HTFAModel(nn.Module):
         self._subject_prior = HTFAGenerativeSubjectPrior(
             self._num_blocks, self._num_times
         )
-        for block in query:
-            block.load()
         self.likelihoods = [tfa_models.TFAGenerativeLikelihood(
-            query[b].locations, self._num_times[b], tfa_models.VOXEL_NOISE,
+            locations, self._num_times[b], tfa_models.VOXEL_NOISE,
             block=b, register_locations=False
         ) for b in range(self._num_blocks)]
         for b, block_likelihood in enumerate(self.likelihoods):
