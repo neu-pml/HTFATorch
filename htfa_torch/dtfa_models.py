@@ -35,32 +35,45 @@ class DeepTFAEmbedding(tfa_models.Model):
         self.subjects = block_subjects
         self.tasks = block_tasks
 
-        self.weights_generator = nn.Sequential(
+        self.weights_mu_generator = nn.Sequential(
             nn.Linear(self._embedding_dim * 2, self._num_factors),
-            nn.Sigmoid(),
-            nn.Linear(self._num_factors, self._num_factors * 2),
+            nn.Tanh(),
+            nn.Linear(self._num_factors, self._num_factors),
         )
-        self.factors_generator = nn.Sequential(
+        self.weights_sigma_generator = nn.Sequential(
+            nn.Linear(self._embedding_dim * 2, self._num_factors),
+            nn.Tanh(),
+            nn.Linear(self._num_factors, self._num_factors),
+            nn.Softplus(),
+        )
+        self.factor_centers_generator = nn.Sequential(
             nn.Linear(self._embedding_dim, self._num_factors),
-            nn.Sigmoid(),
-            nn.Linear(self._num_factors, self._num_factors * 4),
+            nn.Tanh(),
+            nn.Linear(self._num_factors, self._num_factors * 3),
         )
-        self.softplus = nn.Softplus()
+        self.factor_log_widths_generator = nn.Sequential(
+            nn.Linear(self._embedding_dim, self._num_factors),
+            nn.Tanh(),
+            nn.Linear(self._num_factors, self._num_factors),
+        )
 
         if hyper_means is not None:
-            hyper_means['weights'] = hyper_means['weights'].mean(0)
+            hyper_means['weights'] = hyper_means['weights'][0]
             hyper_means['factor_log_widths'] =\
                 torch.Tensor([hyper_means['factor_log_widths']]).\
                 expand(self._num_factors, 1)
-            self.weights_generator[2].bias = nn.Parameter(torch.stack(
-                (hyper_means['weights'], torch.ones(self._num_factors)),
-                dim=1
-            ).view(self._num_factors * 2))
-            self.factors_generator[2].bias = nn.Parameter(torch.cat(
-                (hyper_means['factor_centers'],
-                 hyper_means['factor_log_widths']),
-                dim=1
-            ).view(self._num_factors * 4))
+            self.weights_mu_generator[-1].bias = nn.Parameter(
+                hyper_means['weights']
+            )
+            self.weights_sigma_generator[-1].bias = nn.Parameter(
+                torch.ones(self._num_factors) * tfa_models.SOURCE_WEIGHT_STD_DEV
+            )
+            self.factor_centers_generator[-1].bias = nn.Parameter(
+                hyper_means['factor_centers'].view(self._num_factors * 3)
+            )
+            self.factor_log_widths_generator[-1].bias = nn.Parameter(
+                hyper_means['factor_log_widths'].contiguous().view(self._num_factors)
+            )
 
     # Assumes that all tensors have a particle dimension as their first
     def forward(self, trace, params, guide=probtorch.Trace(), times=None,
@@ -85,21 +98,20 @@ class DeepTFAEmbedding(tfa_models.Model):
 
         if ('z^P_%d' % subject) not in trace:
             subject_embed = trace.normal(subject_params['mu'],
-                                         self.softplus(subject_params['sigma']),
+                                         subject_params['sigma'],
                                          value=guide['z^P_%d' % subject],
                                          name='z^P_%d' % subject)
         else:
             subject_embed = trace['z^P_%d' % subject].value
         if ('z^S_%d' % task) not in trace:
-            task_embed = trace.normal(task_params['mu'],
-                                      self.softplus(task_params['sigma']),
+            task_embed = trace.normal(task_params['mu'], task_params['sigma'],
                                       value=guide['z^S_%d' % task],
                                       name='z^S_%d' % task)
         else:
             task_embed = trace['z^S_%d' % task].value
         if ('z^F_%d' % subject) not in trace:
             factors_embed = trace.normal(factor_params['mu'],
-                                         self.softplus(factor_params['sigma']),
+                                         factor_params['sigma'],
                                          value=guide['z^F_%d' % subject],
                                          name='z^F_%d' % subject)
         else:
@@ -112,19 +124,15 @@ class DeepTFAEmbedding(tfa_models.Model):
              task_embed),
             dim=-1)
 
-        weight_params = self.weights_generator(weights_embed)
-        weight_params = weight_params.view(-1, times[1] - times[0],
-                                           self._num_factors, 2)
-        weights = trace.normal(weight_params[:, :, :, 0],
-                               self.softplus(weight_params[:, :, :, 1]),
+        weight_mus = self.weights_mu_generator(weights_embed)
+        weight_sigmas = self.weights_sigma_generator(weights_embed)
+        weights = trace.normal(weight_mus, weight_sigmas,
                                value=guide['W_%dt%d-%d' % (block, times[0], times[1])],
                                name='W_%dt%d-%d' % (block, times[0], times[1]))
 
-        factors = self.factors_generator(factors_embed)
-        factors = factors.view(-1, self._num_factors, 4)
-
-        factor_centers = factors[:, :, 0:3]
-        factor_log_widths = factors[:, :, 3]
+        factor_centers = self.factor_centers_generator(factors_embed)
+        factor_centers = factor_centers.view(-1, self._num_factors, 3)
+        factor_log_widths = self.factor_log_widths_generator(factors_embed)
 
         if not particles:
             weights = weights[0]
@@ -150,15 +158,13 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
             },
             'subject': {
                 'mu': torch.zeros(self.num_subjects, self.embedding_dim),
-                'sigma': torch.ones(self.num_subjects, self.embedding_dim) *\
-                         tfa_models.SOURCE_WEIGHT_STD_DEV,
+                'sigma': torch.ones(self.num_subjects, self.embedding_dim),
             },
             'task': {
                 'mu': torch.zeros(self.num_tasks, self.num_times,
                                   self.embedding_dim),
                 'sigma': torch.ones(self.num_tasks, self.num_times,
-                                    self.embedding_dim) *\
-                         tfa_models.SOURCE_WEIGHT_STD_DEV,
+                                    self.embedding_dim),
             }
         })
 

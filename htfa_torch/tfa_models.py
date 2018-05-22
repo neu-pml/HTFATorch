@@ -131,7 +131,7 @@ class TFAGuidePrior(GuidePrior):
 
         weights = trace.normal(weight_params['mu'],
                                weight_params['sigma'],
-                               name='Weights' + str(self.block))
+                               name='Weights%dt%d-%d' % (self.block, times[0], times[1]))
 
         centers = trace.normal(params['factor_centers']['mu'],
                                params['factor_centers']['sigma'],
@@ -196,7 +196,7 @@ class TFAGenerativePrior(GenerativePrior):
 
         weights = trace.normal(weight_params['mu'],
                                weight_params['sigma'],
-                               value=guide['Weights' + str(self.block)],
+                               value=guide['Weights%dt%d-%d' % (self.block, times[0], times[1])],
                                name='Weights%dt%d-%d' % (self.block, times[0], times[1]))
 
         factor_centers = trace.normal(params['factor_centers']['mu'],
@@ -224,11 +224,9 @@ class TFAGenerativeLikelihood(GenerativeLikelihood):
         self.block = block
 
     def forward(self, trace, weights, centers, log_widths, times=None,
-                observations=collections.defaultdict(), voxel_noise=None):
+                observations=collections.defaultdict()):
         if times is None:
             times = (0, self._num_times)
-        if voxel_noise is None:
-            voxel_noise = self._voxel_noise
 
         factors = radial_basis(Variable(self.voxel_locations,
                                         requires_grad=True),
