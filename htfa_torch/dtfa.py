@@ -231,7 +231,7 @@ class DeepTFA:
             self.num_factors, 4
         )
         factor_centers = factor_params[:, :3]
-        factor_log_widths = factor_params[:, 3:].contiguous().view(self.num_factors)
+        factor_log_widths = torch.log(factor_params[:, 3:].contiguous().view(self.num_factors))
 
         return {
             'weights': weights.data,
