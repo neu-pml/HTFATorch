@@ -32,17 +32,20 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
         params = utils.vardict({
             'factors': {
                 'mu': torch.zeros(self.num_subjects, self.embedding_dim),
-                'sigma': torch.ones(self.num_subjects, self.embedding_dim),
+                'sigma': torch.ones(self.num_subjects, self.embedding_dim) *\
+                         tfa_models.SOURCE_LOG_WIDTH_STD_DEV,
             },
             'subject': {
                 'mu': torch.zeros(self.num_subjects, self.embedding_dim),
-                'sigma': torch.ones(self.num_subjects, self.embedding_dim),
+                'sigma': torch.ones(self.num_subjects, self.embedding_dim) *\
+                         tfa_models.SOURCE_WEIGHT_STD_DEV,
             },
             'task': {
                 'mu': torch.zeros(self.num_tasks, self.num_times,
                                   self.embedding_dim),
                 'sigma': torch.ones(self.num_tasks, self.num_times,
-                                    self.embedding_dim),
+                                    self.embedding_dim) *\
+                         tfa_models.SOURCE_WEIGHT_STD_DEV,
             }
         })
 
@@ -50,7 +53,7 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
 
 class DeepTFAGuideHyperparams(tfa_models.HyperParams):
     def __init__(self, num_blocks, num_times, num_factors, num_subjects,
-                 num_tasks, embedding_dim=2):
+                 num_tasks, hyper_means, embedding_dim=2):
         self.num_blocks = num_blocks
         self.num_subjects = num_subjects
         self.num_tasks = num_tasks
@@ -71,16 +74,16 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
                 'mu': torch.zeros(self.num_tasks, self.num_times,
                                   self.embedding_dim),
                 'sigma': torch.ones(self.num_tasks, self.num_times,
-                                    self.embedding_dim) *\
-                         tfa_models.SOURCE_WEIGHT_STD_DEV,
+                                    self.embedding_dim),
             },
             'template': {
                 'factor_centers': {
-                    'mu': torch.zeros(self._num_factors, 3),
+                    'mu': hyper_means['factor_centers'],
                     'sigma': torch.ones(self._num_factors, 3),
                 },
                 'factor_log_widths': {
-                    'mu': torch.ones(self._num_factors),
+                    'mu': hyper_means['factor_log_widths'] *\
+                          torch.ones(self._num_factors),
                     'sigma': torch.ones(self._num_factors) *\
                              tfa_models.SOURCE_LOG_WIDTH_STD_DEV
                 }
@@ -109,6 +112,7 @@ class DeepTFAGuide(nn.Module):
                                                    self._num_times,
                                                    self._num_factors,
                                                    num_subjects, num_tasks,
+                                                   hyper_means,
                                                    embedding_dim)
         self.factors_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim, self._num_factors),
@@ -117,7 +121,7 @@ class DeepTFAGuide(nn.Module):
         )
         self.weights_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim * 2, self._num_factors),
-            nn.Tanhshrink(),
+            nn.Tanh(),
             nn.Linear(self._num_factors, self._num_factors),
         )
 
@@ -128,8 +132,7 @@ class DeepTFAGuide(nn.Module):
                 nn.Parameter(hyper_means['weights'][0])
             self.factors_embedding[-1].bias = nn.Parameter(torch.cat(
                 (hyper_means['factor_centers'],
-                 torch.Tensor([hyper_means['factor_log_widths']]).\
-                 expand(self._num_factors, 1)),
+                 torch.ones(self._num_factors, 1) * hyper_means['factor_log_widths'] - np.log(4)),
                 dim=1,
             ).view(self._num_factors * 4))
 
