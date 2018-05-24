@@ -216,17 +216,10 @@ class DeepTFA:
     def results(self, block):
         hyperparams = self.variational.hyperparams.state_vardict()
         subject = self.generative.block_subjects[block]
-        task = self.generative.block_tasks[block]
 
-        subject_embed = hyperparams['subject']['mu'][subject]
-        subject_embed = subject_embed.expand(
-            self.num_times[block], *subject_embed.shape
-        )
-        task_embed = hyperparams['task']['mu'][task][0:self.num_times[block]]
         factors_embed = hyperparams['factors']['mu'][subject]
-        weights_embed = torch.cat((subject_embed, task_embed), dim=-1)
 
-        weights = self.variational.weights_embedding(weights_embed)
+        weights = hyperparams['block']['weights']['mu'][block]
         factor_params = self.variational.factors_embedding(factors_embed).view(
             self.num_factors, 4
         )
@@ -435,16 +428,11 @@ class DeepTFA:
         if show:
             fig.show()
 
-    def scatter_task_embedding(self, t=None, labeler=None, filename=None,
-                               show=True, xlims=None, ylims=None,
-                               figsize=(3.75, 2.75),
+    def scatter_task_embedding(self, labeler=None, filename=None, show=True,
+                               xlims=None, ylims=None, figsize=(3.75, 2.75),
                                colormap='Set1'):
         hyperparams = self.variational.hyperparams.state_vardict()
         z_s = hyperparams['task']['mu'].data
-        if t is not None:
-            z_s = z_s[t]
-        else:
-            z_s = z_s.mean(1)
 
         if labeler is None:
             labeler = lambda b: b.default_label()
