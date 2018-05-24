@@ -23,10 +23,12 @@ from . import tfa_models
 from . import utils
 
 class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
-    def __init__(self, num_subjects, num_tasks, num_times, embedding_dim=2):
+    def __init__(self, num_subjects, num_tasks, num_times, num_factors,
+                 embedding_dim=2):
         self.num_subjects = num_subjects
         self.num_tasks = num_tasks
         self.num_times = max(num_times)
+        self._num_factors = num_factors
         self.embedding_dim = embedding_dim
 
         params = utils.vardict({
@@ -210,7 +212,7 @@ class DeepTFAModel(nn.Module):
 
         self.hyperparams = DeepTFAGenerativeHyperparams(
             len(set(block_subjects)), len(set(block_tasks)), self._num_times,
-            embedding_dim
+            self._num_factors, embedding_dim
         )
         self.htfa_model = htfa_models.HTFAModel(locations, self._num_blocks,
                                                 self._num_times,
