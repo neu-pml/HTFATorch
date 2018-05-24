@@ -202,14 +202,16 @@ class HTFAGenerativeSubjectPrior(tfa_models.GenerativePrior):
                             for b in range(self._num_blocks)]
 
     def forward(self, trace, params, template, times=None, blocks=None,
-                guide=probtorch.Trace()):
+                guide=probtorch.Trace(), weights_params=None):
         if blocks is None:
             blocks = list(range(self._num_blocks))
+        if times is None:
+            times = (0, self._num_times)
 
         weights = []
         factor_centers = []
         factor_log_widths = []
-        for b in blocks:
+        for (i, b) in enumerate(blocks):
             sparams = utils.vardict({
                 'factor_centers': {
                     'mu': template['factor_centers'],
@@ -224,6 +226,8 @@ class HTFAGenerativeSubjectPrior(tfa_models.GenerativePrior):
                     'sigma': params['block']['weights']['sigma'][b],
                 }
             })
+            if weights_params is not None:
+                sparams['weights'] = weights_params[i]
             w, fc, flw = self._tfa_priors[b](trace, sparams, times=times,
                                              guide=guide)
             weights += [w]
@@ -259,14 +263,15 @@ class HTFAModel(nn.Module):
             self.add_module('likelihood' + str(b), block_likelihood)
 
     def forward(self, trace, times=None, guide=probtorch.Trace(), blocks=None,
-                observations=[]):
+                observations=[], weights_params=None):
         if blocks is None:
             blocks = list(range(self._num_blocks))
         params = self._hyperparams.state_vardict()
 
         template = self._template_prior(trace, params, guide=guide)
         weights, centers, log_widths = self._subject_prior(
-            trace, params, template, times=times, blocks=blocks, guide=guide
+            trace, params, template, times=times, blocks=blocks, guide=guide,
+            weights_params=weights_params
         )
 
         return [self.likelihoods[b](trace, weights[i], centers[i], log_widths[i],
