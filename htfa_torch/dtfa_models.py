@@ -136,27 +136,28 @@ class DeepTFAGuide(nn.Module):
                                                    embedding_dim)
         self.factors_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim, self._num_factors),
-            nn.Tanh(),
+            nn.Tanhshrink(),
             nn.Linear(self._num_factors, self._num_factors * 4),
         )
         self.weights_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim * 2, self._num_factors),
-            nn.Softsign(),
+            nn.Tanh(),
             nn.Linear(self._num_factors, self._num_factors * 2),
+            nn.Softsign(),
         )
         self.softplus = nn.Softplus()
 
         self.epsilon = nn.Parameter(torch.Tensor([tfa_models.VOXEL_NOISE]))
 
         if hyper_means is not None:
-            self.weights_embedding[-1].bias = nn.Parameter(torch.cat(
+            self.weights_embedding[-2].bias = nn.Parameter(torch.cat(
                 (hyper_means['weights'].mean(0), torch.ones(self._num_factors)),
                 dim=0
             ))
             self.factors_embedding[-1].bias = nn.Parameter(torch.cat(
                 (hyper_means['factor_centers'],
-                 torch.exp(torch.ones(self._num_factors, 1) *
-                           hyper_means['factor_log_widths'] - np.log(4))),
+                 torch.ones(self._num_factors, 1) *
+                 hyper_means['factor_log_widths'] - np.log(4)),
                 dim=1,
             ).view(self._num_factors * 4))
 
@@ -218,9 +219,9 @@ class DeepTFAGuide(nn.Module):
                                              self.epsilon[0],
                                              name='FactorCenters%d' % b)
             factor_log_widths[i] = trace.normal(
-                torch.log(factor_params[:, :, 3:].contiguous().view(
+                factor_params[:, :, 3:].contiguous().view(
                     -1, self._num_factors
-                )),
+                ),
                 self.epsilon[0], name='FactorLogWidths%d' % b
             )
 
