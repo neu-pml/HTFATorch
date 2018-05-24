@@ -53,8 +53,9 @@ class HTFAGuideHyperParams(tfa_models.HyperParams):
                 'sigma': torch.sqrt(torch.rand(self._num_blocks, self._num_factors)),
             },
             'weights': {
-                'mu': torch.randn(self._num_blocks, self._num_times,
-                                  self._num_factors),
+                'mu':  hyper_means['weights'].mean(0).unsqueeze(0).expand(
+                    self._num_blocks, self._num_times, self._num_factors
+                ),
                 'sigma': torch.ones(self._num_blocks, self._num_times,
                                     self._num_factors),
             },
@@ -173,7 +174,7 @@ class HTFAGenerativeHyperParams(tfa_models.HyperParams):
             'factor_center_noise': torch.ones(self._num_blocks),
             'factor_log_width_noise': torch.ones(self._num_blocks),
             'weights': {
-                'mu': torch.rand(self._num_blocks, self._num_factors),
+                'mu': torch.randn(self._num_blocks, self._num_factors),
                 'sigma': tfa_models.SOURCE_WEIGHT_STD_DEV *\
                          torch.ones(self._num_blocks, self._num_factors)
             },
