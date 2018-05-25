@@ -5,6 +5,7 @@ __email__ = 'e.sennesh@northeastern.edu', 'khan.zu@husky.neu.edu'
 
 import collections
 import numpy as np
+import scipy.spatial
 import torch
 from torch.autograd import Variable
 import probtorch
@@ -149,7 +150,7 @@ class HTFAGuide(nn.Module):
 
 class HTFAGenerativeHyperParams(tfa_models.HyperParams):
     def __init__(self, brain_center, brain_center_std_dev, num_blocks,
-                 num_factors=tfa_models.NUM_FACTORS):
+                 num_factors=tfa_models.NUM_FACTORS, volume=None):
         self._num_factors = num_factors
         self._num_blocks = num_blocks
 
@@ -165,8 +166,11 @@ class HTFAGenerativeHyperParams(tfa_models.HyperParams):
         params['template']['factor_centers']['sigma'] =\
             brain_center_std_dev.expand(self._num_factors, 3)
 
+        coefficient = 1.0
+        if volume is not None:
+            coefficient = np.log(np.cbrt(volume / self._num_factors))
         params['template']['factor_log_widths']['mu'] =\
-            torch.ones(self._num_factors)
+            coefficient * torch.ones(self._num_factors)
         params['template']['factor_log_widths']['sigma'] =\
             tfa_models.SOURCE_LOG_WIDTH_STD_DEV * torch.ones(self._num_factors)
 
@@ -240,7 +244,7 @@ class HTFAGenerativeSubjectPrior(tfa_models.GenerativePrior):
 class HTFAModel(nn.Module):
     """Generative model for hierarchical topographic factor analysis"""
     def __init__(self, locations, num_blocks, num_times,
-                 num_factors=tfa_models.NUM_FACTORS):
+                 num_factors=tfa_models.NUM_FACTORS, volume=None):
         super(self.__class__, self).__init__()
 
         self._num_factors = num_factors
@@ -248,10 +252,14 @@ class HTFAModel(nn.Module):
         self._num_times = num_times
 
         center, center_sigma = utils.brain_centroid(locations)
+        hull = scipy.spatial.ConvexHull(locations)
+        if volume is not None:
+            volume = hull.volume
 
         self._hyperparams = HTFAGenerativeHyperParams(center, center_sigma,
                                                       self._num_blocks,
-                                                      self._num_factors)
+                                                      self._num_factors,
+                                                      volume=volume)
         self._template_prior = HTFAGenerativeTemplatePrior()
         self._subject_prior = HTFAGenerativeSubjectPrior(
             self._num_blocks, self._num_times
