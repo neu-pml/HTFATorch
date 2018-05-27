@@ -137,7 +137,7 @@ class DeepTFAGuide(nn.Module):
         self.factors_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim, self._num_factors),
             nn.Tanhshrink(),
-            nn.Linear(self._num_factors, self._num_factors * 4),
+            nn.Linear(self._num_factors, self._num_factors * 8),
         )
         self.weights_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim * 2, self._num_factors),
@@ -156,10 +156,12 @@ class DeepTFAGuide(nn.Module):
             ))
             self.factors_embedding[-1].bias = nn.Parameter(torch.cat(
                 (hyper_means['factor_centers'],
+                 torch.ones(self._num_factors, 3),
                  torch.ones(self._num_factors, 1) *
-                 hyper_means['factor_log_widths'] - np.log(4)),
+                 hyper_means['factor_log_widths'] - np.log(4),
+                 torch.ones(self._num_factors, 1)),
                 dim=1,
-            ).view(self._num_factors * 4))
+            ).view(self._num_factors * 8))
 
     def forward(self, trace, times=None, blocks=None,
                 num_particles=tfa_models.NUM_PARTICLES):
@@ -200,7 +202,7 @@ class DeepTFAGuide(nn.Module):
                                           name='z^S_%d' % task)
 
             factor_params = self.factors_embedding(factors_embed)
-            factor_params = factor_params.view(-1, self._num_factors, 4)
+            factor_params = factor_params.view(-1, self._num_factors, 8)
             weights_embed = torch.cat((subject_embed, task_embed), dim=-1)
             weight_params = self.weights_embedding(weights_embed).view(
                 -1, self._num_factors, 2
@@ -215,14 +217,18 @@ class DeepTFAGuide(nn.Module):
                 params['block']['weights']['sigma'][:, b, ts[0]:ts[1], :],
                 name='Weights%dt%d-%d' % (b, ts[0], ts[1])
             )
-            factor_centers[i] = trace.normal(factor_params[:, :, 0:3],
-                                             self.epsilon[0],
-                                             name='FactorCenters%d' % b)
+            factor_centers[i] = trace.normal(
+                factor_params[:, :, 0:3],
+                self.softplus(factor_params[:, :, 3:6]),
+                name='FactorCenters%d' % b
+            )
             factor_log_widths[i] = trace.normal(
-                factor_params[:, :, 3:].contiguous().view(
+                factor_params[:, :, 6].contiguous().view(
                     -1, self._num_factors
                 ),
-                self.epsilon[0], name='FactorLogWidths%d' % b
+                self.softplus(factor_params[:, :, 7].contiguous().view(
+                    -1, self._num_factors
+                )), name='FactorLogWidths%d' % b
             )
 
         return weights, factor_centers, factor_log_widths

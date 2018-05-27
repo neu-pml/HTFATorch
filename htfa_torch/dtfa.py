@@ -221,10 +221,12 @@ class DeepTFA:
 
         weights = hyperparams['block']['weights']['mu'][block]
         factor_params = self.variational.factors_embedding(factors_embed).view(
-            self.num_factors, 4
+            self.num_factors, 8
         )
         factor_centers = factor_params[:, :3]
-        factor_log_widths = torch.log(factor_params[:, 3:].contiguous().view(self.num_factors))
+        factor_log_widths = factor_params[:, 6].contiguous().view(
+            self.num_factors
+        )
 
         return {
             'weights': weights.data,
