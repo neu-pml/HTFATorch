@@ -252,7 +252,7 @@ class DeepTFAModel(nn.Module):
         )
         self.htfa_model = htfa_models.HTFAModel(locations, self._num_blocks,
                                                 self._num_times,
-                                                self._num_factors)
+                                                self._num_factors, volume=True)
 
     def forward(self, trace, times=None, guide=probtorch.Trace(),
                 observations=[], blocks=None):
