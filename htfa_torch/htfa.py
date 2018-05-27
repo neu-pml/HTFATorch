@@ -66,7 +66,8 @@ class HierarchicalTopographicFactorAnalysis:
 
         self.enc = htfa_models.HTFAGuide(query, self.num_factors)
         self.dec = htfa_models.HTFAModel(self.voxel_locations, self.num_blocks,
-                                         self.num_times, self.num_factors)
+                                         self.num_times, self.num_factors,
+                                         volume=True)
 
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
               log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES,
