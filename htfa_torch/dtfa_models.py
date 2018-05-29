@@ -143,14 +143,13 @@ class DeepTFAGuide(nn.Module):
             nn.Linear(self._embedding_dim * 2, self._num_factors),
             nn.Tanh(),
             nn.Linear(self._num_factors, self._num_factors * 2),
-            nn.Softsign(),
         )
         self.softplus = nn.Softplus()
 
         self.epsilon = nn.Parameter(torch.Tensor([tfa_models.VOXEL_NOISE]))
 
         if hyper_means is not None:
-            self.weights_embedding[-2].bias = nn.Parameter(torch.cat(
+            self.weights_embedding[-1].bias = nn.Parameter(torch.cat(
                 (hyper_means['weights'].mean(0), torch.ones(self._num_factors)),
                 dim=0
             ))
