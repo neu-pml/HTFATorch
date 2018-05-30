@@ -59,7 +59,10 @@ def hierarchical_elbo(q, p, rv_weight=lambda x: 1.0,
                                  nodes=rvs) -\
                      q.log_joint(sample_dim=sample_dim, batch_dim=batch_dim,
                                  nodes=rvs)
-        weighted_elbo += weight * local_elbo.sum()
+        if sample_dim is not None:
+            weighted_elbo += weight * local_elbo.mean(dim=sample_dim)
+        else:
+            weighted_elbo += weight * local_elbo
     return weighted_elbo
 
 def hierarchical_free_energy(*args, **kwargs):
