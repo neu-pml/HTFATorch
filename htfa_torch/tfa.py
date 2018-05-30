@@ -78,11 +78,12 @@ def log_likelihood(q, p, num_particles=tfa_models.NUM_PARTICLES):
 
 class TopographicalFactorAnalysis:
     """Overall container for a run of TFA"""
-    def __init__(self, data_file, num_factors=tfa_models.NUM_FACTORS):
+    def __init__(self, data_file, num_factors=tfa_models.NUM_FACTORS,
+                 zscore=True):
         self.num_factors = num_factors
 
         self.voxel_activations, self.voxel_locations, self._name,\
-            self._template = utils.load_dataset(data_file)
+            self._template = utils.load_dataset(data_file, zscore=zscore)
 
         # Pull out relevant dimensions: the number of times-of-recording, and
         # the number of voxels in each timewise "slice"
