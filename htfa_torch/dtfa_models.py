@@ -141,7 +141,7 @@ class DeepTFAGuide(nn.Module):
         )
         self.weights_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim * 2, self._num_factors),
-            nn.Tanh(),
+            nn.Tanhshrink(),
             nn.Linear(self._num_factors, self._num_factors * 2),
         )
         self.softplus = nn.Softplus()
@@ -157,8 +157,8 @@ class DeepTFAGuide(nn.Module):
                 (hyper_means['factor_centers'],
                  torch.ones(self._num_factors, 3),
                  torch.ones(self._num_factors, 1) *
-                 hyper_means['factor_log_widths'] - np.log(4),
-                 torch.ones(self._num_factors, 1)),
+                 hyper_means['factor_log_widths'],
+                 torch.sqrt(torch.rand(self._num_factors, 1))),
                 dim=1,
             ).view(self._num_factors * 8))
 
