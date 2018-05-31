@@ -123,7 +123,8 @@ class HTFAGuide(nn.Module):
         self._num_blocks = len(query)
         self._num_times = niidb.query_max_time(query)
 
-        b = np.random.choice(self._num_blocks, 1)[0]
+        b = max(range(self._num_blocks), key=lambda b: query[b].end_time -
+                query[b].start_time)
         query[b].load()
         centers, widths, weights = utils.initial_hypermeans(
             query[b].activations.numpy().T, query[b].locations.numpy(),
