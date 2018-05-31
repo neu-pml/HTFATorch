@@ -77,15 +77,15 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
         params = utils.vardict({
             'factors': {
                 'mu': torch.zeros(self.num_blocks, self.embedding_dim),
-                'sigma': torch.ones(self.num_blocks, self.embedding_dim),
+                'sigma': torch.sqrt(torch.rand(self.num_blocks, self.embedding_dim)),
             },
             'subject': {
                 'mu': torch.zeros(self.num_subjects, self.embedding_dim),
-                'sigma': torch.ones(self.num_subjects, self.embedding_dim),
+                'sigma': torch.sqrt(torch.rand(self.num_blocks, self.embedding_dim)),
             },
             'task': {
                 'mu': torch.zeros(self.num_tasks, self.embedding_dim),
-                'sigma': torch.ones(self.num_tasks, self.embedding_dim),
+                'sigma': torch.sqrt(torch.rand(self.num_blocks, self.embedding_dim)),
             },
             'template': {
                 'factor_centers': {
@@ -95,8 +95,7 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
                 'factor_log_widths': {
                     'mu': hyper_means['factor_log_widths'] *\
                           torch.ones(self._num_factors),
-                    'sigma': torch.ones(self._num_factors) *\
-                             tfa_models.SOURCE_LOG_WIDTH_STD_DEV
+                    'sigma': torch.sqrt(torch.rand(self._num_factors))
                 }
             },
             'block': {
@@ -104,8 +103,9 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
                     'mu': hyper_means['weights'].mean(0).unsqueeze(0).expand(
                         self.num_blocks, self.num_times, self._num_factors
                     ),
-                    'sigma': torch.ones(self.num_blocks, self.num_times,
-                                        self._num_factors),
+                    'sigma': torch.sqrt(torch.rand(self.num_blocks,
+                                                   self.num_times,
+                                                   self._num_factors)),
                 }
             }
         })
@@ -150,7 +150,8 @@ class DeepTFAGuide(nn.Module):
 
         if hyper_means is not None:
             self.weights_embedding[-1].bias = nn.Parameter(torch.cat(
-                (hyper_means['weights'].mean(0), torch.ones(self._num_factors)),
+                (hyper_means['weights'].mean(0),
+                 torch.sqrt(torch.rand(self._num_factors))),
                 dim=0
             ))
             self.factors_embedding[-1].bias = nn.Parameter(torch.cat(
