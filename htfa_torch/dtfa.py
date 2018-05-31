@@ -72,7 +72,8 @@ class DeepTFA:
         block_subjects = [subjects.index(b.subject) for b in self._blocks]
         block_tasks = [tasks.index(b.task) for b in self._blocks]
 
-        b = np.random.choice(self.num_blocks, 1)[0]
+        b = max(range(self.num_blocks), key=lambda b: self._blocks[b].end_time -
+                self._blocks[b].start_time)
         self._blocks[b].load()
         centers, widths, weights = utils.initial_hypermeans(
             self._blocks[b].activations.numpy().T, self._blocks[b].locations.numpy(),
