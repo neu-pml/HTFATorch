@@ -219,7 +219,9 @@ class DeepTFA:
 
         factors_embed = hyperparams['factors']['mu'][subject]
 
-        weights = hyperparams['block']['weights']['mu'][block]
+        weights = hyperparams['block']['weights']['mu'][block]\
+                             [self._blocks[block].start_time:
+                              self._blocks[block].end_time]
         factor_params = self.variational.factors_embedding(factors_embed).view(
             self.num_factors, 8
         )

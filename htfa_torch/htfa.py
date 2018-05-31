@@ -204,7 +204,9 @@ class HierarchicalTopographicFactorAnalysis:
         if block is not None:
             centers = hyperparams['block']['factor_centers']['mu'][block].data
             log_widths = hyperparams['block']['factor_log_widths']['mu'][block].data
-            weights = hyperparams['block']['weights']['mu'][block].data
+            weights = hyperparams['block']['weights']['mu'][block]\
+                                 [self._blocks[block].start_time:
+                                  self._blocks[block].end_time].data
 
             result = {
                 'factors': tfa_models.radial_basis(self.voxel_locations,
