@@ -65,8 +65,9 @@ class HierarchicalTopographicFactorAnalysis:
         self.num_voxels = [acts.shape[1] for acts in self.voxel_activations]
 
         self.enc = htfa_models.HTFAGuide(query, self.num_factors)
-        self.dec = htfa_models.HTFAModel(query, self.num_blocks, self.num_times,
-                                         self.num_factors)
+        self.dec = htfa_models.HTFAModel(self.voxel_locations, self.num_blocks,
+                                         self.num_times, self.num_factors,
+                                         volume=True)
 
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
               log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES,
@@ -155,6 +156,8 @@ class HierarchicalTopographicFactorAnalysis:
                         torch.cuda.empty_cache()
                 if tfa.CUDA and use_cuda:
                     epoch_free_energies[batch] = epoch_free_energies[batch].cpu().data.numpy()
+                else:
+                    epoch_free_energies[batch] = epoch_free_energies[batch].data.numpy()
 
             free_energies[epoch] = np.array(epoch_free_energies).sum(0)
             free_energies[epoch] = free_energies[epoch].sum(0)
@@ -201,7 +204,9 @@ class HierarchicalTopographicFactorAnalysis:
         if block is not None:
             centers = hyperparams['block']['factor_centers']['mu'][block].data
             log_widths = hyperparams['block']['factor_log_widths']['mu'][block].data
-            weights = hyperparams['block']['weights']['mu'][block].data
+            weights = hyperparams['block']['weights']['mu'][block]\
+                                 [self._blocks[block].start_time:
+                                  self._blocks[block].end_time].data
 
             result = {
                 'factors': tfa_models.radial_basis(self.voxel_locations,
