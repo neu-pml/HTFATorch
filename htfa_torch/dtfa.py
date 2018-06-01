@@ -217,12 +217,10 @@ class DeepTFA:
     def results(self, block):
         hyperparams = self.variational.hyperparams.state_vardict()
         subject = self.generative.block_subjects[block]
+        task = self.generative.block_tasks[block]
 
         factors_embed = hyperparams['factors']['mu'][subject]
 
-        weights = hyperparams['block']['weights']['mu'][block]\
-                             [self._blocks[block].start_time:
-                              self._blocks[block].end_time]
         factor_params = self.variational.factors_embedding(factors_embed).view(
             self.num_factors, 8
         )
@@ -230,6 +228,17 @@ class DeepTFA:
         factor_log_widths = factor_params[:, 6].contiguous().view(
             self.num_factors
         )
+
+        weight_deltas = hyperparams['block']['weights']['mu'][block]\
+                                   [self._blocks[block].start_time:
+                                    self._blocks[block].end_time]
+        subject_embed = hyperparams['subject']['mu'][subject]
+        task_embed = hyperparams['task']['mu'][task]
+        weights_embed = torch.cat((subject_embed, task_embed), dim=-1)
+        weight_params = self.variational.weights_embedding(weights_embed).view(
+            self.num_factors, 2
+        )
+        weights = weight_params[:, 0] + weight_deltas
 
         return {
             'weights': weights.data,
