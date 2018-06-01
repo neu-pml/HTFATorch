@@ -64,6 +64,27 @@ def hierarchical_elbo(q, p, rv_weight=lambda x: 1.0,
         weighted_elbo += weight * local_elbo
     return weighted_elbo
 
+def componentized_elbo(q, p, rv_weight=lambda x: 1.0,
+                       num_particles=tfa_models.NUM_PARTICLES, sample_dim=None,
+                       batch_dim=None):
+    if num_particles and num_particles > 0:
+        sample_dim = 0
+    else:
+        sample_dim = None
+
+    trace_elbos = {}
+    for rv in p:
+        local_elbo = p.log_joint(sample_dim=sample_dim, batch_dim=batch_dim,
+                                 nodes=[rv]) -\
+                     q.log_joint(sample_dim=sample_dim, batch_dim=batch_dim,
+                                 nodes=[rv])
+        if sample_dim is not None:
+            local_elbo = local_elbo.mean(dim=sample_dim)
+        trace_elbos[rv] = rv_weight(rv) * local_elbo
+
+    weighted_elbo = sum([trace_elbos[rv] for rv in trace_elbos])
+    return weighted_elbo, trace_elbos
+
 def hierarchical_free_energy(*args, **kwargs):
     return -hierarchical_elbo(*args, **kwargs)
 
