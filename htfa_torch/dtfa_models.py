@@ -76,16 +76,16 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
 
         params = utils.vardict({
             'factors': {
-                'mu': torch.zeros(self.num_blocks, self.embedding_dim),
-                'sigma': torch.sqrt(torch.rand(self.num_blocks, self.embedding_dim)),
+                'mu': torch.zeros(self.num_subjects, self.embedding_dim),
+                'sigma': torch.sqrt(torch.rand(self.num_subjects, self.embedding_dim)),
             },
             'subject': {
                 'mu': torch.zeros(self.num_subjects, self.embedding_dim),
-                'sigma': torch.sqrt(torch.rand(self.num_blocks, self.embedding_dim)),
+                'sigma': torch.sqrt(torch.rand(self.num_subjects, self.embedding_dim)),
             },
             'task': {
                 'mu': torch.zeros(self.num_tasks, self.embedding_dim),
-                'sigma': torch.sqrt(torch.rand(self.num_blocks, self.embedding_dim)),
+                'sigma': torch.sqrt(torch.rand(self.num_tasks, self.embedding_dim)),
             },
             'template': {
                 'factor_centers': {
