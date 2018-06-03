@@ -222,10 +222,10 @@ class DeepTFA:
         factors_embed = hyperparams['factors']['mu'][subject]
 
         factor_params = self.variational.factors_embedding(factors_embed).view(
-            self.num_factors, 8
+            self.num_factors, 4
         )
         factor_centers = factor_params[:, :3]
-        factor_log_widths = factor_params[:, 6].contiguous().view(
+        factor_log_widths = factor_params[:, 3].contiguous().view(
             self.num_factors
         )
 
