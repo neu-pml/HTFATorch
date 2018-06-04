@@ -366,7 +366,6 @@ class DeepTFA:
     def visualize_factor_embedding(self, filename=None, show=True,
                                    num_samples=100, **kwargs):
         hyperprior = self.generative.hyperparams.state_vardict()
-        hyperparams = self.variational.hyperparams.state_vardict()
 
         factor_prior = utils.unsqueeze_and_expand_vardict({
             'mu': hyperprior['factors']['mu'][0],
