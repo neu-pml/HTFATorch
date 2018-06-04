@@ -136,12 +136,12 @@ class DeepTFAGuide(nn.Module):
                                                    embedding_dim)
         self.factors_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim, self._num_factors),
-            nn.Tanhshrink(),
+            nn.SELU(),
             nn.Linear(self._num_factors, self._num_factors * 4),
         )
         self.weights_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim * 2, self._num_factors),
-            nn.Tanhshrink(),
+            nn.SELU(),
             nn.Linear(self._num_factors, self._num_factors * 2),
         )
         self.softplus = nn.Softplus()
