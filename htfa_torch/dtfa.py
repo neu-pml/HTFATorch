@@ -214,7 +214,7 @@ class DeepTFA:
 
         return np.vstack([free_energies])
 
-    def results(self, block):
+    def results(self, block, hist_weights=False):
         hyperparams = self.variational.hyperparams.state_vardict()
         subject = self.generative.block_subjects[block]
         task = self.generative.block_tasks[block]
@@ -237,6 +237,10 @@ class DeepTFA:
             self.num_factors, 2
         )
         weights = weight_params[:, 0] + weight_deltas
+
+        if hist_weights:
+            plt.hist(weights.view(weights.numel()).data.numpy())
+            plt.show()
 
         return {
             'weights': weights.data,
@@ -364,7 +368,8 @@ class DeepTFA:
         return plot
 
     def visualize_factor_embedding(self, filename=None, show=True,
-                                   num_samples=100, **kwargs):
+                                   num_samples=100, hist_log_widths=True,
+                                   **kwargs):
         hyperprior = self.generative.hyperparams.state_vardict()
 
         factor_prior = utils.unsqueeze_and_expand_vardict({
@@ -394,6 +399,11 @@ class DeepTFA:
             plot.savefig(filename)
         if show:
             niplot.show()
+
+        if hist_log_widths:
+            log_widths = torch.log(widths)
+            plt.hist(log_widths.view(log_widths.numel()).numpy())
+            plt.show()
 
         return plot, centers, torch.log(widths)
 
