@@ -156,11 +156,6 @@ class DeepTFAGuide(nn.Module):
         self.epsilon = nn.Parameter(torch.Tensor([tfa_models.VOXEL_NOISE]))
 
         if hyper_means is not None:
-            self.weights_embedding[-1].bias = nn.Parameter(torch.cat(
-                (hyper_means['weights'].mean(0),
-                 torch.sqrt(torch.rand(self._num_factors))),
-                dim=0
-            ))
             self.centers_embedding.bias = nn.Parameter(
                 hyper_means['factor_centers'].view(self._num_factors * 3)
             )
@@ -192,19 +187,21 @@ class DeepTFAGuide(nn.Module):
             if ('z^F_%d' % subject) not in trace:
                 factors_embed = trace.normal(
                     params['factors']['mu'][:, subject, :],
-                    params['factors']['sigma'][:, subject, :],
+                    self.softplus(params['factors']['sigma'][:, subject, :]),
                     name='z^F_%d' % subject
                 )
             if ('z^P_%d' % subject) not in trace:
                 subject_embed = trace.normal(
                     params['subject']['mu'][:, subject, :],
-                    params['subject']['sigma'][:, subject, :],
+                    self.softplus(params['subject']['sigma'][:, subject, :]),
                     name='z^P_%d' % subject
                 )
             if ('z^S_%d' % task) not in trace:
-                task_embed = trace.normal(params['task']['mu'][:, task],
-                                          params['task']['sigma'][:, task],
-                                          name='z^S_%d' % task)
+                task_embed = trace.normal(
+                    params['task']['mu'][:, task],
+                    self.softplus(params['task']['sigma'][:, task]),
+                    name='z^S_%d' % task
+                )
 
             factor_params = self.factors_embedding(factors_embed)
             centers_predictions = self.centers_embedding(factor_params).view(
@@ -213,19 +210,20 @@ class DeepTFAGuide(nn.Module):
             log_widths_predictions = self.log_widths_embedding(factor_params).\
                                      view(-1, self._num_factors)
             weights_embed = torch.cat((subject_embed, task_embed), dim=-1)
-            weight_params = self.weights_embedding(weights_embed).view(
+            weight_predictions = self.weights_embedding(weights_embed).view(
                 -1, self._num_factors, 2
             )
 
-            weights_mu = trace.normal(weight_params[:, :, 0], self.epsilon[0],
-                                      name='mu^W_%d' % b)
-            weights_sigma = trace.normal(self.softplus(weight_params[:, :, 1]),
+            weights_mu = trace.normal(weight_predictions[:, :, 0],
+                                      self.epsilon[0], name='mu^W_%d' % b)
+            weights_sigma = trace.normal(weight_predictions[:, :, 1],
                                          self.epsilon[0], name='sigma^W_%d' % b)
+            weights_params = params['block']['weights']
             weights[i] = trace.normal(
-                params['block']['weights']['mu'][:, b, ts[0]:ts[1], :] +\
-                    weights_mu.unsqueeze(1),
-                params['block']['weights']['sigma'][:, b, ts[0]:ts[1], :] +\
-                    weights_sigma.unsqueeze(1),
+                weights_params['mu'][:, b, ts[0]:ts[1], :] +
+                weights_mu.unsqueeze(1),
+                self.softplus(weights_params['sigma'][:, b, ts[0]:ts[1], :] +
+                              weights_sigma.unsqueeze(1)),
                 name='Weights%dt%d-%d' % (b, ts[0], ts[1])
             )
             factor_centers[i] = trace.normal(
