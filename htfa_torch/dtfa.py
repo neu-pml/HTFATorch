@@ -221,13 +221,11 @@ class DeepTFA:
 
         factors_embed = hyperparams['factors']['mu'][subject]
 
-        factor_params = self.variational.factors_embedding(factors_embed).view(
-            self.num_factors, 4
+        factor_params = self.variational.factors_embedding(factors_embed)
+        factor_centers = self.variational.centers_embedding(factor_params).view(
+            self.num_factors, 3
         )
-        factor_centers = factor_params[:, :3]
-        factor_log_widths = factor_params[:, 3].contiguous().view(
-            self.num_factors
-        )
+        factor_log_widths = self.variational.log_widths_embedding(factor_params)
 
         weight_deltas = hyperparams['block']['weights']['mu'][block]\
                                    [self._blocks[block].start_time:
@@ -377,10 +375,11 @@ class DeepTFA:
 
         embedding = torch.normal(factor_prior['mu'], factor_prior['sigma'] * 2)
         factor_params = self.variational.factors_embedding(embedding)
-        factor_params = factor_params.contiguous().view(num_samples,
-                                                        self.num_factors, 4)
-        centers = factor_params[:, :, :3].data.contiguous()
-        widths = torch.exp(factor_params[:, :, 3].data.contiguous())
+        centers = self.variational.centers_embedding(factor_params).view(
+            -1, self.num_factors, 3
+        ).data
+        widths = torch.exp(self.variational.log_widths_embedding(factor_params))
+        widths = widths.view(-1, self.num_factors).data
 
         plot = niplot.plot_connectome(
             np.eye(num_samples * self.num_factors),

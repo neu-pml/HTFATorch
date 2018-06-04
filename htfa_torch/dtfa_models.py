@@ -136,12 +136,15 @@ class DeepTFAGuide(nn.Module):
                                                    embedding_dim)
         self.factors_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim, self._num_factors),
-            nn.SELU(),
-            nn.Linear(self._num_factors, self._num_factors * 4),
+            nn.Softsign(),
         )
+        self.centers_embedding = nn.Linear(self._num_factors,
+                                           self._num_factors * 3)
+        self.log_widths_embedding = nn.Linear(self._num_factors,
+                                              self._num_factors)
         self.weights_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim * 2, self._num_factors),
-            nn.SELU(),
+            nn.Softsign(),
             nn.Linear(self._num_factors, self._num_factors * 2),
         )
         self.softplus = nn.Softplus()
@@ -154,12 +157,12 @@ class DeepTFAGuide(nn.Module):
                  torch.sqrt(torch.rand(self._num_factors))),
                 dim=0
             ))
-            self.factors_embedding[-1].bias = nn.Parameter(torch.cat(
-                (hyper_means['factor_centers'],
-                 torch.ones(self._num_factors, 1) *
-                 hyper_means['factor_log_widths']),
-                dim=1,
-            ).view(self._num_factors * 4))
+            self.centers_embedding.bias = nn.Parameter(
+                hyper_means['factor_centers'].view(self._num_factors * 3)
+            )
+            self.log_widths_embedding.bias = nn.Parameter(
+                torch.ones(self._num_factors) * hyper_means['factor_log_widths']
+            )
 
     def forward(self, trace, times=None, blocks=None,
                 num_particles=tfa_models.NUM_PARTICLES):
@@ -200,7 +203,11 @@ class DeepTFAGuide(nn.Module):
                                           name='z^S_%d' % task)
 
             factor_params = self.factors_embedding(factors_embed)
-            factor_params = factor_params.view(-1, self._num_factors, 4)
+            centers_predictions = self.centers_embedding(factor_params).view(
+                -1, self._num_factors, 3
+            )
+            log_widths_predictions = self.log_widths_embedding(factor_params).\
+                                     view(-1, self._num_factors)
             weights_embed = torch.cat((subject_embed, task_embed), dim=-1)
             weight_params = self.weights_embedding(weights_embed).view(
                 -1, self._num_factors, 2
@@ -218,14 +225,12 @@ class DeepTFAGuide(nn.Module):
                 name='Weights%dt%d-%d' % (b, ts[0], ts[1])
             )
             factor_centers[i] = trace.normal(
-                factor_params[:, :, 0:3],
+                centers_predictions,
                 self.epsilon[0],
                 name='FactorCenters%d' % b
             )
             factor_log_widths[i] = trace.normal(
-                factor_params[:, :, 3].contiguous().view(
-                    -1, self._num_factors
-                ),
+                log_widths_predictions,
                 self.epsilon[0], name='FactorLogWidths%d' % b
             )
 
