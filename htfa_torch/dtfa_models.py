@@ -304,5 +304,4 @@ class DeepTFAModel(nn.Module):
             }
 
         return self.htfa_model(trace, times, guide, blocks=blocks,
-                               observations=observations,
-                               weights_params=weight_params)
+                               observations=observations)
