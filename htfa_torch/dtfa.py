@@ -365,6 +365,40 @@ class DeepTFA:
 
         return plot
 
+    def visualize_factor_embedding(self, filename=None, show=True,
+                                   num_samples=100, **kwargs):
+        hyperprior = self.generative.hyperparams.state_vardict()
+        hyperparams = self.variational.hyperparams.state_vardict()
+
+        factor_prior = utils.unsqueeze_and_expand_vardict({
+            'mu': hyperprior['factors']['mu'][0],
+            'sigma': hyperprior['factors']['sigma'][0]
+        }, 0, num_samples, True)
+
+        embedding = torch.normal(factor_prior['mu'], factor_prior['sigma'] * 2)
+        factor_params = self.variational.factors_embedding(embedding)
+        factor_params = factor_params.contiguous().view(num_samples,
+                                                        self.num_factors, 4)
+        centers = factor_params[:, :, :3].data.contiguous()
+        widths = torch.exp(factor_params[:, :, 3].data.contiguous())
+
+        plot = niplot.plot_connectome(
+            np.eye(num_samples * self.num_factors),
+            centers.view(num_samples * self.num_factors, 3).numpy(),
+            node_size=widths.view(num_samples * self.num_factors).numpy(),
+            title="$z^F$ std-dev %.8e, $x^F$ std-dev %.8e, $\\rho^F$ std-dev %.8e" %
+            (embedding.std(0).norm(), centers.std(0).norm(),
+             torch.log(widths).std(0).norm()),
+            **kwargs
+        )
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot, centers, torch.log(widths)
+
     def scatter_factor_embedding(self, labeler=None, filename=None, show=True,
                                  xlims=None, ylims=None, figsize=(3.75, 2.75),
                                  colormap='Set1'):
