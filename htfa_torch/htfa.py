@@ -130,7 +130,7 @@ class HierarchicalTopographicFactorAnalysis:
                     dec(p, times=trs, guide=q, observations=activations,
                         blocks=block_batch)
 
-                    def block_rv_weight(node):
+                    def block_rv_weight(node, prior=True):
                         result = 1.0
                         if measure_occurrences:
                             rv_occurrences[node] += 1

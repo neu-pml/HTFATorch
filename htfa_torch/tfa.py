@@ -44,7 +44,7 @@ def free_energy(q, p, num_particles=tfa_models.NUM_PARTICLES):
         sample_dim = None
     return -probtorch.objectives.montecarlo.elbo(q, p, sample_dim=sample_dim)
 
-def hierarchical_elbo(q, p, rv_weight=lambda x: 1.0,
+def hierarchical_elbo(q, p, rv_weight=lambda x, prior=True: 1.0,
                       num_particles=tfa_models.NUM_PARTICLES,
                       sample_dim=None, batch_dim=None):
     if num_particles and num_particles > 0:
@@ -62,9 +62,9 @@ def hierarchical_elbo(q, p, rv_weight=lambda x: 1.0,
         if sample_dim is not None:
             local_elbo = local_elbo.mean(dim=sample_dim)
         if p[rv].observed and rv not in q:
-            weighted_log_likelihood += rv_weight(rv) * local_elbo
+            weighted_log_likelihood += rv_weight(rv, False) * local_elbo
         else:
-            weighted_prior_kl -= rv_weight(rv) * local_elbo
+            weighted_prior_kl -= rv_weight(rv, True) * local_elbo
     weighted_elbo = weighted_log_likelihood - weighted_prior_kl
     return weighted_elbo, weighted_log_likelihood, weighted_prior_kl
 
