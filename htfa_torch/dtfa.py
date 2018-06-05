@@ -38,6 +38,8 @@ from . import tfa
 from . import tfa_models
 from . import utils
 
+EPOCH_MSG = '[Epoch %d] (%dms) Posterior free-energy %.8e = KL from prior %.8e - log-likelihood %.8e'
+
 class DeepTFA:
     """Overall container for a run of Deep TFA"""
     def __init__(self, query, mask, num_factors=tfa_models.NUM_FACTORS,
@@ -136,9 +138,13 @@ class DeepTFA:
         for epoch in range(num_steps):
             start = time.time()
             epoch_free_energies = list(range(len(activations_loader)))
+            epoch_lls = list(range(len(activations_loader)))
+            epoch_prior_kls = list(range(len(activations_loader)))
 
             for (batch, data) in enumerate(activations_loader):
                 epoch_free_energies[batch] = 0.0
+                epoch_lls[batch] = 0.0
+                epoch_prior_kls[batch] = 0.0
                 block_batches = utils.chunks(list(range(self.num_blocks)),
                                              n=blocks_batch_size)
                 for block_batch in block_batches:
@@ -167,7 +173,7 @@ class DeepTFA:
                             rv_occurrences[node] += 1
                         result /= rv_occurrences[node]
                         return result
-                    free_energy = tfa.hierarchical_free_energy(
+                    free_energy, ll, prior_kl = tfa.hierarchical_free_energy(
                         q, p,
                         rv_weight=block_rv_weight,
                         num_particles=num_particles
@@ -176,6 +182,8 @@ class DeepTFA:
                     free_energy.backward()
                     optimizer.step()
                     epoch_free_energies[batch] += free_energy
+                    epoch_lls[batch] += ll
+                    epoch_prior_kls[batch] += prior_kl
 
                     if tfa.CUDA and use_cuda:
                         del activations
@@ -185,8 +193,12 @@ class DeepTFA:
                         torch.cuda.empty_cache()
                 if tfa.CUDA and use_cuda:
                     epoch_free_energies[batch] = epoch_free_energies[batch].cpu().data.numpy()
+                    epoch_lls[batch] = epoch_lls[batch].cpu().data.numpy()
+                    epoch_prior_kls[batch] = epoch_prior_kls[batch].cpu().data.numpy()
                 else:
                     epoch_free_energies[batch] = epoch_free_energies[batch].data.numpy()
+                    epoch_lls[batch] = epoch_lls[batch].data.numpy()
+                    epoch_prior_kls[batch] = epoch_prior_kls[batch].data.numpy()
 
             free_energies[epoch] = np.array(epoch_free_energies).sum(0)
             free_energies[epoch] = free_energies[epoch].sum(0)
@@ -195,7 +207,9 @@ class DeepTFA:
             measure_occurrences = False
 
             end = time.time()
-            msg = tfa.EPOCH_MSG % (epoch + 1, (end - start) * 1000, free_energies[epoch])
+            msg = EPOCH_MSG % (epoch + 1, (end - start) * 1000,
+                               free_energies[epoch], sum(epoch_prior_kls),
+                               sum(epoch_lls))
             logging.info(msg)
             if checkpoint_steps is not None and epoch % checkpoint_steps == 0:
                 now = datetime.datetime.now()
