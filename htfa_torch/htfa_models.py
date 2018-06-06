@@ -162,26 +162,27 @@ class HTFAGenerativeHyperParams(tfa_models.HyperParams):
             self._num_factors
         )
 
-        params['template']['factor_centers']['mu'] =\
-            brain_center.expand(self._num_factors, 3)
-        params['template']['factor_centers']['sigma'] =\
-            brain_center_std_dev.expand(self._num_factors, 3)
-
         coefficient = 1.0
         if volume is not None:
             coefficient = np.log(np.cbrt(volume / self._num_factors))
+
+        params['template']['factor_centers']['mu'] =\
+            brain_center.expand(self._num_factors, 3)
+        params['template']['factor_centers']['sigma'] =\
+            brain_center_std_dev.expand(self._num_factors, 3) /\
+            np.exp(coefficient)
+
         params['template']['factor_log_widths']['mu'] =\
             coefficient * torch.ones(self._num_factors)
         params['template']['factor_log_widths']['sigma'] =\
-            tfa_models.SOURCE_LOG_WIDTH_STD_DEV * torch.ones(self._num_factors)
+            torch.ones(self._num_factors)
 
         params['block'] = {
             'factor_center_noise': torch.ones(self._num_blocks),
             'factor_log_width_noise': torch.ones(self._num_blocks),
             'weights': {
                 'mu': torch.zeros(self._num_blocks, self._num_factors),
-                'sigma': tfa_models.SOURCE_WEIGHT_STD_DEV *\
-                         torch.ones(self._num_blocks, self._num_factors)
+                'sigma': torch.ones(self._num_blocks, self._num_factors)
             },
         }
         super(self.__class__, self).__init__(params, guide=False)
