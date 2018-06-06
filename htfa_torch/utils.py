@@ -15,14 +15,18 @@ try:
         matplotlib.use('TkAgg')
 finally:
     import matplotlib.cm as cm
+    import matplotlib.colors
     import matplotlib.patches as mpatches
     import matplotlib.pyplot as plt
 import numpy as np
 import scipy.io as sio
+import scipy.spatial.distance as sd
 import scipy.special as spspecial
 import scipy.stats as stats
 from sklearn.cluster import KMeans
 import torch
+from torch import distributions
+import probtorch
 from torch.autograd import Variable
 import torch.nn as nn
 from torch.nn import Parameter
@@ -189,6 +193,201 @@ def load_dataset(data_file, mask=None, zscore=True):
 
     return activations, locations, name, template
 
+def generate_group_activities(group_data,window_size = 10):
+    """
+    :param group_data: n_subjects x n_times x n_voxels (or factors) activation data for all subjects
+    :return: activation_vectors: times (depending on window size) x n_voxels (or factors) vectors of mean activation
+    """
+    n_times = group_data.shape[1]
+    n_nodes = group_data.shape[2]
+    n_windows = n_times-window_size+1
+    activation_vectors = np.empty(shape = (n_windows,n_nodes))
+    for w in range(0,n_windows):
+        window = group_data[:,w:w+window_size,:]
+        activation_vectors[w,:] = window.numpy().mean(axis=(0,1))
+
+    return activation_vectors
+
+
+def get_covariance(group_data, window_size=5):
+    """
+    :param data: n_subjects x n_times x n_nodes
+    :param windowsize: number of observations to include in each sliding window (set to 0 or don't specify if all
+                           timepoints should be used)
+    :return: n_subjets x number-of-features by number-of-features covariance matrix
+    """
+    n_times = group_data.shape[1]
+    n_nodes = group_data.shape[2]
+    n_windows = n_times - window_size + 1
+    cov = np.empty(shape=(n_windows, n_nodes, n_nodes))
+    for w in range(0, n_windows):
+        window = group_data[:, w:w + window_size, :]
+        window = np.mean(window,axis=1)
+        cov[w, :, :] = np.cov(window.T)
+
+    return cov
+
+def calculate_kl(mean1,cov1,mean2,cov2):
+    cov1 = cov1 + 1e-3*np.eye(cov1.shape[0])
+    cov2 = cov2 + 1e-3*np.eye(cov2.shape[0])
+    d = len(mean1)
+    cov2inv = np.linalg.inv(cov2)
+    kl  = np.log(np.linalg.det(cov2)) - np.log(np.linalg.det(cov1)) - d + np.trace(np.dot(cov2inv,cov1)) + \
+          (mean2-mean1).T.dot(cov2inv).dot(mean2-mean1)
+    return kl/2
+def get_correlation_matrix(pattern_G1,pattern_G2):
+
+    activity_correlation_matrix = np.empty((pattern_G1.shape[0], pattern_G2.shape[0]))
+    for i in range(pattern_G1.shape[0]):
+        for j in range(pattern_G2.shape[0]):
+            activity_correlation_matrix[i, j] = stats.pearsonr(pattern_G1[i], pattern_G2[j])[0]
+
+    return activity_correlation_matrix
+
+def get_decoding_accuracy(G1,G2,window_size=5,hist=True):
+    """
+    :param G1: Split Half Group G1 (group_size x n_times x n_nodes)
+    :param G2: Split Half Group G2 (group_size x n_times x n_nodes
+    :return: time labels of G1 as predicted by max corr with G2
+    """
+    activity_pattern_G1 = generate_group_activities(torch.Tensor(G1), window_size=window_size)
+    activity_pattern_G2 = generate_group_activities(torch.Tensor(G2), window_size=window_size)
+    activity_correlation_matrix = get_correlation_matrix(activity_pattern_G1,activity_pattern_G2)
+    time_labels = np.argmax(activity_correlation_matrix, axis=1)
+    decoding_accuracy=[]
+    if hist:
+        for i in range(5):
+            temp = np.sum(time_labels+i == np.arange(activity_pattern_G1.shape[0]))
+            decoding_accuracy.append(temp)
+            if i!=0:
+                temp = np.sum(time_labels-i == np.arange(activity_pattern_G1.shape[0]))
+                decoding_accuracy.append(temp)
+    else:
+        decoding_accuracy = np.sum(time_labels == np.arange(activity_pattern_G1.shape[0]))
+    decoding_accuracy = np.array(decoding_accuracy)/activity_pattern_G1.shape[0]
+
+    return decoding_accuracy,activity_correlation_matrix
+
+def get_isfc_decoding_accuracy(G1,G2,window_size=5,hist=True):
+    """
+    :param G1: Split Half Group G1 (group_size x n_times x n_nodes)
+    :param G2: Split Half Group G2 (group_size x n_times x n_nodes
+    :return: time labels of G1 as predicted by max corr with G2
+    """
+    isfc_pattern_G1 = dynamic_ISFC(G1, windowsize=window_size)
+    isfc_pattern_G2 = dynamic_ISFC(G2, windowsize = window_size)
+    activity_correlation_matrix = get_correlation_matrix(isfc_pattern_G1,isfc_pattern_G2)
+    time_labels = np.argmax(activity_correlation_matrix, axis=1)
+    decoding_accuracy = []
+    if hist:
+        for i in range(5):
+            temp = np.sum(time_labels+i == np.arange(isfc_pattern_G1.shape[0]))
+            decoding_accuracy.append(temp)
+            if i!=0:
+                temp = np.sum(time_labels-i == np.arange(isfc_pattern_G1.shape[0]))
+                decoding_accuracy.append(temp)
+    else:
+        decoding_accuracy = np.sum(time_labels == np.arange(isfc_pattern_G1.shape[0]))
+    decoding_accuracy = np.array(decoding_accuracy)/isfc_pattern_G1.shape[0]
+
+    return decoding_accuracy,activity_correlation_matrix
+
+
+def get_mixed_decoding_accuracy(isfc_correlation_matrix,activity_correlation_matrix,mixing_prop=0.5,hist=True):
+    """
+    :param G1: Split Half Group G1 (group_size x n_times x n_nodes)
+    :param G2: Split Half Group G2 (group_size x n_times x n_nodes
+    :return: time labels of G1 as predicted by max corr with G2
+    """
+    activity_correlation_matrix = mixing_prop*activity_correlation_matrix +\
+                                  (1-mixing_prop)*isfc_correlation_matrix
+    time_labels = np.argmax(activity_correlation_matrix, axis=1)
+    decoding_accuracy = []
+    if hist:
+        for i in range(5):
+            temp = np.sum(time_labels+i == np.arange(activity_correlation_matrix.shape[0]))
+            decoding_accuracy.append(temp)
+            if i!=0:
+                temp = np.sum(time_labels-i == np.arange(activity_correlation_matrix.shape[0]))
+                decoding_accuracy.append(temp)
+    else:
+        decoding_accuracy = np.sum(time_labels == np.arange(activity_correlation_matrix.shape[0]))
+    decoding_accuracy = np.array(decoding_accuracy)/activity_correlation_matrix.shape[0]
+
+    return decoding_accuracy
+
+def get_kl_decoding_accuracy(G1, G2, window_size=5,hist=True):
+    means_G1 = generate_group_activities(torch.Tensor(G1), window_size=window_size)
+    means_G2 = generate_group_activities(torch.Tensor(G2), window_size=window_size)
+    cov_G1 = get_covariance(G1, window_size=window_size)
+    cov_G2 = get_covariance(G2, window_size=window_size)
+    kl = np.empty(shape=(means_G1.shape[0],means_G2.shape[0]))
+    for t in range(means_G1.shape[0]):
+        for t2 in range(means_G2.shape[0]):
+            kl[t,t2] = calculate_kl(means_G1[t,:],cov_G1[t,:,:],means_G2[t2,:],cov_G2[t2,:,:])
+    time_labels = np.argmin(kl, axis=1)
+    decoding_accuracy = []
+    if hist:
+        for i in range(5):
+            temp = np.sum(time_labels+i == np.arange(means_G1.shape[0]))
+            decoding_accuracy.append(temp)
+            if i!=0:
+                temp = np.sum(time_labels-i == np.arange(means_G1.shape[0]))
+                decoding_accuracy.append(temp)
+    else:
+        decoding_accuracy = np.sum(time_labels == np.arange(means_G1.shape[0]))
+    decoding_accuracy = np.array(decoding_accuracy)/means_G1.shape[0]
+
+    return decoding_accuracy
+
+
+def dynamic_ISFC(data, windowsize=5):
+        """
+        :param data: n_subjects x n_times x n_nodes
+        :param windowsize: number of observations to include in each sliding window (set to 0 or don't specify if all
+                           timepoints should be used)
+        :return: number-of-features by number-of-features isfc matrix
+        reference: http://www.nature.com/articles/ncomms12141
+        code based on https://github.com/brainiak/brainiak/blob/master/examples/factoranalysis/htfa_tutorial.ipynb
+        """
+        def r2z(r):
+            return 0.5 * (np.log(1 + r) - np.log(1 - r))
+
+        def z2r(z):
+            return (np.exp(2 * z) - 1) / (np.exp(2 * z) + 1)
+
+        def vectorize(m):
+            np.fill_diagonal(m, 0)
+            return sd.squareform(m,checks=False)
+        assert len(data) > 1
+
+        ns = data.shape[1]
+        vs = data.shape[2]
+
+        n = np.min(ns)
+        if windowsize == 0:
+            windowsize = n
+
+        assert len(np.unique(vs)) == 1
+        v = vs
+
+        isfc_mat = np.zeros([ns - windowsize + 1, int((v ** 2 - v) / 2)])
+        for n in range(0, ns - windowsize + 1):
+            next_inds = range(n, n + windowsize)
+            for i in range(0, data.shape[0]):
+                mean_other_data = np.zeros([len(next_inds), v])
+                for j in range(0, data.shape[0]):
+                    if i == j:
+                        continue
+                    mean_other_data = mean_other_data + data[j,next_inds, :]
+                mean_other_data /= (data.shape[0] - 1)
+                next_corrs = np.array(r2z(1 - sd.cdist(data[i,next_inds, :].T, mean_other_data.T, 'correlation')))
+                isfc_mat[n, :] = isfc_mat[n, :] + vectorize(next_corrs + next_corrs.T)
+            isfc_mat[n, :] = z2r(isfc_mat[n, :] / (2 * data.shape[0]))
+
+        isfc_mat[np.where(np.isnan(isfc_mat))] = 0
+        return isfc_mat
+
 def vardict(existing=None):
     vdict = flatdict.FlatDict(delimiter='__')
     if existing:
@@ -235,18 +434,45 @@ def gaussian_populator(*dims):
     }
 
 def uncertainty_alphas(uncertainties, scalars=None):
-    if scalars is not None:
-        uncertainties = uncertainties / scalars
-    if len(uncertainties.shape) > 1:
-        uncertainties = uncertainties.norm(p=2, dim=1)
-    return (1.0 - torch.sigmoid(torch.log(uncertainties))).numpy()
+    return np.float64(1.0) - intensity_alphas(uncertainties, scalars)
 
-def compose_palette(length, alphas=None, colormap='Set2'):
-    scalar_map = cm.ScalarMappable(None, colormap)
-    colors = scalar_map.to_rgba(np.linspace(0, 1, length), norm=False)
+def normalize_tensors(seq, absval=False, percentiles=None):
+    flat = torch.cat([t.view(-1) for t in seq], dim=0)
+    if absval:
+        flat = torch.abs(flat)
+    flat = flat.numpy()
+    if percentiles is not None:
+        left, right = percentiles
+        result = matplotlib.colors.Normalize(np.percentile(flat, left),
+                                             np.percentile(flat, right),
+                                             clip=True)
+    else:
+        result = matplotlib.colors.Normalize(clip=True)
+        result.autoscale_None(flat)
+
+    return result
+
+def intensity_alphas(intensities, scalars=None, normalizer=None):
+    if scalars is not None:
+        intensities = intensities / scalars
+    if len(intensities.shape) > 1:
+        intensities = intensities.norm(p=2, dim=1)
+    if normalizer is None:
+        normalizer = matplotlib.colors.Normalize()
+    result = normalizer(intensities.numpy())
+    if normalizer.clip:
+        result = np.clip(result, 0.0, 1.0)
+    return result
+
+def scalar_map_palette(scalars, alphas=None, colormap='Set2', normalizer=None):
+    scalar_map = cm.ScalarMappable(normalizer, colormap)
+    colors = scalar_map.to_rgba(scalars, norm=True)
     if alphas is not None:
         colors[:, 3] = alphas
     return colors
+
+def compose_palette(length, alphas=None, colormap='Set2'):
+    return scalar_map_palette(np.linspace(0, 1, length), alphas, colormap)
 
 def uncertainty_palette(uncertainties, scalars=None, colormap='Set2'):
     alphas = uncertainty_alphas(uncertainties, scalars=scalars)

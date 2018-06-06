@@ -44,7 +44,7 @@ def free_energy(q, p, num_particles=tfa_models.NUM_PARTICLES):
         sample_dim = None
     return -probtorch.objectives.montecarlo.elbo(q, p, sample_dim=sample_dim)
 
-def hierarchical_elbo(q, p, rv_weight=lambda x: 1.0,
+def hierarchical_elbo(q, p, rv_weight=lambda x, prior=True: 1.0,
                       num_particles=tfa_models.NUM_PARTICLES,
                       sample_dim=None, batch_dim=None):
     if num_particles and num_particles > 0:
@@ -52,18 +52,46 @@ def hierarchical_elbo(q, p, rv_weight=lambda x: 1.0,
     else:
         sample_dim = None
 
-    weight_rvs = utils.inverse(rv_weight, p)
-    weighted_elbo = 0.0
-    for weight, rvs in weight_rvs.items():
+    weighted_log_likelihood = 0.0
+    weighted_prior_kl = 0.0
+    for rv in p:
         local_elbo = p.log_joint(sample_dim=sample_dim, batch_dim=batch_dim,
-                                 nodes=rvs) -\
+                                 nodes=[rv]) -\
                      q.log_joint(sample_dim=sample_dim, batch_dim=batch_dim,
-                                 nodes=rvs)
-        weighted_elbo += weight * local_elbo.sum()
-    return weighted_elbo
+                                 nodes=[rv])
+        if sample_dim is not None:
+            local_elbo = local_elbo.mean(dim=sample_dim)
+        if p[rv].observed and rv not in q:
+            weighted_log_likelihood += rv_weight(rv, False) * local_elbo
+        else:
+            weighted_prior_kl -= rv_weight(rv, True) * local_elbo
+    weighted_elbo = weighted_log_likelihood - weighted_prior_kl
+    return weighted_elbo, weighted_log_likelihood, weighted_prior_kl
+
+def componentized_elbo(q, p, rv_weight=lambda x: 1.0,
+                       num_particles=tfa_models.NUM_PARTICLES, sample_dim=None,
+                       batch_dim=None):
+    if num_particles and num_particles > 0:
+        sample_dim = 0
+    else:
+        sample_dim = None
+
+    trace_elbos = {}
+    for rv in p:
+        local_elbo = p.log_joint(sample_dim=sample_dim, batch_dim=batch_dim,
+                                 nodes=[rv]) -\
+                     q.log_joint(sample_dim=sample_dim, batch_dim=batch_dim,
+                                 nodes=[rv])
+        if sample_dim is not None:
+            local_elbo = local_elbo.mean(dim=sample_dim)
+        trace_elbos[rv] = rv_weight(rv) * local_elbo
+
+    weighted_elbo = sum([trace_elbos[rv] for rv in trace_elbos])
+    return weighted_elbo, trace_elbos
 
 def hierarchical_free_energy(*args, **kwargs):
-    return -hierarchical_elbo(*args, **kwargs)
+    elbo, ll, kl = hierarchical_elbo(*args, **kwargs)
+    return -elbo, ll, kl
 
 def log_likelihood(q, p, num_particles=tfa_models.NUM_PARTICLES):
     """The expected log-likelihood of observed data under the proposal distribution"""
@@ -75,11 +103,12 @@ def log_likelihood(q, p, num_particles=tfa_models.NUM_PARTICLES):
 
 class TopographicalFactorAnalysis:
     """Overall container for a run of TFA"""
-    def __init__(self, data_file, num_factors=tfa_models.NUM_FACTORS):
+    def __init__(self, data_file, num_factors=tfa_models.NUM_FACTORS,
+                 zscore=True):
         self.num_factors = num_factors
 
         self.voxel_activations, self.voxel_locations, self._name,\
-            self._template = utils.load_dataset(data_file)
+            self._template = utils.load_dataset(data_file, zscore=zscore)
 
         # Pull out relevant dimensions: the number of times-of-recording, and
         # the number of voxels in each timewise "slice"
