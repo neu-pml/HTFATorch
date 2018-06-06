@@ -179,7 +179,7 @@ class HTFAGenerativeHyperParams(tfa_models.HyperParams):
             'factor_center_noise': torch.ones(self._num_blocks),
             'factor_log_width_noise': torch.ones(self._num_blocks),
             'weights': {
-                'mu': torch.randn(self._num_blocks, self._num_factors),
+                'mu': torch.zeros(self._num_blocks, self._num_factors),
                 'sigma': tfa_models.SOURCE_WEIGHT_STD_DEV *\
                          torch.ones(self._num_blocks, self._num_factors)
             },

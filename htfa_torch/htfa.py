@@ -130,13 +130,13 @@ class HierarchicalTopographicFactorAnalysis:
                     dec(p, times=trs, guide=q, observations=activations,
                         blocks=block_batch)
 
-                    def block_rv_weight(node):
+                    def block_rv_weight(node, prior=True):
                         result = 1.0
                         if measure_occurrences:
                             rv_occurrences[node] += 1
                         result /= rv_occurrences[node]
                         return result
-                    free_energy = tfa.hierarchical_free_energy(
+                    free_energy, _, _ = tfa.hierarchical_free_energy(
                         q, p,
                         rv_weight=block_rv_weight,
                         num_particles=num_particles

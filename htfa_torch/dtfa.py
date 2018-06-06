@@ -38,6 +38,8 @@ from . import tfa
 from . import tfa_models
 from . import utils
 
+EPOCH_MSG = '[Epoch %d] (%dms) Posterior free-energy %.8e = KL from prior %.8e - log-likelihood %.8e'
+
 class DeepTFA:
     """Overall container for a run of Deep TFA"""
     def __init__(self, query, mask, num_factors=tfa_models.NUM_FACTORS,
@@ -123,7 +125,7 @@ class DeepTFA:
         optimizer = torch.optim.Adam(list(variational.parameters()),
                                      lr=learning_rate, weight_decay=1e-2)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, factor=1e-1, min_lr=5e-5, patience=patience,
+            optimizer, factor=0.5, min_lr=1e-5, patience=patience,
             verbose=True
         )
         variational.train()
@@ -136,9 +138,13 @@ class DeepTFA:
         for epoch in range(num_steps):
             start = time.time()
             epoch_free_energies = list(range(len(activations_loader)))
+            epoch_lls = list(range(len(activations_loader)))
+            epoch_prior_kls = list(range(len(activations_loader)))
 
             for (batch, data) in enumerate(activations_loader):
                 epoch_free_energies[batch] = 0.0
+                epoch_lls[batch] = 0.0
+                epoch_prior_kls[batch] = 0.0
                 block_batches = utils.chunks(list(range(self.num_blocks)),
                                              n=blocks_batch_size)
                 for block_batch in block_batches:
@@ -161,13 +167,13 @@ class DeepTFA:
                     generative(p, times=trs, guide=q, observations=activations,
                                blocks=block_batch)
 
-                    def block_rv_weight(node):
+                    def block_rv_weight(node, prior=True):
                         result = 1.0
                         if measure_occurrences:
                             rv_occurrences[node] += 1
                         result /= rv_occurrences[node]
                         return result
-                    free_energy = tfa.hierarchical_free_energy(
+                    free_energy, ll, prior_kl = tfa.hierarchical_free_energy(
                         q, p,
                         rv_weight=block_rv_weight,
                         num_particles=num_particles
@@ -176,6 +182,8 @@ class DeepTFA:
                     free_energy.backward()
                     optimizer.step()
                     epoch_free_energies[batch] += free_energy
+                    epoch_lls[batch] += ll
+                    epoch_prior_kls[batch] += prior_kl
 
                     if tfa.CUDA and use_cuda:
                         del activations
@@ -185,8 +193,12 @@ class DeepTFA:
                         torch.cuda.empty_cache()
                 if tfa.CUDA and use_cuda:
                     epoch_free_energies[batch] = epoch_free_energies[batch].cpu().data.numpy()
+                    epoch_lls[batch] = epoch_lls[batch].cpu().data.numpy()
+                    epoch_prior_kls[batch] = epoch_prior_kls[batch].cpu().data.numpy()
                 else:
                     epoch_free_energies[batch] = epoch_free_energies[batch].data.numpy()
+                    epoch_lls[batch] = epoch_lls[batch].data.numpy()
+                    epoch_prior_kls[batch] = epoch_prior_kls[batch].data.numpy()
 
             free_energies[epoch] = np.array(epoch_free_energies).sum(0)
             free_energies[epoch] = free_energies[epoch].sum(0)
@@ -195,7 +207,9 @@ class DeepTFA:
             measure_occurrences = False
 
             end = time.time()
-            msg = tfa.EPOCH_MSG % (epoch + 1, (end - start) * 1000, free_energies[epoch])
+            msg = EPOCH_MSG % (epoch + 1, (end - start) * 1000,
+                               free_energies[epoch], sum(epoch_prior_kls),
+                               sum(epoch_lls))
             logging.info(msg)
             if checkpoint_steps is not None and epoch % checkpoint_steps == 0:
                 now = datetime.datetime.now()
@@ -214,22 +228,33 @@ class DeepTFA:
 
         return np.vstack([free_energies])
 
-    def results(self, block):
+    def results(self, block, hist_weights=False):
         hyperparams = self.variational.hyperparams.state_vardict()
         subject = self.generative.block_subjects[block]
+        task = self.generative.block_tasks[block]
 
         factors_embed = hyperparams['factors']['mu'][subject]
 
-        weights = hyperparams['block']['weights']['mu'][block]\
-                             [self._blocks[block].start_time:
-                              self._blocks[block].end_time]
-        factor_params = self.variational.factors_embedding(factors_embed).view(
-            self.num_factors, 8
+        factor_params = self.variational.factors_embedding(factors_embed)
+        factor_centers = self.variational.centers_embedding(factor_params).view(
+            self.num_factors, 3
         )
-        factor_centers = factor_params[:, :3]
-        factor_log_widths = factor_params[:, 6].contiguous().view(
-            self.num_factors
+        factor_log_widths = self.variational.log_widths_embedding(factor_params)
+
+        weight_deltas = hyperparams['block']['weights']['mu'][block]\
+                                   [self._blocks[block].start_time:
+                                    self._blocks[block].end_time]
+        subject_embed = hyperparams['subject']['mu'][subject]
+        task_embed = hyperparams['task']['mu'][task]
+        weights_embed = torch.cat((subject_embed, task_embed), dim=-1)
+        weight_params = self.variational.weights_embedding(weights_embed).view(
+            self.num_factors, 2
         )
+        weights = weight_params[:, 0] + weight_deltas
+
+        if hist_weights:
+            plt.hist(weights.view(weights.numel()).data.numpy())
+            plt.show()
 
         return {
             'weights': weights.data,
@@ -355,6 +380,46 @@ class DeepTFA:
             niplot.show()
 
         return plot
+
+    def visualize_factor_embedding(self, filename=None, show=True,
+                                   num_samples=100, hist_log_widths=True,
+                                   **kwargs):
+        hyperprior = self.generative.hyperparams.state_vardict()
+
+        factor_prior = utils.unsqueeze_and_expand_vardict({
+            'mu': hyperprior['factors']['mu'][0],
+            'sigma': hyperprior['factors']['sigma'][0]
+        }, 0, num_samples, True)
+
+        embedding = torch.normal(factor_prior['mu'], factor_prior['sigma'] * 2)
+        factor_params = self.variational.factors_embedding(embedding)
+        centers = self.variational.centers_embedding(factor_params).view(
+            -1, self.num_factors, 3
+        ).data
+        widths = torch.exp(self.variational.log_widths_embedding(factor_params))
+        widths = widths.view(-1, self.num_factors).data
+
+        plot = niplot.plot_connectome(
+            np.eye(num_samples * self.num_factors),
+            centers.view(num_samples * self.num_factors, 3).numpy(),
+            node_size=widths.view(num_samples * self.num_factors).numpy(),
+            title="$z^F$ std-dev %.8e, $x^F$ std-dev %.8e, $\\rho^F$ std-dev %.8e" %
+            (embedding.std(0).norm(), centers.std(0).norm(),
+             torch.log(widths).std(0).norm()),
+            **kwargs
+        )
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        if hist_log_widths:
+            log_widths = torch.log(widths)
+            plt.hist(log_widths.view(log_widths.numel()).numpy())
+            plt.show()
+
+        return plot, centers, torch.log(widths)
 
     def scatter_factor_embedding(self, labeler=None, filename=None, show=True,
                                  xlims=None, ylims=None, figsize=(3.75, 2.75),
