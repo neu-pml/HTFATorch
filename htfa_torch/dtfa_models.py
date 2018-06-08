@@ -215,9 +215,11 @@ class DeepTFAGuide(nn.Module):
             )
 
             weights_mu = trace.normal(weight_predictions[:, :, 0],
-                                      self.epsilon[0], name='mu^W_%d' % b)
+                                      self.softplus(self.epsilon)[0],
+                                      name='mu^W_%d' % b)
             weights_sigma = trace.normal(weight_predictions[:, :, 1],
-                                         self.epsilon[0], name='sigma^W_%d' % b)
+                                         self.softplus(self.epsilon)[0],
+                                         name='sigma^W_%d' % b)
             weights_params = params['block']['weights']
             weights[i] = trace.normal(
                 weights_params['mu'][:, b, ts[0]:ts[1], :] +
@@ -228,12 +230,12 @@ class DeepTFAGuide(nn.Module):
             )
             factor_centers[i] = trace.normal(
                 centers_predictions,
-                self.epsilon[0],
+                self.softplus(self.epsilon)[0],
                 name='FactorCenters%d' % b
             )
             factor_log_widths[i] = trace.normal(
                 log_widths_predictions,
-                self.epsilon[0], name='FactorLogWidths%d' % b
+                self.softplus(self.epsilon)[0], name='FactorLogWidths%d' % b
             )
 
         return weights, factor_centers, factor_log_widths
