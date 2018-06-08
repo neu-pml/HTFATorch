@@ -91,18 +91,6 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
                 'sigma': torch.ones(self.num_tasks, self.embedding_dim) *\
                          tfa_models.SOURCE_WEIGHT_STD_DEV,
             },
-            'template': {
-                'factor_centers': {
-                    'mu': hyper_means['factor_centers'],
-                    'sigma': torch.ones(self._num_factors, 3),
-                },
-                'factor_log_widths': {
-                    'mu': hyper_means['factor_log_widths'] *\
-                          torch.ones(self._num_factors),
-                    'sigma': torch.ones(self._num_factors) *
-                             tfa_models.SOURCE_LOG_WIDTH_STD_DEV,
-                }
-            },
             'block': {
                 'weights': {
                     'mu': hyper_means['weights'].mean(0).unsqueeze(0).expand(
@@ -132,7 +120,6 @@ class DeepTFAGuide(nn.Module):
         num_subjects = len(set(self.block_subjects))
         num_tasks = len(set(self.block_tasks))
 
-        self.htfa_template = htfa_models.HTFAGuideTemplatePrior()
         self.hyperparams = DeepTFAGuideHyperparams(self._num_blocks,
                                                    self._num_times,
                                                    self._num_factors,
@@ -154,27 +141,40 @@ class DeepTFAGuide(nn.Module):
         )
 
         self.epsilon = nn.Parameter(torch.Tensor([tfa_models.VOXEL_NOISE]))
+        self.register_buffer('origin', torch.zeros(self._embedding_dim))
 
         if hyper_means is not None:
             self.centers_embedding.bias = nn.Parameter(
                 hyper_means['factor_centers'].view(self._num_factors * 3)
             )
             self.log_widths_embedding.bias = nn.Parameter(
-                torch.ones(self._num_factors) * hyper_means['factor_log_widths']
+                torch.ones(self._num_factors) *
+                hyper_means['factor_log_widths'] / 2
             )
 
     def forward(self, trace, times=None, blocks=None,
                 num_particles=tfa_models.NUM_PARTICLES):
         params = self.hyperparams.state_vardict()
-        self.htfa_template(trace, params, num_particles=num_particles)
         for k, v in params.items():
             params[k] = v.expand(num_particles, *v.shape)
+        origin = self.origin.expand(num_particles, self._embedding_dim)
         if blocks is None:
             blocks = list(range(self._num_blocks))
 
         weights = [None for b in blocks]
         factor_centers = [None for b in blocks]
         factor_log_widths = [None for b in blocks]
+
+        template_params = self.factors_embedding(origin)
+        template_centers = self.centers_embedding(template_params).view(
+            -1, self._num_factors, 3
+        )
+        trace.normal(template_centers, softplus(self.epsilon)[0],
+                     name='template_factor_centers')
+        template_log_widths = self.log_widths_embedding(template_params).\
+                              view(-1, self._num_factors)
+        trace.normal(template_log_widths, softplus(self.epsilon)[0],
+                     name='template_factor_log_widths')
 
         for (i, b) in enumerate(blocks):
             subject = self.block_subjects[b]
