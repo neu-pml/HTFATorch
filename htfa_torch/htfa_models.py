@@ -10,6 +10,7 @@ import torch
 from torch.autograd import Variable
 import probtorch
 import torch.nn as nn
+from torch.nn.functional import softplus
 
 from . import niidb
 from . import tfa_models
@@ -74,9 +75,11 @@ class HTFAGuideTemplatePrior(tfa_models.GuidePrior):
             )
         template = template_shape.copy()
         for (k, _) in template.iteritems():
-            template[k] = trace.normal(template_params[k]['mu'],
-                                       template_params[k]['sigma'],
-                                       name='template_' + k)
+            template[k] = trace.normal(
+                template_params[k]['mu'],
+                softplus(template_params[k]['sigma']),
+                name='template_' + k
+            )
 
         return template
 
