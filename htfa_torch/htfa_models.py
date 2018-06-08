@@ -176,7 +176,7 @@ class HTFAGenerativeHyperParams(tfa_models.HyperParams):
             np.exp(coefficient)
 
         params['template']['factor_log_widths']['mu'] =\
-            coefficient * torch.ones(self._num_factors)
+            torch.ones(self._num_factors)
         params['template']['factor_log_widths']['sigma'] =\
             torch.ones(self._num_factors)
 
