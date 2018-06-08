@@ -14,6 +14,7 @@ import torch
 import torch.distributions as dists
 from torch.autograd import Variable
 import torch.nn as nn
+from torch.nn.functional import softplus
 import torch.utils.data
 
 import probtorch
@@ -151,7 +152,6 @@ class DeepTFAGuide(nn.Module):
             nn.Softsign(),
             nn.Linear(self._num_factors, self._num_factors * 2),
         )
-        self.softplus = nn.Softplus()
 
         self.epsilon = nn.Parameter(torch.Tensor([tfa_models.VOXEL_NOISE]))
 
@@ -187,19 +187,19 @@ class DeepTFAGuide(nn.Module):
             if ('z^F_%d' % subject) not in trace:
                 factors_embed = trace.normal(
                     params['factors']['mu'][:, subject, :],
-                    self.softplus(params['factors']['sigma'][:, subject, :]),
+                    softplus(params['factors']['sigma'][:, subject, :]),
                     name='z^F_%d' % subject
                 )
             if ('z^P_%d' % subject) not in trace:
                 subject_embed = trace.normal(
                     params['subject']['mu'][:, subject, :],
-                    self.softplus(params['subject']['sigma'][:, subject, :]),
+                    softplus(params['subject']['sigma'][:, subject, :]),
                     name='z^P_%d' % subject
                 )
             if ('z^S_%d' % task) not in trace:
                 task_embed = trace.normal(
                     params['task']['mu'][:, task],
-                    self.softplus(params['task']['sigma'][:, task]),
+                    softplus(params['task']['sigma'][:, task]),
                     name='z^S_%d' % task
                 )
 
@@ -215,27 +215,27 @@ class DeepTFAGuide(nn.Module):
             )
 
             weights_mu = trace.normal(weight_predictions[:, :, 0],
-                                      self.softplus(self.epsilon)[0],
+                                      softplus(self.epsilon)[0],
                                       name='mu^W_%d' % b)
             weights_sigma = trace.normal(weight_predictions[:, :, 1],
-                                         self.softplus(self.epsilon)[0],
+                                         softplus(self.epsilon)[0],
                                          name='sigma^W_%d' % b)
             weights_params = params['block']['weights']
             weights[i] = trace.normal(
                 weights_params['mu'][:, b, ts[0]:ts[1], :] +
                 weights_mu.unsqueeze(1),
-                self.softplus(weights_params['sigma'][:, b, ts[0]:ts[1], :] +
-                              weights_sigma.unsqueeze(1)),
+                softplus(weights_params['sigma'][:, b, ts[0]:ts[1], :] +
+                         weights_sigma.unsqueeze(1)),
                 name='Weights%dt%d-%d' % (b, ts[0], ts[1])
             )
             factor_centers[i] = trace.normal(
                 centers_predictions,
-                self.softplus(self.epsilon)[0],
+                softplus(self.epsilon)[0],
                 name='FactorCenters%d' % b
             )
             factor_log_widths[i] = trace.normal(
                 log_widths_predictions,
-                self.softplus(self.epsilon)[0], name='FactorLogWidths%d' % b
+                softplus(self.epsilon)[0], name='FactorLogWidths%d' % b
             )
 
         return weights, factor_centers, factor_log_widths

@@ -10,6 +10,7 @@ import torch
 import torch.distributions as dists
 from torch.autograd import Variable
 import torch.nn as nn
+from torch.nn.functional import softplus
 import torch.utils.data
 
 import probtorch
@@ -130,15 +131,17 @@ class TFAGuidePrior(GuidePrior):
                                                                True)
 
         weights = trace.normal(weight_params['mu'],
-                               weight_params['sigma'],
+                               softplus(weight_params['sigma']),
                                name='Weights%dt%d-%d' % (self.block, times[0], times[1]))
 
         centers = trace.normal(params['factor_centers']['mu'],
-                               params['factor_centers']['sigma'],
+                               softplus(params['factor_centers']['sigma']),
                                name='FactorCenters' + str(self.block))
-        log_widths = trace.normal(params['factor_log_widths']['mu'],
-                                  params['factor_log_widths']['sigma'],
-                                  name='FactorLogWidths' + str(self.block))
+        log_widths = trace.normal(
+            params['factor_log_widths']['mu'],
+            softplus(params['factor_log_widths']['sigma']),
+            name='FactorLogWidths' + str(self.block)
+        )
         return weights, centers, log_widths
 
 class TFAGuide(nn.Module):
