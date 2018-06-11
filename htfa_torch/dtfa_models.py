@@ -33,15 +33,11 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
         self.embedding_dim = embedding_dim
 
         params = utils.vardict({
-            'factors': {
-                'mu': torch.zeros(self.num_subjects, self.embedding_dim),
-                'sigma': torch.ones(self.num_subjects, self.embedding_dim) *\
-                         tfa_models.SOURCE_LOG_WIDTH_STD_DEV,
-            },
             'subject': {
                 'mu': torch.zeros(self.num_subjects, self.embedding_dim),
                 'sigma': torch.ones(self.num_subjects, self.embedding_dim) *\
-                         tfa_models.SOURCE_WEIGHT_STD_DEV,
+                         tfa_models.SOURCE_WEIGHT_STD_DEV *\
+                         tfa_models.SOURCE_LOG_WIDTH_STD_DEV,
             },
             'task': {
                 'mu': torch.zeros(self.num_tasks, self.embedding_dim),
@@ -76,15 +72,11 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
         self.embedding_dim = embedding_dim
 
         params = utils.vardict({
-            'factors': {
-                'mu': torch.zeros(self.num_subjects, self.embedding_dim),
-                'sigma': torch.ones(self.num_subjects, self.embedding_dim) *\
-                         tfa_models.SOURCE_LOG_WIDTH_STD_DEV,
-            },
             'subject': {
                 'mu': torch.zeros(self.num_subjects, self.embedding_dim),
                 'sigma': torch.ones(self.num_subjects, self.embedding_dim) *\
-                         tfa_models.SOURCE_WEIGHT_STD_DEV,
+                         tfa_models.SOURCE_WEIGHT_STD_DEV *\
+                         tfa_models.SOURCE_LOG_WIDTH_STD_DEV,
             },
             'task': {
                 'mu': torch.zeros(self.num_tasks, self.embedding_dim),
@@ -184,12 +176,6 @@ class DeepTFAGuide(nn.Module):
             else:
                 ts = times
 
-            if ('z^F_%d' % subject) not in trace:
-                factors_embed = trace.normal(
-                    params['factors']['mu'][:, subject, :],
-                    softplus(params['factors']['sigma'][:, subject, :]),
-                    name='z^F_%d' % subject
-                )
             if ('z^P_%d' % subject) not in trace:
                 subject_embed = trace.normal(
                     params['subject']['mu'][:, subject, :],
@@ -203,7 +189,7 @@ class DeepTFAGuide(nn.Module):
                     name='z^S_%d' % task
                 )
 
-            factor_params = self.factors_embedding(factors_embed)
+            factor_params = self.factors_embedding(subject_embed)
             centers_predictions = self.centers_embedding(factor_params).view(
                 -1, self._num_factors, 3
             )
@@ -276,11 +262,6 @@ class DeepTFAModel(nn.Module):
             else:
                 ts = times
 
-            if ('z^F_%d' % subject) not in trace:
-                trace.normal(params['factors']['mu'][subject],
-                             params['factors']['sigma'][subject],
-                             value=guide['z^F_%d' % subject],
-                             name='z^F_%d' % subject)
             if ('z^P_%d' % subject) not in trace:
                 trace.normal(params['subject']['mu'][subject],
                              params['subject']['sigma'][subject],
