@@ -391,6 +391,60 @@ class DeepTFA:
 
         return plot
 
+    def plot_subject_template(self, subject, filename=None, show=True,
+                              plot_abs=False, **kwargs):
+        i = list(set([block.subject for block in self._blocks])).index(subject)
+        results = self.results(block=None, task=None, subject=i)
+        template = [i for (i, b) in enumerate(self._blocks)
+                    if b.subject == subject][0]
+        reconstruction = results['weights'] @ results['factors']
+
+        image = utils.cmu2nii(reconstruction.numpy(),
+                              self.voxel_locations.numpy(),
+                              self._templates[template])
+        image_slice = nilearn.image.index_img(image, 0)
+        plot = niplot.plot_glass_brain(
+            image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
+            title="Template for Participant %d" % subject,
+            vmin=-self.activation_normalizers[template],
+            vmax=self.activation_normalizers[template],
+            **kwargs,
+        )
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
+
+    def plot_task_template(self, task, filename=None, show=True, plot_abs=False,
+                           labeler=lambda x: x, **kwargs):
+        i = self._tasks.index(task)
+        results = self.results(block=None, subject=None, task=i)
+        template = [i for (i, b) in enumerate(self._blocks)
+                    if b.task == task][0]
+        reconstruction = results['weights'] @ results['factors']
+
+        image = utils.cmu2nii(reconstruction.numpy(),
+                              self.voxel_locations.numpy(),
+                              self._templates[template])
+        image_slice = nilearn.image.index_img(image, 0)
+        plot = niplot.plot_glass_brain(
+            image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
+            title="Template for Stimulus '%s'" % labeler(task),
+            vmin=-self.activation_normalizers[template],
+            vmax=self.activation_normalizers[template],
+            **kwargs,
+        )
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
+
     def visualize_factor_embedding(self, filename=None, show=True,
                                    num_samples=100, hist_log_widths=True,
                                    **kwargs):
