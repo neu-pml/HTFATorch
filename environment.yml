@@ -141,7 +141,6 @@ dependencies:
     - ppca==0.0.3
     - probtorch==0.0+b259290
     - python-editor==1.0.3
-    - pytorchviz==0.0.1
     - seaborn==0.8.1
     - sqlalchemy==1.2.6
     - tables==3.4.2
