@@ -74,8 +74,7 @@ class DeepTFA:
         block_subjects = [subjects.index(b.subject) for b in self._blocks]
         block_tasks = [tasks.index(b.task) for b in self._blocks]
 
-        b = max(range(self.num_blocks), key=lambda b: self._blocks[b].end_time -
-                self._blocks[b].start_time)
+        b = max(range(self.num_blocks), key=lambda b: self.num_times[b])
         self._blocks[b].load()
         centers, widths, weights = utils.initial_hypermeans(
             self._blocks[b].activations.numpy().T, self._blocks[b].locations.numpy(),
@@ -254,8 +253,7 @@ class DeepTFA:
             weight_deltas = torch.zeros(max(self.num_times), self.num_factors)
         else:
             weight_deltas = hyperparams['block']['weights']['mu'][block]\
-                                       [self._blocks[block].start_time:
-                                        self._blocks[block].end_time]
+                                       [0:self.num_times[block]]
         weights_embed = torch.cat((subject_embed, task_embed), dim=-1)
         weight_params = self.variational.weights_embedding(weights_embed).view(
             self.num_factors, 2
