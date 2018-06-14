@@ -19,6 +19,7 @@ from . import utils
 
 NUM_FACTORS = 5
 NUM_PARTICLES = 10
+SOURCE_CENTER_STD_DEV = np.sqrt(10)
 SOURCE_WEIGHT_STD_DEV = np.sqrt(2.0)
 SOURCE_LOG_WIDTH_STD_DEV = np.sqrt(3.0)
 VOXEL_NOISE = 0.1
@@ -170,8 +171,7 @@ class TFAGenerativeHyperParams(HyperParams):
         params['factor_centers'] = {
             'mu': brain_center.expand(self._num_factors, 3) *\
                 torch.ones((self._num_factors, 3)),
-            'sigma': brain_center_std_dev.expand(self._num_factors, 3) *\
-                torch.ones((self._num_factors, 3))
+            'sigma': brain_center_std_dev * SOURCE_CENTER_STD_DEV
         }
         params['factor_log_widths'] = {
             'mu': torch.ones((self._num_factors)),
@@ -202,10 +202,11 @@ class TFAGenerativePrior(GenerativePrior):
                                value=guide['Weights%dt%d-%d' % (self.block, times[0], times[1])],
                                name='Weights%dt%d-%d' % (self.block, times[0], times[1]))
 
-        factor_centers = trace.normal(params['factor_centers']['mu'],
-                                      params['factor_centers']['sigma'],
-                                      value=guide['FactorCenters' + str(self.block)],
-                                      name='FactorCenters' + str(self.block))
+        factor_centers = trace.multivariate_normal(
+            params['factor_centers']['mu'], params['factor_centers']['sigma'],
+            value=guide['FactorCenters' + str(self.block)],
+            name='FactorCenters' + str(self.block)
+        )
         factor_log_widths = trace.normal(params['factor_log_widths']['mu'],
                                          params['factor_log_widths']['sigma'],
                                          value=guide['FactorLogWidths' + str(self.block)],
