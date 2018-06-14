@@ -181,7 +181,7 @@ class HTFAGenerativeHyperParams(tfa_models.HyperParams):
             torch.ones(self._num_factors)
 
         params['block'] = {
-            'factor_center_noise': torch.ones(self._num_blocks),
+            'factor_center_noise': torch.eye(3).expand(self._num_blocks, 3, 3),
             'factor_log_width_noise': torch.ones(self._num_blocks),
             'weights': {
                 'mu': torch.zeros(self._num_blocks, self._num_factors),
@@ -195,10 +195,16 @@ class HTFAGenerativeTemplatePrior(tfa_models.GenerativePrior):
                 guide=probtorch.Trace()):
         template = utils.vardict(template_shape.copy())
         for (k, _) in template.iteritems():
-            template[k] = trace.normal(params['template'][k]['mu'],
-                                       params['template'][k]['sigma'],
-                                       value=guide['template_' + k],
-                                       name='template_' + k)
+            if len(params['template'][k]['mu'].shape) > 1:
+                template[k] = trace.multivariate_normal(
+                    params['template'][k]['mu'], params['template'][k]['sigma'],
+                    value=guide['template_' + k], name='template_' + k
+                )
+            else:
+                template[k] = trace.normal(
+                    params['template'][k]['mu'], params['template'][k]['sigma'],
+                    value=guide['template_' + k], name='template_' + k
+                )
 
         return template
 

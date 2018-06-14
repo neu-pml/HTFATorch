@@ -37,10 +37,8 @@ from nilearn.input_data import NiftiMasker
 
 def brain_centroid(locations):
     brain_center = torch.mean(locations, 0).unsqueeze(0)
-    brain_center_std_dev = torch.sqrt(
-        torch.var(locations, 0).unsqueeze(0)
-    )
-    return brain_center, brain_center_std_dev
+    brain_center_std_dev = torch.diagflat(torch.sqrt(torch.var(locations, 0)))
+    return brain_center, brain_center_std_dev.unsqueeze(0)
 
 def initial_radial_basis(location, center, widths):
     """The radial basis function used as the shape for the factors"""
