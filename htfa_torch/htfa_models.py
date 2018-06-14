@@ -167,16 +167,15 @@ class HTFAGenerativeHyperParams(tfa_models.HyperParams):
 
         coefficient = 1.0
         if volume is not None:
-            coefficient = np.log(np.cbrt(volume / self._num_factors))
+            coefficient = np.cbrt(volume / self._num_factors)
 
         params['template']['factor_centers']['mu'] =\
             brain_center.expand(self._num_factors, 3)
         params['template']['factor_centers']['sigma'] =\
-            brain_center_std_dev.expand(self._num_factors, 3) /\
-            np.exp(coefficient)
+            brain_center_std_dev / coefficient
 
         params['template']['factor_log_widths']['mu'] =\
-            torch.ones(self._num_factors)
+            torch.ones(self._num_factors) * np.log(coefficient)
         params['template']['factor_log_widths']['sigma'] =\
             torch.ones(self._num_factors)
 
