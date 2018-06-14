@@ -47,13 +47,13 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
             'template': {
                 'weights': {
                     'mu': {
-                        'mu': torch.randn(self._num_factors),
-                        'sigma': torch.rand(self._num_factors),
+                        'mu': torch.zeros(self._num_factors),
+                        'sigma': torch.sqrt(torch.rand(self._num_factors)),
                     },
                     'sigma': {
                         'mu': torch.ones(self._num_factors) *\
                               tfa_models.SOURCE_WEIGHT_STD_DEV,
-                        'sigma': torch.rand(self._num_factors),
+                        'sigma': torch.sqrt(torch.rand(self._num_factors)),
                     }
                 }
             }
