@@ -35,6 +35,19 @@ import torch.utils.data
 import nibabel as nib
 from nilearn.input_data import NiftiMasker
 
+def perturb_parameters(optimizer, noise=1e-3):
+    for param_group in optimizer.param_groups:
+        for param in param_group['params']:
+            adjustment = torch.randn(*param.data.shape, requires_grad=False)
+            adjustment *= noise
+            if param.is_cuda:
+                adjustment = adjustment.cuda()
+            param.data += adjustment
+
+def adjust_learning_rate(optimizer, adjustment):
+    for param_group in optimizer.param_groups:
+        param_group['lr'] *= adjustment
+
 def brain_centroid(locations):
     brain_center = torch.mean(locations, 0).unsqueeze(0)
     brain_center_std_dev = torch.diagflat(torch.sqrt(torch.var(locations, 0)))
