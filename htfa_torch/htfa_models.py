@@ -187,6 +187,10 @@ class HTFAGenerativeHyperParams(tfa_models.HyperParams):
                 'sigma': torch.ones(self._num_blocks, self._num_factors)
             },
         }
+
+        params['voxel_noise'] = torch.ones(self._num_blocks) *\
+                                tfa_models.VOXEL_NOISE
+
         super(self.__class__, self).__init__(params, guide=False)
 
 class HTFAGenerativeTemplatePrior(tfa_models.GenerativePrior):
@@ -239,7 +243,7 @@ class HTFAGenerativeSubjectPrior(tfa_models.GenerativePrior):
                 'weights': {
                     'mu': params['block']['weights']['mu'][b],
                     'sigma': params['block']['weights']['sigma'][b],
-                }
+                },
             })
             if weights_params is not None:
                 sparams['weights'] = weights_params[i]
@@ -275,8 +279,7 @@ class HTFAModel(nn.Module):
             self._num_blocks, self._num_times
         )
         self.likelihoods = [tfa_models.TFAGenerativeLikelihood(
-            locations, self._num_times[b], tfa_models.VOXEL_NOISE,
-            block=b, register_locations=False
+            locations, self._num_times[b], block=b, register_locations=False
         ) for b in range(self._num_blocks)]
         for b, block_likelihood in enumerate(self.likelihoods):
             self.add_module('likelihood' + str(b), block_likelihood)
@@ -293,6 +296,7 @@ class HTFAModel(nn.Module):
             weights_params=weights_params
         )
 
-        return [self.likelihoods[b](trace, weights[i], centers[i], log_widths[i],
-                                    times=times, observations=observations[i])
+        return [self.likelihoods[b](trace, weights[i], centers[i],
+                                    log_widths[i], params, times=times,
+                                    observations=observations[i])
                 for (i, b) in enumerate(blocks)]
