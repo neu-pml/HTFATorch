@@ -122,7 +122,7 @@ class DeepTFA:
             generative = self.generative
 
         optimizer = torch.optim.Adam(list(variational.parameters()),
-                                     lr=learning_rate)
+                                     lr=learning_rate, amsgrad=True)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, factor=0.5, min_lr=1e-5, patience=patience,
             verbose=True
