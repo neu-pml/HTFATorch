@@ -91,7 +91,7 @@ class HierarchicalTopographicFactorAnalysis:
             enc = self.enc
             dec = self.dec
         optimizer = torch.optim.Adam(list(self.enc.parameters()),
-                                     lr=learning_rate)
+                                     lr=learning_rate, amsgrad=True)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, factor=1e-1, min_lr=5e-5
         )
