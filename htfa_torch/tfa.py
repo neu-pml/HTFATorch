@@ -162,8 +162,7 @@ class TopographicalFactorAnalysis:
             enc = self.enc
             dec = self.dec
 
-        optimizer = torch.optim.Adam(list(self.enc.parameters()),
-                                     lr=learning_rate, amsgrad=True)
+        optimizer = torch.optim.Adam(list(self.enc.parameters()), lr=learning_rate)
 
         enc.train()
         dec.train()

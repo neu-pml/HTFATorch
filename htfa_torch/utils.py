@@ -35,23 +35,12 @@ import torch.utils.data
 import nibabel as nib
 from nilearn.input_data import NiftiMasker
 
-def perturb_parameters(optimizer, noise=1e-3):
-    for param_group in optimizer.param_groups:
-        for param in param_group['params']:
-            adjustment = torch.randn(*param.data.shape, requires_grad=False)
-            adjustment *= noise
-            if param.is_cuda:
-                adjustment = adjustment.cuda()
-            param.data += adjustment
-
-def adjust_learning_rate(optimizer, adjustment):
-    for param_group in optimizer.param_groups:
-        param_group['lr'] *= adjustment
-
 def brain_centroid(locations):
     brain_center = torch.mean(locations, 0).unsqueeze(0)
-    brain_center_std_dev = torch.diagflat(torch.sqrt(torch.var(locations, 0)))
-    return brain_center, brain_center_std_dev.unsqueeze(0)
+    brain_center_std_dev = torch.sqrt(
+        torch.var(locations, 0).unsqueeze(0)
+    )
+    return brain_center, brain_center_std_dev
 
 def initial_radial_basis(location, center, widths):
     """The radial basis function used as the shape for the factors"""
@@ -72,13 +61,15 @@ def initial_hypermeans(activations, locations, num_factors):
                     random_state=100)
     kmeans.fit(locations)
     initial_centers = kmeans.cluster_centers_
-    initial_widths = np.linalg.norm(np.std(locations, axis=0))
-    initial_factors = initial_radial_basis(locations, initial_centers,
-                                           initial_widths)
+    initial_widths = 2.0 * math.pow(np.nanmax(np.std(locations, axis=0)), 2)
+    F = initial_radial_basis(locations, initial_centers, initial_widths)
+    F = F.T
 
-    initial_weights, _, _, _ = np.linalg.lstsq(initial_factors.T, activations)
+    # beta = np.var(voxel_activations)
+    trans_F = F.T.copy()
+    initial_weights = np.linalg.solve(trans_F.dot(F), trans_F.dot(activations))
 
-    return initial_centers, float(np.log(initial_widths)), initial_weights.T
+    return initial_centers, np.log(initial_widths), initial_weights.T
 
 def plot_losses(losses):
     epochs = range(losses.shape[1])
