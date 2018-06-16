@@ -141,7 +141,7 @@ class DeepTFAGuide(nn.Module):
             )
             self.log_widths_embedding.bias = nn.Parameter(
                 torch.ones(self._num_factors) *
-                hyper_means['factor_log_widths'] / 2
+                hyper_means['factor_log_widths']
             )
 
     def forward(self, trace, times=None, blocks=None,
