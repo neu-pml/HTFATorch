@@ -19,6 +19,7 @@ from . import utils
 
 NUM_FACTORS = 5
 NUM_PARTICLES = 10
+SOURCE_CENTER_STD_DEV = np.sqrt(10)
 SOURCE_WEIGHT_STD_DEV = np.sqrt(2.0)
 SOURCE_LOG_WIDTH_STD_DEV = np.sqrt(3.0)
 VOXEL_NOISE = 0.1
@@ -159,7 +160,7 @@ class TFAGuide(nn.Module):
 
 class TFAGenerativeHyperParams(HyperParams):
     def __init__(self, brain_center, brain_center_std_dev,
-                 num_factors=NUM_FACTORS):
+                 num_factors=NUM_FACTORS, voxel_noise=VOXEL_NOISE):
         self._num_factors = num_factors
 
         params = utils.vardict()
@@ -170,13 +171,14 @@ class TFAGenerativeHyperParams(HyperParams):
         params['factor_centers'] = {
             'mu': brain_center.expand(self._num_factors, 3) *\
                 torch.ones((self._num_factors, 3)),
-            'sigma': brain_center_std_dev.expand(self._num_factors, 3) *\
-                torch.ones((self._num_factors, 3))
+            'sigma': brain_center_std_dev * SOURCE_CENTER_STD_DEV
         }
         params['factor_log_widths'] = {
             'mu': torch.ones((self._num_factors)),
             'sigma': SOURCE_LOG_WIDTH_STD_DEV * torch.ones((self._num_factors))
         }
+        params['voxel_noise'] = torch.ones(1) * voxel_noise
+
         super(self.__class__, self).__init__(params, guide=False)
 
     def forward(self):
@@ -202,10 +204,11 @@ class TFAGenerativePrior(GenerativePrior):
                                value=guide['Weights%dt%d-%d' % (self.block, times[0], times[1])],
                                name='Weights%dt%d-%d' % (self.block, times[0], times[1]))
 
-        factor_centers = trace.normal(params['factor_centers']['mu'],
-                                      params['factor_centers']['sigma'],
-                                      value=guide['FactorCenters' + str(self.block)],
-                                      name='FactorCenters' + str(self.block))
+        factor_centers = trace.multivariate_normal(
+            params['factor_centers']['mu'], params['factor_centers']['sigma'],
+            value=guide['FactorCenters' + str(self.block)],
+            name='FactorCenters' + str(self.block)
+        )
         factor_log_widths = trace.normal(params['factor_log_widths']['mu'],
                                          params['factor_log_widths']['sigma'],
                                          value=guide['FactorLogWidths' + str(self.block)],
@@ -214,7 +217,7 @@ class TFAGenerativePrior(GenerativePrior):
         return weights, factor_centers, factor_log_widths
 
 class TFAGenerativeLikelihood(GenerativeLikelihood):
-    def __init__(self, locations, num_times, voxel_noise=VOXEL_NOISE, block=0,
+    def __init__(self, locations, num_times, block=0,
                  register_locations=True):
         super(self.__class__, self).__init__()
 
@@ -223,10 +226,9 @@ class TFAGenerativeLikelihood(GenerativeLikelihood):
         else:
             self.voxel_locations = locations
         self._num_times = num_times
-        self._voxel_noise = voxel_noise
         self.block = block
 
-    def forward(self, trace, weights, centers, log_widths, times=None,
+    def forward(self, trace, weights, centers, log_widths, params, times=None,
                 observations=collections.defaultdict()):
         if times is None:
             times = (0, self._num_times)
@@ -236,7 +238,8 @@ class TFAGenerativeLikelihood(GenerativeLikelihood):
                                centers, log_widths)
 
         activations = trace.normal(weights @ factors,
-                                   self._voxel_noise, value=observations['Y'],
+                                   softplus(params['voxel_noise'])[0],
+                                   value=observations['Y'],
                                    name='Y%dt%d-%d' % (self.block, times[0], times[1]))
         return activations
 
@@ -254,11 +257,11 @@ class TFAModel(nn.Module):
 
         self._hyperparams = TFAGenerativeHyperParams(brain_center,
                                                      brain_center_std_dev,
-                                                     self._num_factors)
+                                                     self._num_factors,
+                                                     voxel_noise)
         self._prior = TFAGenerativePrior(self._num_times, block=self.block)
         self._likelihood = TFAGenerativeLikelihood(self._locations,
                                                    self._num_times,
-                                                   voxel_noise,
                                                    block=self.block,
                                                    register_locations=register_locations)
 
