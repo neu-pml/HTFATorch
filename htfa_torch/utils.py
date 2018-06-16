@@ -72,13 +72,13 @@ def initial_hypermeans(activations, locations, num_factors):
                     random_state=100)
     kmeans.fit(locations)
     initial_centers = kmeans.cluster_centers_
-    initial_widths = 2.0 * math.pow(np.nanmax(np.std(locations, axis=0)), 2)
+    initial_widths = np.linalg.norm(np.std(locations, axis=0))
     initial_factors = initial_radial_basis(locations, initial_centers,
                                            initial_widths)
 
     initial_weights, _, _, _ = np.linalg.lstsq(initial_factors.T, activations)
 
-    return initial_centers, np.log(initial_widths), initial_weights.T
+    return initial_centers, float(np.log(initial_widths)), initial_weights.T
 
 def plot_losses(losses):
     epochs = range(losses.shape[1])
