@@ -167,27 +167,30 @@ class HTFAGenerativeHyperParams(tfa_models.HyperParams):
 
         coefficient = 1.0
         if volume is not None:
-            coefficient = np.log(np.cbrt(volume / self._num_factors))
+            coefficient = np.cbrt(volume / self._num_factors)
 
         params['template']['factor_centers']['mu'] =\
             brain_center.expand(self._num_factors, 3)
         params['template']['factor_centers']['sigma'] =\
-            brain_center_std_dev.expand(self._num_factors, 3) /\
-            np.exp(coefficient)
+            brain_center_std_dev / coefficient
 
         params['template']['factor_log_widths']['mu'] =\
-            torch.ones(self._num_factors)
+            torch.ones(self._num_factors) * np.log(coefficient)
         params['template']['factor_log_widths']['sigma'] =\
             torch.ones(self._num_factors)
 
         params['block'] = {
-            'factor_center_noise': torch.ones(self._num_blocks),
+            'factor_center_noise': torch.eye(3).expand(self._num_blocks, 3, 3),
             'factor_log_width_noise': torch.ones(self._num_blocks),
             'weights': {
                 'mu': torch.zeros(self._num_blocks, self._num_factors),
                 'sigma': torch.ones(self._num_blocks, self._num_factors)
             },
         }
+
+        params['voxel_noise'] = torch.ones(self._num_blocks) *\
+                                tfa_models.VOXEL_NOISE
+
         super(self.__class__, self).__init__(params, guide=False)
 
 class HTFAGenerativeTemplatePrior(tfa_models.GenerativePrior):
@@ -195,10 +198,16 @@ class HTFAGenerativeTemplatePrior(tfa_models.GenerativePrior):
                 guide=probtorch.Trace()):
         template = utils.vardict(template_shape.copy())
         for (k, _) in template.iteritems():
-            template[k] = trace.normal(params['template'][k]['mu'],
-                                       params['template'][k]['sigma'],
-                                       value=guide['template_' + k],
-                                       name='template_' + k)
+            if len(params['template'][k]['mu'].shape) > 1:
+                template[k] = trace.multivariate_normal(
+                    params['template'][k]['mu'], params['template'][k]['sigma'],
+                    value=guide['template_' + k], name='template_' + k
+                )
+            else:
+                template[k] = trace.normal(
+                    params['template'][k]['mu'], params['template'][k]['sigma'],
+                    value=guide['template_' + k], name='template_' + k
+                )
 
         return template
 
@@ -234,7 +243,7 @@ class HTFAGenerativeSubjectPrior(tfa_models.GenerativePrior):
                 'weights': {
                     'mu': params['block']['weights']['mu'][b],
                     'sigma': params['block']['weights']['sigma'][b],
-                }
+                },
             })
             if weights_params is not None:
                 sparams['weights'] = weights_params[i]
@@ -270,8 +279,7 @@ class HTFAModel(nn.Module):
             self._num_blocks, self._num_times
         )
         self.likelihoods = [tfa_models.TFAGenerativeLikelihood(
-            locations, self._num_times[b], tfa_models.VOXEL_NOISE,
-            block=b, register_locations=False
+            locations, self._num_times[b], block=b, register_locations=False
         ) for b in range(self._num_blocks)]
         for b, block_likelihood in enumerate(self.likelihoods):
             self.add_module('likelihood' + str(b), block_likelihood)
@@ -288,6 +296,7 @@ class HTFAModel(nn.Module):
             weights_params=weights_params
         )
 
-        return [self.likelihoods[b](trace, weights[i], centers[i], log_widths[i],
-                                    times=times, observations=observations[i])
+        return [self.likelihoods[b](trace, weights[i], centers[i],
+                                    log_widths[i], params, times=times,
+                                    observations=observations[i])
                 for (i, b) in enumerate(blocks)]
