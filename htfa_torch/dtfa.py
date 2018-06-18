@@ -608,7 +608,7 @@ class DeepTFA:
 
         for (b, block) in enumerate(self._blocks):
             factorization = self.results(b)
-            group[(block.task)].append(factorization['weights']['mu'])
+            group[(block.task)].append(factorization['weights'])
 
         for task in set(tasks):
             print (task)
