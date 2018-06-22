@@ -631,3 +631,24 @@ class DeepTFA:
             )
 
         return accuracy
+
+    def voxel_decoding_accuracy(self, labeler=lambda x: x, window_size=5):
+        times = self.num_times
+        keys = np.unique([labeler(b.task) for b in self._blocks])
+        group = {key: [] for key in keys}
+        accuracy = {key: [] for key in keys}
+        for key in keys:
+            print (key)
+            for n in range(self.num_blocks):
+                if key == self._blocks[n].task:
+                    self._blocks[n].load()
+                    group[key].append(self._blocks[n].activations[:times[n],:])
+            group[key] = np.rollaxis(np.dstack(group[key]), -1)
+            if group[key].shape[0] < 2:
+                raise ValueError('not enough subjects for the task: ' + key)
+
+            else:
+                G1 = group[key][:int(group[key].shape[0] / 2), :, :]
+                G2 = group[key][int(group[key].shape[0] / 2):, :, :]
+                accuracy[key].append(utils.get_decoding_accuracy(G1, G2, window_size)[0])
+        return accuracy
