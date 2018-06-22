@@ -601,7 +601,7 @@ class DeepTFA:
         """
         :return: accuracy: a dict containing decoding accuracies for each task [activity,isfc,mixed]
         """
-        tasks = [(b.task) for b in self._blocks]
+        tasks = np.unique([labeler(b.task) for b in self._blocks])
         group = {task: [] for task in tasks}
         accuracy = {task: {'node': [], 'isfc': [], 'mixed': [], 'kl': []}
                     for task in tasks}
