@@ -29,6 +29,7 @@ import torch.distributions as dists
 from torch.autograd import Variable
 import torch.nn as nn
 from torch.nn import Parameter
+from torch.nn.functional import softplus
 import torch.optim.lr_scheduler
 
 import probtorch
@@ -487,7 +488,8 @@ class DeepTFA:
                                   xlims=None, ylims=None, figsize=(3.75, 2.75),
                                   colormap='Set1'):
         hyperparams = self.variational.hyperparams.state_vardict()
-        z_p = hyperparams['subject']['mu'].data
+        z_p_mu = hyperparams['subject']['mu'].data
+        z_p_sigma = softplus(hyperparams['subject']['sigma'].data)
 
         if labeler is None:
             labeler = lambda b: b.default_label()
@@ -499,8 +501,9 @@ class DeepTFA:
 
         subjects = list(set([block.subject for block in self._blocks]))
         z_ps = torch.stack(
-            [z_p[subjects.index(b.subject)] for b in self._blocks
-             if labeler(b) is not None]
+            [torch.normal(z_p_mu[subjects.index(b.subject)],
+                          z_p_sigma[subjects.index(b.subject)])
+             for b in self._blocks if labeler(b) is not None]
         )
         block_colors = [palette[labeler(b)] for b in self._blocks
                         if labeler(b) is not None]
@@ -526,7 +529,8 @@ class DeepTFA:
                                xlims=None, ylims=None, figsize=(3.75, 2.75),
                                colormap='Set1'):
         hyperparams = self.variational.hyperparams.state_vardict()
-        z_s = hyperparams['task']['mu'].data
+        z_s_mu = hyperparams['task']['mu'].data
+        z_s_sigma = softplus(hyperparams['task']['sigma'].data)
 
         if labeler is None:
             labeler = lambda b: b.default_label()
@@ -538,8 +542,9 @@ class DeepTFA:
 
         tasks = list(set([block.task for block in self._blocks]))
         z_ss = torch.stack(
-            [z_s[tasks.index(b.task)] for b in self._blocks
-             if labeler(b) is not None]
+            [torch.normal(z_s_mu[tasks.index(b.task)],
+                          z_s_sigma[tasks.index(b.task)])
+             for b in self._blocks if labeler(b) is not None]
         )
         block_colors = [palette[labeler(b)] for b in self._blocks
                         if labeler(b) is not None]
