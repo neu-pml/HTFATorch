@@ -64,6 +64,12 @@ def initial_radial_basis(location, center, widths):
     widths = np.expand_dims(widths, 1)
     return np.exp(-delta2s.sum(2) / (widths))
 
+def kmeans_factor_widths(locations, num_factors, kmeans):
+    labels = kmeans.predict(locations)
+    for factor in range(num_factors):
+        factor_voxels = [labels[v] == factor for v in range(locations.shape[0])]
+        yield np.linalg.norm(locations[factor_voxels].var(axis=0))
+
 def initial_hypermeans(activations, locations, num_factors):
     """Initialize our center, width, and weight parameters via K-means"""
     kmeans = KMeans(init='k-means++',
@@ -72,13 +78,14 @@ def initial_hypermeans(activations, locations, num_factors):
                     random_state=100)
     kmeans.fit(locations)
     initial_centers = kmeans.cluster_centers_
-    initial_widths = np.linalg.norm(np.std(locations, axis=0))
+    initial_widths = list(kmeans_factor_widths(locations, num_factors, kmeans))
     initial_factors = initial_radial_basis(locations, initial_centers,
                                            initial_widths)
 
     initial_weights, _, _, _ = np.linalg.lstsq(initial_factors.T, activations)
 
-    return initial_centers, float(np.log(initial_widths)), initial_weights.T
+    return initial_centers, torch.log(torch.Tensor(initial_widths)),\
+           initial_weights.T
 
 def plot_losses(losses):
     epochs = range(losses.shape[1])
