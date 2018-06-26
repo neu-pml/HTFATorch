@@ -33,6 +33,7 @@ from torch.nn import Parameter
 import torch.utils.data
 
 import nibabel as nib
+import nilearn.image
 from nilearn.input_data import NiftiMasker
 
 def perturb_parameters(optimizer, noise=1e-3):
@@ -121,10 +122,12 @@ def full_fact(dimensions):
             row += len(vals)
         return independents
 
-def nii2cmu(nifti_file, mask_file=None):
+def nii2cmu(nifti_file, mask_file=None, smooth=None):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         image = nib.load(nifti_file)
+        if smooth is not None:
+            image = nilearn.image.smooth_img(image, smooth)
         mask = NiftiMasker(mask_strategy='background')
         if mask_file is None:
             mask.fit(nifti_file)
@@ -188,13 +191,13 @@ def load_collective_dataset(data_files, mask):
 
     return activations, locations, names, templates
 
-def load_dataset(data_file, mask=None, zscore=True):
+def load_dataset(data_file, mask=None, zscore=True, smooth=None):
     name, ext = os.path.splitext(data_file)
     if ext == 'mat':
         dataset = sio.loadmat(data_file)
         template = None
     else:
-        dataset = nii2cmu(data_file, mask_file=mask)
+        dataset = nii2cmu(data_file, mask_file=mask, smooth=smooth)
         template = data_file
     _, name = os.path.split(name)
     # pull out the voxel activations and locations
