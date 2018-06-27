@@ -35,6 +35,7 @@ import torch.utils.data
 import nibabel as nib
 import nilearn.image
 from nilearn.input_data import NiftiMasker
+import nilearn.signal
 
 def perturb_parameters(optimizer, noise=1e-3):
     for param_group in optimizer.param_groups:
@@ -122,13 +123,12 @@ def full_fact(dimensions):
             row += len(vals)
         return independents
 
-def nii2cmu(nifti_file, mask_file=None, smooth=None):
+def nii2cmu(nifti_file, mask_file=None, smooth=None, zscore=False):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         image = nib.load(nifti_file)
-        if smooth is not None:
-            image = nilearn.image.smooth_img(image, smooth)
-        mask = NiftiMasker(mask_strategy='background')
+        mask = NiftiMasker(mask_strategy='background', smoothing_fwhm=smooth,
+                           standardize=zscore)
         if mask_file is None:
             mask.fit(nifti_file)
         else:
@@ -197,15 +197,12 @@ def load_dataset(data_file, mask=None, zscore=True, smooth=None):
         dataset = sio.loadmat(data_file)
         template = None
     else:
-        dataset = nii2cmu(data_file, mask_file=mask, smooth=smooth)
+        dataset = nii2cmu(data_file, mask_file=mask, smooth=smooth,
+                          zscore=zscore)
         template = data_file
     _, name = os.path.split(name)
     # pull out the voxel activations and locations
-    if zscore:
-        data = stats.zscore(dataset['data'], axis=1, ddof=1)
-    else:
-        data = dataset['data']
-    activations = torch.Tensor(data).t()
+    activations = torch.Tensor(dataset['data']).t()
     locations = torch.Tensor(dataset['R'])
 
     del dataset
