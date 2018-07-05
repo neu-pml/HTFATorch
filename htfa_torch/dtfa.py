@@ -617,7 +617,7 @@ class DeepTFA:
 
         for task in set(tasks):
             print(task)
-            group[task] = torch.stack(group[task])    #np.rollaxis(np.dstack(group[task]), -1)
+            group[task] = torch.stack(group[task])
             if group[task].shape[0] < 2:
                 raise ValueError('Not enough subjects for task %s' % task)
             group1 = group[task][:group[task].shape[0] // 2]
