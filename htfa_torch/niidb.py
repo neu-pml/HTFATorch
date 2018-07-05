@@ -16,14 +16,15 @@ import torch.utils.data
 from . import utils
 
 @lru_cache(maxsize=16)
-def lru_load_dataset(fname, mask, zscore):
-    logging.info('Loading Nifti image %s with mask %s (zscore=%s)', fname, mask,
-                 zscore)
-    return utils.load_dataset(fname, mask, zscore)
+def lru_load_dataset(fname, mask, zscore, smooth):
+    logging.info('Loading Nifti image %s with mask %s (zscore=%s, smooth=%s)',
+                 fname, mask, zscore, smooth)
+    return utils.load_dataset(fname, mask, zscore, smooth)
 
 class FMriActivationBlock(object):
-    def __init__(self, zscore=True):
+    def __init__(self, zscore=True, smooth=None):
         self._zscore = zscore
+        self.smooth = smooth
         self.filename = ''
         self.mask = None
         self.subject = 0
@@ -37,7 +38,8 @@ class FMriActivationBlock(object):
 
     def load(self):
         self.activations, self.locations, _, _ =\
-            lru_load_dataset(self.filename, self.mask, self._zscore)
+            lru_load_dataset(self.filename, self.mask, self._zscore,
+                             self.smooth)
         if self.start_time is None:
             self.start_time = 0
         if self.end_time is None:
@@ -61,14 +63,16 @@ class FMriActivationBlock(object):
         return "subject%d_run%d_block%d" % (self.subject, self.run, self.block)
 
 class FMriActivationsDb:
-    def __init__(self, name, mask=None):
+    def __init__(self, name, mask=None, smooth=None):
         self._db = dataset.connect('sqlite:///%s' % name)
         self._table = self._db['fmri_activations']
         self.mask = mask
+        self.smooth = smooth
 
     def insert(self, block):
         if self.mask is not None:
             block.mask = self.mask
+            block.smooth = self.smooth
         block_dict = block.__dict__.copy()
         del block_dict['activations']
         del block_dict['locations']
@@ -83,6 +87,7 @@ class FMriActivationsDb:
     def upsert(self, block):
         if self.mask is not None:
             block.mask = self.mask
+            block.smooth = self.smooth
         block_dict = block.__dict__.copy()
         del block_dict['activations']
         del block_dict['locations']
