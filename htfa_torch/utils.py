@@ -37,6 +37,13 @@ import nilearn.image
 from nilearn.input_data import NiftiMasker
 import nilearn.signal
 
+def clamped(rv, guide=None, observations=None):
+    if not guide:
+        guide = {}
+    if not observations:
+        observations = {}
+    return observations.get(rv, guide.get(rv, None))
+
 def perturb_parameters(optimizer, noise=1e-3):
     for param_group in optimizer.param_groups:
         for param in param_group['params']:
