@@ -97,6 +97,136 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
 
         super(self.__class__, self).__init__(params, guide=True)
 
+class DeepTFADecoder(nn.Module):
+    """Neural network module mapping from embeddings to a topographic factor
+       analysis"""
+    def __init__(self, num_factors, embedding_dim=2, hyper_means=None):
+        super(DeepTFADecoder, self).__init__()
+        self._embedding_dim = embedding_dim
+        self._num_factors = num_factors
+
+        self.factors_embedding = nn.Sequential(
+            nn.Linear(self._embedding_dim, self._num_factors),
+            nn.Softsign(),
+        )
+        self.centers_embedding = nn.Linear(self._num_factors,
+                                           self._num_factors * 3)
+        self.log_widths_embedding = nn.Linear(self._num_factors,
+                                              self._num_factors)
+        self.weights_embedding = nn.Sequential(
+            nn.Linear(self._embedding_dim * 2, self._num_factors),
+            nn.Softsign(),
+            nn.Linear(self._num_factors, self._num_factors * 2),
+        )
+        self.epsilon = nn.Parameter(torch.Tensor([tfa_models.VOXEL_NOISE]))
+        self.register_buffer('origin', torch.zeros(self._embedding_dim))
+
+        if hyper_means is not None:
+            self.centers_embedding.bias = nn.Parameter(
+                hyper_means['factor_centers'].view(self._num_factors * 3)
+            )
+            self.log_widths_embedding.bias = nn.Parameter(
+                torch.ones(self._num_factors) *
+                hyper_means['factor_log_widths']
+            )
+
+    def forward(self, trace, blocks, block_subjects, block_tasks, params, times,
+                guide=None, observations=None,
+                num_particles=tfa_models.NUM_PARTICLES):
+        if observations is None:
+            observations = [None for _ in blocks]
+        params = utils.vardict(params)
+        for k, v in params.items():
+            if v.shape[0] != num_particles:
+                params[k] = v.expand(num_particles, *v.shape)
+        origin = self.origin.expand(num_particles, self._embedding_dim)
+
+        weights = [None for b in blocks]
+        factor_centers = [None for b in blocks]
+        factor_log_widths = [None for b in blocks]
+
+        template_params = self.factors_embedding(origin)
+        template_centers = self.centers_embedding(template_params).view(
+            -1, self._num_factors, 3
+        )
+        trace.normal(template_centers, softplus(self.epsilon)[0],
+                     value=utils.clamped('template_factor_centers', guide),
+                     name='template_factor_centers')
+        template_log_widths = self.log_widths_embedding(template_params).\
+                              view(-1, self._num_factors)
+        trace.normal(template_log_widths, softplus(self.epsilon)[0],
+                     value=utils.clamped('template_factor_log_widths', guide),
+                     name='template_factor_log_widths')
+
+        for (i, b) in enumerate(blocks):
+            subject = block_subjects[b]
+            task = block_tasks[b]
+
+            if ('z^P_%d' % subject) not in trace:
+                subject_embed = trace.normal(
+                    params['subject']['mu'][:, subject, :],
+                    softplus(params['subject']['sigma'][:, subject, :]),
+                    value=utils.clamped('z^P_%d' % subject, guide),
+                    name='z^P_%d' % subject
+                )
+            else:
+                subject_embed = trace['z^P_%d' % subject].value
+            if ('z^S_%d' % task) not in trace:
+                task_embed = trace.normal(
+                    params['task']['mu'][:, task],
+                    softplus(params['task']['sigma'][:, task]),
+                    value=utils.clamped('z^S_%d' % task, guide),
+                    name='z^S_%d' % task
+                )
+            else:
+                task_embed = trace['z^S_%d' % task].value
+
+            factor_params = self.factors_embedding(subject_embed)
+            centers_predictions = self.centers_embedding(factor_params).view(
+                -1, self._num_factors, 3
+            )
+            log_widths_predictions = self.log_widths_embedding(factor_params).\
+                                     view(-1, self._num_factors)
+            weights_embed = torch.cat((subject_embed, task_embed), dim=-1)
+            weight_predictions = self.weights_embedding(weights_embed).view(
+                -1, self._num_factors, 2
+            )
+
+            weights_mu = trace.normal(
+                weight_predictions[:, :, 0], softplus(self.epsilon)[0],
+                value=utils.clamped('mu^W_%d' % b, guide),
+                name='mu^W_%d' % b
+            )
+            weights_sigma = trace.normal(
+                weight_predictions[:, :, 1], softplus(self.epsilon)[0],
+                value=utils.clamped('sigma^W_%d' % b, guide),
+                name='sigma^W_%d' % b
+            )
+            weights_params = params['block']['weights']
+            weights[i] = trace.normal(
+                weights_params['mu'][:, b, times[0]:times[1], :] +
+                weights_mu.unsqueeze(1),
+                softplus(weights_params['sigma'][:, b, times[0]:times[1], :] +
+                         weights_sigma.unsqueeze(1)),
+                value=utils.clamped('Weights%dt%d-%d' % (b, times[0], times[1]),
+                                    guide),
+                name='Weights%dt%d-%d' % (b, times[0], times[1])
+            )
+            factor_centers[i] = trace.normal(
+                centers_predictions,
+                softplus(self.epsilon)[0],
+                value=utils.clamped('FactorCenters%d' % b, guide,
+                                    observations[b]),
+                name='FactorCenters%d' % b
+            )
+            factor_log_widths[i] = trace.normal(
+                log_widths_predictions,
+                softplus(self.epsilon)[0], name='FactorLogWidths%d' % b,
+                value=utils.clamped('FactorLogWidths%d' % b, guide),
+            )
+
+        return weights, factor_centers, factor_log_widths
+
 class DeepTFAGuide(nn.Module):
     """Variational guide for deep topographic factor analysis"""
     def __init__(self, num_factors, block_subjects, block_tasks, num_blocks=1,
