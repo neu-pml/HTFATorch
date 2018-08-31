@@ -91,7 +91,8 @@ def initial_hypermeans(activations, locations, num_factors):
     initial_factors = initial_radial_basis(locations, initial_centers,
                                            initial_widths)
 
-    initial_weights, _, _, _ = np.linalg.lstsq(initial_factors.T, activations)
+    initial_weights, _, _, _ = np.linalg.lstsq(initial_factors.T, activations,
+                                               rcond=None)
 
     return initial_centers, torch.log(torch.Tensor(initial_widths)),\
            initial_weights.T
