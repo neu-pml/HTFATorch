@@ -88,6 +88,8 @@ class DeepTFA:
         }
         self._blocks[b].unload()
 
+        self.decoder = dtfa_models.DeepTFADecoder(self.num_factors,
+                                                  embedding_dim, hyper_means)
         self.generative = dtfa_models.DeepTFAModel(
             self.voxel_locations, block_subjects, block_tasks,
             self.num_factors, self.num_blocks, self.num_times, embedding_dim
@@ -113,12 +115,15 @@ class DeepTFA:
             pin_memory=True,
         )
         if tfa.CUDA and use_cuda:
+            decoder = torch.nn.DataParallel(self.decoder)
             variational = torch.nn.DataParallel(self.variational)
             generative = torch.nn.DataParallel(self.generative)
+            decoder.cuda()
             variational.cuda()
             generative.cuda()
             cuda_locations = self.voxel_locations.cuda()
         else:
+            decoder = self.decoder
             variational = self.variational
             generative = self.generative
 
@@ -151,8 +156,7 @@ class DeepTFA:
                     if tfa.CUDA and use_cuda:
                         data = data.cuda()
                         for b in block_batch:
-                            htfa_model = generative.module.htfa_model
-                            htfa_model.likelihoods[b].voxel_locations =\
+                            generative.module.likelihoods[b].voxel_locations =\
                                 cuda_locations
                     activations = [{'Y': Variable(data[:, b, :])}
                                    for b in block_batch]
@@ -161,11 +165,11 @@ class DeepTFA:
 
                     optimizer.zero_grad()
                     q = probtorch.Trace()
-                    variational(q, times=trs, num_particles=num_particles,
-                                blocks=block_batch)
+                    variational(decoder, q, times=trs, blocks=block_batch,
+                                num_particles=num_particles)
                     p = probtorch.Trace()
-                    generative(p, times=trs, guide=q, observations=activations,
-                               blocks=block_batch)
+                    generative(decoder, p, times=trs, guide=q,
+                               observations=activations, blocks=block_batch)
 
                     def block_rv_weight(node, prior=True):
                         result = 1.0
@@ -188,7 +192,7 @@ class DeepTFA:
                     if tfa.CUDA and use_cuda:
                         del activations
                         for b in block_batch:
-                            htfa_model.likelihoods[b].voxel_locations =\
+                            generative.module.likelihoods[b].voxel_locations =\
                                 self.voxel_locations
                         torch.cuda.empty_cache()
                 if tfa.CUDA and use_cuda:
@@ -218,6 +222,7 @@ class DeepTFA:
                 self.save_state(path='.', tag=checkpoint_name)
 
         if tfa.CUDA and use_cuda:
+            decoder.cpu()
             variational.cpu()
             generative.cpu()
 
@@ -235,20 +240,20 @@ class DeepTFA:
             task = self.generative.block_tasks[block]
 
         if subject is None:
-            subject_embed = self.variational.origin
+            subject_embed = self.decoder.origin
         else:
             subject_embed = hyperparams['subject']['mu'][subject]
 
         if task is None:
-            task_embed = self.variational.origin
+            task_embed = self.decoder.origin
         else:
             task_embed = hyperparams['task']['mu'][task]
 
-        factor_params = self.variational.factors_embedding(subject_embed)
-        factor_centers = self.variational.centers_embedding(factor_params).view(
+        factor_params = self.decoder.factors_embedding(subject_embed)
+        factor_centers = self.decoder.centers_embedding(factor_params).view(
             self.num_factors, 3
         )
-        factor_log_widths = self.variational.log_widths_embedding(factor_params)
+        factor_log_widths = self.decoder.log_widths_embedding(factor_params)
 
         if block is None:
             weight_deltas = torch.zeros(max(self.num_times), self.num_factors)
@@ -256,7 +261,7 @@ class DeepTFA:
             weight_deltas = hyperparams['block']['weights']['mu'][block]\
                                        [0:self.num_times[block]]
         weights_embed = torch.cat((subject_embed, task_embed), dim=-1)
-        weight_params = self.variational.weights_embedding(weights_embed).view(
+        weight_params = self.decoder.weights_embedding(weights_embed).view(
             self.num_factors, 2
         )
         weights = weight_params[:, 0] + weight_deltas
@@ -455,11 +460,11 @@ class DeepTFA:
         }, 0, num_samples, True)
 
         embedding = torch.normal(factor_prior['mu'], factor_prior['sigma'] * 2)
-        factor_params = self.variational.factors_embedding(embedding)
-        centers = self.variational.centers_embedding(factor_params).view(
+        factor_params = self.decoder.factors_embedding(embedding)
+        centers = self.decoder.centers_embedding(factor_params).view(
             -1, self.num_factors, 3
         ).data
-        widths = torch.exp(self.variational.log_widths_embedding(factor_params))
+        widths = torch.exp(self.decoder.log_widths_embedding(factor_params))
         widths = widths.view(-1, self.num_factors).data
 
         plot = niplot.plot_connectome(
