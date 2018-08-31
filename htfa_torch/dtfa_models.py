@@ -24,8 +24,9 @@ from . import tfa_models
 from . import utils
 
 class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
-    def __init__(self, num_subjects, num_tasks, num_times, num_factors,
-                 embedding_dim=2):
+    def __init__(self, num_blocks, num_subjects, num_tasks, num_times,
+                 num_factors, embedding_dim=2):
+        self.num_blocks = num_blocks
         self.num_subjects = num_subjects
         self.num_tasks = num_tasks
         self.num_times = max(num_times)
@@ -44,19 +45,16 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
                 'sigma': torch.ones(self.num_tasks, self.embedding_dim) *\
                          tfa_models.SOURCE_WEIGHT_STD_DEV,
             },
-            'template': {
+            'block': {
                 'weights': {
-                    'mu': {
-                        'mu': torch.zeros(self._num_factors),
-                        'sigma': torch.sqrt(torch.rand(self._num_factors)),
-                    },
-                    'sigma': {
-                        'mu': torch.ones(self._num_factors) *\
-                              tfa_models.SOURCE_WEIGHT_STD_DEV,
-                        'sigma': torch.sqrt(torch.rand(self._num_factors)),
-                    }
+                    'mu': torch.zeros(self.num_blocks, self.num_times,
+                                      self._num_factors),
+                    'sigma': torch.ones(self.num_blocks, self.num_times,
+                                        self._num_factors) *\
+                             tfa_models.SOURCE_WEIGHT_STD_DEV,
                 }
-            }
+            },
+            'voxel_noise': torch.ones(self.num_blocks) * tfa_models.VOXEL_NOISE
         })
 
         super(self.__class__, self).__init__(params, guide=False)
