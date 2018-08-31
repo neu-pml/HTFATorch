@@ -368,49 +368,38 @@ class DeepTFAModel(nn.Module):
         self.block_tasks = block_tasks
 
         self.hyperparams = DeepTFAGenerativeHyperparams(
-            len(set(block_subjects)), len(set(block_tasks)), self._num_times,
-            self._num_factors, embedding_dim
+            self._num_blocks, len(set(block_subjects)), len(set(block_tasks)),
+            self._num_times, self._num_factors, embedding_dim
         )
+        self.likelihoods = [tfa_models.TFAGenerativeLikelihood(
+            locations, self._num_times[b], block=b, register_locations=False
+        ) for b in range(self._num_blocks)]
+        for b, block_likelihood in enumerate(self.likelihoods):
+            self.add_module('likelihood' + str(b), block_likelihood)
         self.htfa_model = htfa_models.HTFAModel(locations, self._num_blocks,
                                                 self._num_times,
                                                 self._num_factors, volume=True)
 
-    def forward(self, trace, times=None, guide=probtorch.Trace(),
+    def forward(self, decoder, trace, times=None, guide=probtorch.Trace(),
                 observations=[], blocks=None):
         params = self.hyperparams.state_vardict()
+        if times is None:
+            times = (0, max(self._num_times))
         if blocks is None:
             blocks = list(range(self._num_blocks))
 
-        weight_params = [b for b in blocks]
-        for (i, b) in enumerate(blocks):
-            subject = self.block_subjects[b]
-            task = self.block_tasks[b]
-            if times is None:
-                ts = (0, self._num_times[b])
-            else:
-                ts = times
+        block_subjects = [self.block_subjects[b]
+                          for b in range(self._num_blocks)
+                          if b in blocks]
+        block_tasks = [self.block_tasks[b] for b in range(self._num_blocks)
+                       if b in blocks]
 
-            if ('z^P_%d' % subject) not in trace:
-                trace.normal(params['subject']['mu'][subject],
-                             params['subject']['sigma'][subject],
-                             value=guide['z^P_%d' % subject],
-                             name='z^P_%d' % subject)
-            if ('z^S_%d' % task) not in trace:
-                trace.normal(params['task']['mu'][task],
-                             params['task']['sigma'][task],
-                             value=guide['z^S_%d' % task], name='z^S_%d' % task)
+        weights, centers, log_widths = decoder(trace, blocks, block_subjects,
+                                               block_tasks, params, times,
+                                               guide=guide,
+                                               num_particles=1)
 
-            weight_params[i] = {
-                'mu': trace.normal(params['template']['weights']['mu']['mu'],
-                                   params['template']['weights']['mu']['sigma'],
-                                   value=guide['mu^W_%d' % b],
-                                   name='mu^W_%d' % b),
-                'sigma': trace.normal(
-                    params['template']['weights']['sigma']['mu'],
-                    params['template']['weights']['sigma']['sigma'],
-                    value=guide['sigma^W_%d' % b], name='sigma^W_%d' % b
-                ),
-            }
-
-        return self.htfa_model(trace, times, guide, blocks=blocks,
-                               observations=observations)
+        return [self.likelihoods[b](trace, weights[i], centers[i],
+                                    log_widths[i], params, times=times,
+                                    observations=observations[i])
+                for (i, b) in enumerate(blocks)]
