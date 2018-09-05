@@ -241,32 +241,39 @@ class DeepTFA:
         guide = probtorch.Trace()
         if block is not None:
             subject = self.generative.block_subjects[block]
+            task = self.generative.block_tasks[block]
+            times = (0, self.num_times[block])
+            blocks = [block]
+        else:
+            times = (0, max(self.num_times))
+            blocks = []
+
+        if subject is not None:
             guide.variable(torch.distributions.Normal,
                            hyperparams['subject']['mu'][:, subject],
                            softplus(hyperparams['subject']['sigma'][:, subject]),
                            value=hyperparams['subject']['mu'][:, subject],
                            name='z^P_%d' % subject)
-
-            task = self.generative.block_tasks[block]
+        if task is not None:
             guide.variable(torch.distributions.Normal,
                            hyperparams['task']['mu'][:, task],
                            softplus(hyperparams['task']['sigma'][:, task]),
                            value=hyperparams['task']['mu'][:, task],
                            name='z^S_%d' % task)
 
-            times = (0, self.num_times[block])
-        else:
-            times = (0, max(self.num_times))
-
         weights, factor_centers, factor_log_widths =\
-            self.decoder(probtorch.Trace(), [block],
+            self.decoder(probtorch.Trace(), blocks,
                          self.generative.block_subjects,
                          self.generative.block_tasks, hyperparams, times,
                          guide=guide, num_particles=1)
 
-        weights = weights[0].squeeze(0)
-        factor_centers = factor_centers[0].squeeze(0)
-        factor_log_widths = factor_log_widths[0].squeeze(0)
+        if block is not None:
+            weights = weights[0]
+            factor_centers = factor_centers[0]
+            factor_log_widths = factor_log_widths[0]
+        weights = weights.squeeze(0)
+        factor_centers = factor_centers.squeeze(0)
+        factor_log_widths = factor_log_widths.squeeze(0)
 
         if hist_weights:
             plt.hist(weights.view(weights.numel()).data.numpy())
