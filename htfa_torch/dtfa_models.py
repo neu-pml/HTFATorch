@@ -94,6 +94,10 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
                                                    self.num_times,
                                                    self._num_factors)),
                 }
+            },
+            'origin': {
+                'mu': torch.zeros(self.embedding_dim),
+                'sigma': torch.ones(self.embedding_dim),
             }
         })
 
