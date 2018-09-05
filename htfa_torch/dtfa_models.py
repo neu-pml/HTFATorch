@@ -54,7 +54,11 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
                              tfa_models.SOURCE_WEIGHT_STD_DEV,
                 }
             },
-            'voxel_noise': torch.ones(self.num_blocks) * tfa_models.VOXEL_NOISE
+            'voxel_noise': torch.ones(self.num_blocks) * tfa_models.VOXEL_NOISE,
+            'origin': {
+                'mu': torch.zeros(self.embedding_dim),
+                'sigma': torch.ones(self.embedding_dim) * 1e-3,
+            }
         })
 
         super(self.__class__, self).__init__(params, guide=False)
