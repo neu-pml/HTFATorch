@@ -117,7 +117,6 @@ class DeepTFADecoder(nn.Module):
             nn.Linear(self._num_factors, self._num_factors * 2),
         )
         self.epsilon = nn.Parameter(torch.Tensor([tfa_models.VOXEL_NOISE]))
-        self.register_buffer('origin', torch.zeros(self._embedding_dim))
 
         if hyper_means is not None:
             self.centers_embedding.bias = nn.Parameter(
@@ -137,7 +136,17 @@ class DeepTFADecoder(nn.Module):
         for k, v in params.items():
             if v.shape[0] != num_particles:
                 params[k] = v.expand(num_particles, *v.shape)
-        origin = self.origin.expand(num_particles, self._embedding_dim)
+        if 'origin' in params:
+            if 'z^P_{-1}' not in trace:
+                origin = trace.normal(
+                    params['origin']['mu'], softplus(params['origin']['sigma']),
+                    value=utils.clamped('z^P_{-1}', guide), name='z^P_{-1}',
+                )
+            else:
+                origin = trace['z^P_{-1}'].value
+        else:
+            origin = torch.zeros(num_particles, self._embedding_dim)
+            origin = origin.to(self.epsilon)
 
         weights = [None for b in blocks]
         factor_centers = [None for b in blocks]
