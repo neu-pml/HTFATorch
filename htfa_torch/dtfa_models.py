@@ -136,14 +136,13 @@ class DeepTFADecoder(nn.Module):
             )
 
     def forward(self, trace, blocks, block_subjects, block_tasks, params, times,
-                guide=None, observations=None,
-                num_particles=tfa_models.NUM_PARTICLES):
-        if observations is None:
-            observations = [None for _ in blocks]
+                guide=None, num_particles=tfa_models.NUM_PARTICLES,
+                expand_params=False):
         params = utils.vardict(params)
-        for k, v in params.items():
-            if v.shape[0] != num_particles:
+        if expand_params:
+            for k, v in params.items():
                 params[k] = v.expand(num_particles, *v.shape)
+
         if 'origin' in params:
             if 'z^P_{-1}' not in trace:
                 origin = trace.normal(
@@ -174,27 +173,31 @@ class DeepTFADecoder(nn.Module):
                      name='template_factor_log_widths')
 
         for (i, b) in enumerate(blocks):
-            subject = block_subjects[b]
-            task = block_tasks[b]
+            subject = block_subjects[b] if b else None
+            task = block_tasks[b] if b else None
 
-            if ('z^P_%d' % subject) not in trace:
+            if subject and ('z^P_%d' % subject) not in trace:
                 subject_embed = trace.normal(
-                    params['subject']['mu'][:, subject, :],
-                    softplus(params['subject']['sigma'][:, subject, :]),
+                    origin + params['subject']['mu'][:, subject],
+                    softplus(params['subject']['sigma'][:, subject]),
                     value=utils.clamped('z^P_%d' % subject, guide),
                     name='z^P_%d' % subject
                 )
-            else:
+            elif subject:
                 subject_embed = trace['z^P_%d' % subject].value
-            if ('z^S_%d' % task) not in trace:
+            else:
+                subject_embed = origin
+            if task and ('z^S_%d' % task) not in trace:
                 task_embed = trace.normal(
-                    params['task']['mu'][:, task],
+                    origin + params['task']['mu'][:, task],
                     softplus(params['task']['sigma'][:, task]),
                     value=utils.clamped('z^S_%d' % task, guide),
                     name='z^S_%d' % task
                 )
-            else:
+            elif task:
                 task_embed = trace['z^S_%d' % task].value
+            else:
+                task_embed = origin
 
             factor_params = self.factors_embedding(subject_embed)
             centers_predictions = self.centers_embedding(factor_params).view(
@@ -209,13 +212,13 @@ class DeepTFADecoder(nn.Module):
 
             weights_mu = trace.normal(
                 weight_predictions[:, :, 0], softplus(self.epsilon)[0],
-                value=utils.clamped('mu^W_%d' % b, guide),
-                name='mu^W_%d' % b
+                value=utils.clamped('mu^W_%d' % (b or -1), guide),
+                name='mu^W_%d' % (b or -1)
             )
             weights_sigma = trace.normal(
                 weight_predictions[:, :, 1], softplus(self.epsilon)[0],
-                value=utils.clamped('sigma^W_%d' % b, guide),
-                name='sigma^W_%d' % b
+                value=utils.clamped('sigma^W_%d' % (b or -1), guide),
+                name='sigma^W_%d' % (b or -1)
             )
             weights_params = params['block']['weights']
             weights[i] = trace.normal(
@@ -230,14 +233,13 @@ class DeepTFADecoder(nn.Module):
             factor_centers[i] = trace.normal(
                 centers_predictions,
                 softplus(self.epsilon)[0],
-                value=utils.clamped('FactorCenters%d' % b, guide,
-                                    observations[b]),
-                name='FactorCenters%d' % b
+                value=utils.clamped('FactorCenters%d' % (b or -1), guide),
+                name='FactorCenters%d' % (b or -1)
             )
             factor_log_widths[i] = trace.normal(
                 log_widths_predictions,
-                softplus(self.epsilon)[0], name='FactorLogWidths%d' % b,
-                value=utils.clamped('FactorLogWidths%d' % b, guide),
+                softplus(self.epsilon)[0], name='FactorLogWidths%d' % (b or -1),
+                value=utils.clamped('FactorLogWidths%d' % (b or -1), guide),
             )
 
         return weights, factor_centers, factor_log_widths
@@ -324,7 +326,8 @@ class DeepTFAModel(nn.Module):
         weights, centers, log_widths = decoder(trace, blocks, block_subjects,
                                                block_tasks, params, times,
                                                guide=guide,
-                                               num_particles=1)
+                                               num_particles=1,
+                                               expand_params=True)
 
         return [self.likelihoods[b](trace, weights[i], centers[i],
                                     log_widths[i], params, times=times,
