@@ -235,36 +235,38 @@ class DeepTFA:
 
     def results(self, block=None, subject=None, task=None, hist_weights=False):
         hyperparams = self.variational.hyperparams.state_vardict()
+        for k, v in hyperparams.items():
+            hyperparams[k] = v.expand(1, *v.shape)
+
+        guide = probtorch.Trace()
         if block is not None:
             subject = self.generative.block_subjects[block]
+            guide.variable(torch.distributions.Normal,
+                           hyperparams['subject']['mu'][:, subject],
+                           softplus(hyperparams['subject']['sigma'][:, subject]),
+                           value=hyperparams['subject']['mu'][:, subject],
+                           name='z^P_%d' % subject)
+
             task = self.generative.block_tasks[block]
+            guide.variable(torch.distributions.Normal,
+                           hyperparams['task']['mu'][:, task],
+                           softplus(hyperparams['task']['sigma'][:, task]),
+                           value=hyperparams['task']['mu'][:, task],
+                           name='z^S_%d' % task)
 
-        if subject is None:
-            subject_embed = self.decoder.origin
+            times = (0, self.num_times[block])
         else:
-            subject_embed = hyperparams['subject']['mu'][subject]
+            times = (0, max(self.num_times))
 
-        if task is None:
-            task_embed = self.decoder.origin
-        else:
-            task_embed = hyperparams['task']['mu'][task]
+        weights, factor_centers, factor_log_widths =\
+            self.decoder(probtorch.Trace(), [block],
+                         self.generative.block_subjects,
+                         self.generative.block_tasks, hyperparams, times,
+                         guide=guide, num_particles=1)
 
-        factor_params = self.decoder.factors_embedding(subject_embed)
-        factor_centers = self.decoder.centers_embedding(factor_params).view(
-            self.num_factors, 3
-        )
-        factor_log_widths = self.decoder.log_widths_embedding(factor_params)
-
-        if block is None:
-            weight_deltas = torch.zeros(max(self.num_times), self.num_factors)
-        else:
-            weight_deltas = hyperparams['block']['weights']['mu'][block]\
-                                       [0:self.num_times[block]]
-        weights_embed = torch.cat((subject_embed, task_embed), dim=-1)
-        weight_params = self.decoder.weights_embedding(weights_embed).view(
-            self.num_factors, 2
-        )
-        weights = weight_params[:, 0] + weight_deltas
+        weights = weights[0].squeeze(0)
+        factor_centers = factor_centers[0].squeeze(0)
+        factor_log_widths = factor_log_widths[0].squeeze(0)
 
         if hist_weights:
             plt.hist(weights.view(weights.numel()).data.numpy())
