@@ -135,6 +135,43 @@ class DeepTFADecoder(nn.Module):
                 hyper_means['factor_log_widths']
             )
 
+    def predict(self, trace, params, guide, subject, task, origin):
+        if subject and ('z^P_%d' % subject) not in trace:
+            subject_embed = trace.normal(
+                origin + params['subject']['mu'][:, subject],
+                softplus(params['subject']['sigma'][:, subject]),
+                value=utils.clamped('z^P_%d' % subject, guide),
+                name='z^P_%d' % subject
+            )
+        elif subject:
+            subject_embed = trace['z^P_%d' % subject].value
+        else:
+            subject_embed = origin
+        if task and ('z^S_%d' % task) not in trace:
+            task_embed = trace.normal(
+                origin + params['task']['mu'][:, task],
+                softplus(params['task']['sigma'][:, task]),
+                value=utils.clamped('z^S_%d' % task, guide),
+                name='z^S_%d' % task
+            )
+        elif task:
+            task_embed = trace['z^S_%d' % task].value
+        else:
+            task_embed = origin
+
+        factor_params = self.factors_embedding(subject_embed)
+        centers_predictions = self.centers_embedding(factor_params).view(
+            -1, self._num_factors, 3
+        )
+        log_widths_predictions = self.log_widths_embedding(factor_params).\
+                                 view(-1, self._num_factors)
+        weights_embed = torch.cat((subject_embed, task_embed), dim=-1)
+        weight_predictions = self.weights_embedding(weights_embed).view(
+            -1, self._num_factors, 2
+        )
+
+        return centers_predictions, log_widths_predictions, weight_predictions
+
     def forward(self, trace, blocks, block_subjects, block_tasks, params, times,
                 guide=None, num_particles=tfa_models.NUM_PARTICLES,
                 expand_params=False):
@@ -155,10 +192,6 @@ class DeepTFADecoder(nn.Module):
             origin = torch.zeros(num_particles, self._embedding_dim)
             origin = origin.to(self.epsilon)
 
-        weights = [None for b in blocks]
-        factor_centers = [None for b in blocks]
-        factor_log_widths = [None for b in blocks]
-
         template_params = self.factors_embedding(origin)
         template_centers = self.centers_embedding(template_params).view(
             -1, self._num_factors, 3
@@ -172,74 +205,82 @@ class DeepTFADecoder(nn.Module):
                      value=utils.clamped('template_factor_log_widths', guide),
                      name='template_factor_log_widths')
 
-        for (i, b) in enumerate(blocks):
-            subject = block_subjects[b] if b else None
-            task = block_tasks[b] if b else None
+        if blocks:
+            weights = [None for b in blocks]
+            factor_centers = [None for b in blocks]
+            factor_log_widths = [None for b in blocks]
 
-            if subject and ('z^P_%d' % subject) not in trace:
-                subject_embed = trace.normal(
-                    origin + params['subject']['mu'][:, subject],
-                    softplus(params['subject']['sigma'][:, subject]),
-                    value=utils.clamped('z^P_%d' % subject, guide),
-                    name='z^P_%d' % subject
-                )
-            elif subject:
-                subject_embed = trace['z^P_%d' % subject].value
-            else:
-                subject_embed = origin
-            if task and ('z^S_%d' % task) not in trace:
-                task_embed = trace.normal(
-                    origin + params['task']['mu'][:, task],
-                    softplus(params['task']['sigma'][:, task]),
-                    value=utils.clamped('z^S_%d' % task, guide),
-                    name='z^S_%d' % task
-                )
-            elif task:
-                task_embed = trace['z^S_%d' % task].value
-            else:
-                task_embed = origin
+            for (i, b) in enumerate(blocks):
+                subject = block_subjects[i] if b else None
+                task = block_tasks[i] if b else None
 
-            factor_params = self.factors_embedding(subject_embed)
-            centers_predictions = self.centers_embedding(factor_params).view(
-                -1, self._num_factors, 3
-            )
-            log_widths_predictions = self.log_widths_embedding(factor_params).\
-                                     view(-1, self._num_factors)
-            weights_embed = torch.cat((subject_embed, task_embed), dim=-1)
-            weight_predictions = self.weights_embedding(weights_embed).view(
-                -1, self._num_factors, 2
-            )
+                centers_predictions, log_widths_predictions, weight_predictions =\
+                    self.predict(trace, params, guide, subject, task, origin)
+
+                weights_mu = trace.normal(
+                    weight_predictions[:, :, 0], softplus(self.epsilon)[0],
+                    value=utils.clamped('mu^W_%d' % (b or -1), guide),
+                    name='mu^W_%d' % (b or -1)
+                )
+                weights_sigma = trace.normal(
+                    weight_predictions[:, :, 1], softplus(self.epsilon)[0],
+                    value=utils.clamped('sigma^W_%d' % (b or -1), guide),
+                    name='sigma^W_%d' % (b or -1)
+                )
+                weights_params = params['block']['weights']
+                weights[i] = trace.normal(
+                    weights_params['mu'][:, b, times[0]:times[1], :] +
+                    weights_mu.unsqueeze(1),
+                    softplus(weights_params['sigma'][:, b, times[0]:times[1], :] +
+                             weights_sigma.unsqueeze(1)),
+                    value=utils.clamped(
+                        'Weights%dt%d-%d' % (b or -1, times[0], times[1]), guide
+                    ),
+                    name='Weights%dt%d-%d' % (b or -1, times[0], times[1])
+                )
+                factor_centers[i] = trace.normal(
+                    centers_predictions,
+                    softplus(self.epsilon)[0],
+                    value=utils.clamped('FactorCenters%d' % (b or -1), guide),
+                    name='FactorCenters%d' % (b or -1)
+                )
+                factor_log_widths[i] = trace.normal(
+                    log_widths_predictions,
+                    softplus(self.epsilon)[0], name='FactorLogWidths%d' % (b or -1),
+                    value=utils.clamped('FactorLogWidths%d' % (b or -1), guide),
+                )
+        else:
+            centers_predictions, log_widths_predictions, weight_predictions =\
+                self.predict(trace, params, guide, None, None, origin)
 
             weights_mu = trace.normal(
                 weight_predictions[:, :, 0], softplus(self.epsilon)[0],
-                value=utils.clamped('mu^W_%d' % (b or -1), guide),
-                name='mu^W_%d' % (b or -1)
+                value=utils.clamped('mu^W_{-1}', guide),
+                name='mu^W_{-1}'
             )
             weights_sigma = trace.normal(
                 weight_predictions[:, :, 1], softplus(self.epsilon)[0],
-                value=utils.clamped('sigma^W_%d' % (b or -1), guide),
-                name='sigma^W_%d' % (b or -1)
+                value=utils.clamped('sigma^W_{-1}', guide),
+                name='sigma^W_{-1}'
             )
-            weights_params = params['block']['weights']
-            weights[i] = trace.normal(
-                weights_params['mu'][:, b, times[0]:times[1], :] +
+            weights = trace.normal(
                 weights_mu.unsqueeze(1),
-                softplus(weights_params['sigma'][:, b, times[0]:times[1], :] +
-                         weights_sigma.unsqueeze(1)),
-                value=utils.clamped('Weights%dt%d-%d' % (b, times[0], times[1]),
-                                    guide),
-                name='Weights%dt%d-%d' % (b, times[0], times[1])
-            )
-            factor_centers[i] = trace.normal(
+                softplus(weights_sigma.unsqueeze(1)),
+                value=utils.clamped(
+                    'Weights%dt%d-%d' % (-1, times[0], times[1]), guide
+                ),
+                name='Weights%dt%d-%d' % (-1, times[0], times[1])
+            ).expand(-1, times[1]-times[0], self._num_factors)
+            factor_centers = trace.normal(
                 centers_predictions,
                 softplus(self.epsilon)[0],
-                value=utils.clamped('FactorCenters%d' % (b or -1), guide),
-                name='FactorCenters%d' % (b or -1)
+                value=utils.clamped('FactorCenters%d' % -1, guide),
+                name='FactorCenters%d' % -1
             )
-            factor_log_widths[i] = trace.normal(
+            factor_log_widths = trace.normal(
                 log_widths_predictions,
-                softplus(self.epsilon)[0], name='FactorLogWidths%d' % (b or -1),
-                value=utils.clamped('FactorLogWidths%d' % (b or -1), guide),
+                softplus(self.epsilon)[0], name='FactorLogWidths%d' % -1,
+                value=utils.clamped('FactorLogWidths%d' % -1, guide),
             )
 
         return weights, factor_centers, factor_log_widths
