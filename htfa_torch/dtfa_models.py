@@ -128,9 +128,9 @@ class DeepTFADecoder(nn.Module):
             nn.Softsign(),
         )
         self.centers_embedding = nn.Linear(self._num_factors,
-                                           self._num_factors * 3)
+                                           self._num_factors * 3, bias=False)
         self.log_widths_embedding = nn.Linear(self._num_factors,
-                                              self._num_factors)
+                                              self._num_factors, bias=False)
         self.weights_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim * 2, self._num_factors),
             nn.Softsign(),
@@ -170,12 +170,31 @@ class DeepTFADecoder(nn.Module):
         else:
             task_embed = origin
 
+        if 'centers_bias' not in trace:
+            centers_bias = trace.normal(
+                params['centers_bias']['mu'],
+                softplus(params['centers_bias']['sigma']),
+                value=utils.clamped('centers_bias', guide),
+                name='centers_bias',
+            )
+        else:
+            centers_bias = trace['centers_bias'].value
+        if 'log_widths_bias' not in trace:
+            log_widths_bias = trace.normal(
+                params['log_widths_bias']['mu'],
+                softplus(params['log_widths_bias']['sigma']),
+                value=utils.clamped('log_widths_bias', guide),
+                name='log_widths_bias',
+            )
+        else:
+            log_widths_bias = trace['log_widths_bias'].value
+
         factor_params = self.factors_embedding(subject_embed)
         centers_predictions = self.centers_embedding(factor_params).view(
             -1, self._num_factors, 3
-        )
+        ) + centers_bias
         log_widths_predictions = self.log_widths_embedding(factor_params).\
-                                 view(-1, self._num_factors)
+                                 view(-1, self._num_factors) + log_widths_bias
         weights_embed = torch.cat((subject_embed, task_embed), dim=-1)
         weight_predictions = self.weights_embedding(weights_embed).view(
             -1, self._num_factors, 2
