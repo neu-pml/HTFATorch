@@ -279,7 +279,7 @@ class DeepTFA:
             plt.hist(weights.view(weights.numel()).data.numpy())
             plt.show()
 
-        return {
+        result = {
             'weights': weights.data,
             'factors': tfa_models.radial_basis(self.voxel_locations,
                                                factor_centers.data,
@@ -287,6 +287,11 @@ class DeepTFA:
             'factor_centers': factor_centers.data,
             'factor_log_widths': factor_log_widths.data,
         }
+        if subject is not None:
+            result['z^P_%d' % subject] = hyperparams['subject']['mu'][:, subject]
+        if task is not None:
+            result['z^S_%d' % task] = hyperparams['task']['mu'][:, task]
+        return result
 
     def normalize_activations(self):
         subject_runs = list(set([(block.subject, block.run)
