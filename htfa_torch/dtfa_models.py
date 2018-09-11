@@ -58,6 +58,14 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
             'origin': {
                 'mu': torch.zeros(self.embedding_dim),
                 'sigma': torch.ones(self.embedding_dim) * 1e-3,
+            },
+            'centers_bias': {
+                'mu': torch.zeros(self._num_factors, 3),
+                'sigma': torch.ones(self._num_factors, 3),
+            },
+            'log_widths_bias': {
+                'mu': torch.zeros(self._num_factors),
+                'sigma': torch.ones(self._num_factors),
             }
         })
 
@@ -94,6 +102,14 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
             'origin': {
                 'mu': torch.zeros(self.embedding_dim),
                 'sigma': torch.ones(self.embedding_dim),
+            },
+            'centers_bias': {
+                'mu': hyper_means['factor_centers'],
+                'sigma': torch.ones(self._num_factors, 3),
+            },
+            'log_widths_bias': {
+                'mu': hyper_means['factor_log_widths'],
+                'sigma': torch.ones(self._num_factors),
             }
         })
 
