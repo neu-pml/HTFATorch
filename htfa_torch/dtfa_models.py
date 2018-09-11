@@ -118,7 +118,7 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
 class DeepTFADecoder(nn.Module):
     """Neural network module mapping from embeddings to a topographic factor
        analysis"""
-    def __init__(self, num_factors, embedding_dim=2, hyper_means=None):
+    def __init__(self, num_factors, embedding_dim=2):
         super(DeepTFADecoder, self).__init__()
         self._embedding_dim = embedding_dim
         self._num_factors = num_factors
@@ -136,15 +136,6 @@ class DeepTFADecoder(nn.Module):
             nn.Softsign(),
             nn.Linear(self._num_factors, self._num_factors * 2),
         )
-
-        if hyper_means is not None:
-            self.centers_embedding.bias = nn.Parameter(
-                hyper_means['factor_centers'].view(self._num_factors * 3)
-            )
-            self.log_widths_embedding.bias = nn.Parameter(
-                torch.ones(self._num_factors) *
-                hyper_means['factor_log_widths']
-            )
 
     def predict(self, trace, params, guide, subject, task, origin):
         if subject and ('z^P_%d' % subject) not in trace:
