@@ -75,24 +75,20 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
 
         params = utils.vardict({
             'subject': {
-                'mu': torch.zeros(self.num_subjects, self.embedding_dim),
-                'sigma': torch.ones(self.num_subjects, self.embedding_dim) *\
-                         tfa_models.SOURCE_WEIGHT_STD_DEV *\
-                         tfa_models.SOURCE_LOG_WIDTH_STD_DEV,
+                'mu': torch.randn(self.num_subjects, self.embedding_dim),
+                'sigma': torch.ones(self.num_subjects, self.embedding_dim),
             },
             'task': {
-                'mu': torch.zeros(self.num_tasks, self.embedding_dim),
-                'sigma': torch.ones(self.num_tasks, self.embedding_dim) *\
-                         tfa_models.SOURCE_WEIGHT_STD_DEV,
+                'mu': torch.randn(self.num_tasks, self.embedding_dim),
+                'sigma': torch.ones(self.num_tasks, self.embedding_dim),
             },
             'block': {
                 'weights': {
                     'mu': hyper_means['weights'].mean(0).unsqueeze(0).expand(
                         self.num_blocks, self.num_times, self._num_factors
                     ),
-                    'sigma': torch.sqrt(torch.rand(self.num_blocks,
-                                                   self.num_times,
-                                                   self._num_factors)),
+                    'sigma': torch.ones(self.num_blocks, self.num_times,
+                                        self._num_factors),
                 }
             },
             'origin': {
