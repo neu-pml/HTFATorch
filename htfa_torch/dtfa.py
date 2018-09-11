@@ -89,7 +89,7 @@ class DeepTFA:
         self._blocks[b].unload()
 
         self.decoder = dtfa_models.DeepTFADecoder(self.num_factors,
-                                                  embedding_dim, hyper_means)
+                                                  embedding_dim)
         self.generative = dtfa_models.DeepTFAModel(
             self.voxel_locations, block_subjects, block_tasks,
             self.num_factors, self.num_blocks, self.num_times, embedding_dim
