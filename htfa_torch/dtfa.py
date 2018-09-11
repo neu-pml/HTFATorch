@@ -464,30 +464,18 @@ class DeepTFA:
         return plot
 
     def visualize_factor_embedding(self, filename=None, show=True,
-                                   num_samples=100, hist_log_widths=True,
-                                   **kwargs):
-        hyperprior = self.generative.hyperparams.state_vardict()
-
-        factor_prior = utils.unsqueeze_and_expand_vardict({
-            'mu': hyperprior['subject']['mu'][0],
-            'sigma': hyperprior['subject']['sigma'][0]
-        }, 0, num_samples, True)
-
-        embedding = torch.normal(factor_prior['mu'], factor_prior['sigma'] * 2)
-        factor_params = self.decoder.factors_embedding(embedding)
-        centers = self.decoder.centers_embedding(factor_params).view(
-            -1, self.num_factors, 3
-        ).data
-        widths = torch.exp(self.decoder.log_widths_embedding(factor_params))
-        widths = widths.view(-1, self.num_factors).data
+                                   hist_log_widths=True, **kwargs):
+        results = self.results(block=None, subject=0, task=None)
+        centers = results['factor_centers']
+        log_widths = results['factor_log_widths']
+        widths = torch.exp(log_widths)
 
         plot = niplot.plot_connectome(
-            np.eye(num_samples * self.num_factors),
-            centers.view(num_samples * self.num_factors, 3).numpy(),
-            node_size=widths.view(num_samples * self.num_factors).numpy(),
-            title="$z^P$ std-dev %.8e, $x^F$ std-dev %.8e, $\\rho^F$ std-dev %.8e" %
-            (embedding.std(0).norm(), centers.std(0).norm(),
-             torch.log(widths).std(0).norm()),
+            np.eye(self.num_factors),
+            centers.view(self.num_factors, 3).numpy(),
+            node_size=widths.view(self.num_factors).numpy(),
+            title="$x^F$ std-dev %.8e, $\\rho^F$ std-dev %.8e" %
+            (centers.std(0).norm(), log_widths.std(0).norm()),
             **kwargs
         )
 
@@ -497,11 +485,10 @@ class DeepTFA:
             niplot.show()
 
         if hist_log_widths:
-            log_widths = torch.log(widths)
             plt.hist(log_widths.view(log_widths.numel()).numpy())
             plt.show()
 
-        return plot, centers, torch.log(widths)
+        return plot, centers, log_widths
 
     def scatter_subject_embedding(self, labeler=None, filename=None, show=True,
                                   xlims=None, ylims=None, figsize=(3.75, 2.75),
