@@ -92,7 +92,7 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
             },
             'block': {
                 'weights': {
-                    'mu': hyper_means['weights'].mean(0).unsqueeze(0).expand(
+                    'mu': hyper_means['weights'].expand(
                         self.num_blocks, self.num_times, self._num_factors
                     ),
                     'sigma': torch.ones(self.num_blocks, self.num_times,
@@ -124,17 +124,19 @@ class DeepTFADecoder(nn.Module):
         self._num_factors = num_factors
 
         self.factors_embedding = nn.Sequential(
-            nn.Linear(self._embedding_dim, self._num_factors),
+            nn.Linear(self._embedding_dim, self._num_factors * 2),
+            nn.Softsign(),
+            nn.Linear(self._num_factors * 2, self._num_factors * 4),
             nn.Softsign(),
         )
-        self.centers_embedding = nn.Linear(self._num_factors,
-                                           self._num_factors * 3, bias=False)
-        self.log_widths_embedding = nn.Linear(self._num_factors,
-                                              self._num_factors, bias=False)
+        self.centers_embedding = nn.Linear(self._num_factors * 4,
+                                           self._num_factors * 3)
+        self.log_widths_embedding = nn.Linear(self._num_factors * 4,
+                                              self._num_factors)
         self.weights_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim * 2, self._num_factors),
             nn.Softsign(),
-            nn.Linear(self._num_factors, self._num_factors * 2),
+            nn.Linear(self._num_factors, self._num_factors),
         )
 
     def predict(self, trace, params, guide, subject, task, origin):
@@ -188,7 +190,7 @@ class DeepTFADecoder(nn.Module):
                                  view(-1, self._num_factors) + log_widths_bias
         weights_embed = torch.cat((subject_embed, task_embed), dim=-1)
         weight_predictions = self.weights_embedding(weights_embed).view(
-            -1, self._num_factors, 2
+            -1, self._num_factors
         )
 
         return centers_predictions, log_widths_predictions, weight_predictions
@@ -228,9 +230,8 @@ class DeepTFADecoder(nn.Module):
                 weights_params = params['block']['weights']
                 weights[i] = trace.normal(
                     weights_params['mu'][:, b, times[0]:times[1], :] +
-                    weight_predictions[:, :, 0].unsqueeze(1),
-                    softplus(weights_params['sigma'][:, b, times[0]:times[1], :] +
-                             weight_predictions[:, :, 1].unsqueeze(1)),
+                    weight_predictions.unsqueeze(1),
+                    softplus(weights_params['sigma'][:, b, times[0]:times[1], :]),
                     value=utils.clamped(
                         'Weights%dt%d-%d' % (b or -1, times[0], times[1]), guide
                     ),
@@ -241,8 +242,8 @@ class DeepTFADecoder(nn.Module):
                 self.predict(trace, params, guide, None, None, origin)
 
             weights = trace.normal(
-                weight_predictions[:, :, 0].unsqueeze(1),
-                softplus(weight_predictions[:, :, 1].unsqueeze(1)),
+                weight_predictions.unsqueeze(1),
+                torch.ones(*weight_predictions.shape).to(weight_predictions),
                 value=utils.clamped(
                     'Weights%dt%d-%d' % (-1, times[0], times[1]), guide
                 ),
