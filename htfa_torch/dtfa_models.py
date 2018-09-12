@@ -308,9 +308,6 @@ class DeepTFAModel(nn.Module):
         ) for b in range(self._num_blocks)]
         for b, block_likelihood in enumerate(self.likelihoods):
             self.add_module('likelihood' + str(b), block_likelihood)
-        self.htfa_model = htfa_models.HTFAModel(locations, self._num_blocks,
-                                                self._num_times,
-                                                self._num_factors, volume=True)
 
     def forward(self, decoder, trace, times=None, guide=probtorch.Trace(),
                 observations=[], blocks=None):
