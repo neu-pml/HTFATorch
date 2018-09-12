@@ -126,14 +126,12 @@ class DeepTFADecoder(nn.Module):
         self.factors_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim * 2, self._num_factors * 2),
             nn.Softsign(),
-            nn.Linear(self._num_factors * 2, self._num_factors * 4),
-            nn.Softsign(),
         )
-        self.centers_embedding = nn.Linear(self._num_factors * 4,
+        self.centers_embedding = nn.Linear(self._num_factors * 2,
                                            self._num_factors * 3)
-        self.log_widths_embedding = nn.Linear(self._num_factors * 4,
+        self.log_widths_embedding = nn.Linear(self._num_factors * 2,
                                               self._num_factors)
-        self.weights_embedding = nn.Linear(self._num_factors * 4,
+        self.weights_embedding = nn.Linear(self._num_factors * 2,
                                            self._num_factors)
 
     def predict(self, trace, params, guide, subject, task, origin):
