@@ -124,7 +124,7 @@ class DeepTFADecoder(nn.Module):
         self._num_factors = num_factors
 
         self.factors_embedding = nn.Sequential(
-            nn.Linear(self._embedding_dim, self._num_factors * 2),
+            nn.Linear(self._embedding_dim * 2, self._num_factors * 2),
             nn.Softsign(),
             nn.Linear(self._num_factors * 2, self._num_factors * 4),
             nn.Softsign(),
@@ -133,11 +133,8 @@ class DeepTFADecoder(nn.Module):
                                            self._num_factors * 3)
         self.log_widths_embedding = nn.Linear(self._num_factors * 4,
                                               self._num_factors)
-        self.weights_embedding = nn.Sequential(
-            nn.Linear(self._embedding_dim * 2, self._num_factors),
-            nn.Softsign(),
-            nn.Linear(self._num_factors, self._num_factors),
-        )
+        self.weights_embedding = nn.Linear(self._num_factors * 4,
+                                           self._num_factors)
 
     def predict(self, trace, params, guide, subject, task, origin):
         if subject and ('z^P_%d' % subject) not in trace:
@@ -182,14 +179,15 @@ class DeepTFADecoder(nn.Module):
         else:
             log_widths_bias = trace['log_widths_bias'].value
 
-        factor_params = self.factors_embedding(subject_embed)
+        embedding = torch.cat((subject_embed, task_embed), dim=-1)
+        factor_params = self.factors_embedding(embedding)
+
         centers_predictions = self.centers_embedding(factor_params).view(
             -1, self._num_factors, 3
         ) + centers_bias
         log_widths_predictions = self.log_widths_embedding(factor_params).\
                                  view(-1, self._num_factors) + log_widths_bias
-        weights_embed = torch.cat((subject_embed, task_embed), dim=-1)
-        weight_predictions = self.weights_embedding(weights_embed).view(
+        weight_predictions = self.weights_embedding(factor_params).view(
             -1, self._num_factors
         )
 
