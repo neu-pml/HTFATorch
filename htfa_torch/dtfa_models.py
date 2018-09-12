@@ -59,11 +59,11 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
                 'mu': torch.zeros(self.embedding_dim),
                 'sigma': torch.ones(self.embedding_dim) * 1e-3,
             },
-            'centers_bias': {
+            'template_factor_centers': {
                 'mu': torch.zeros(self._num_factors, 3),
                 'sigma': torch.ones(self._num_factors, 3),
             },
-            'log_widths_bias': {
+            'template_factor_log_widths': {
                 'mu': torch.zeros(self._num_factors),
                 'sigma': torch.ones(self._num_factors),
             }
@@ -103,11 +103,11 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
                 'mu': torch.zeros(self.embedding_dim),
                 'sigma': torch.ones(self.embedding_dim),
             },
-            'centers_bias': {
+            'template_factor_centers': {
                 'mu': hyper_means['factor_centers'],
                 'sigma': torch.ones(self._num_factors, 3),
             },
-            'log_widths_bias': {
+            'template_factor_log_widths': {
                 'mu': hyper_means['factor_log_widths'],
                 'sigma': torch.ones(self._num_factors),
             }
@@ -160,33 +160,14 @@ class DeepTFADecoder(nn.Module):
         else:
             task_embed = origin
 
-        if 'centers_bias' not in trace:
-            centers_bias = trace.normal(
-                params['centers_bias']['mu'],
-                softplus(params['centers_bias']['sigma']),
-                value=utils.clamped('centers_bias', guide),
-                name='centers_bias',
-            )
-        else:
-            centers_bias = trace['centers_bias'].value
-        if 'log_widths_bias' not in trace:
-            log_widths_bias = trace.normal(
-                params['log_widths_bias']['mu'],
-                softplus(params['log_widths_bias']['sigma']),
-                value=utils.clamped('log_widths_bias', guide),
-                name='log_widths_bias',
-            )
-        else:
-            log_widths_bias = trace['log_widths_bias'].value
-
         embedding = torch.cat((subject_embed, task_embed), dim=-1)
         factor_params = self.factors_embedding(embedding)
 
         centers_predictions = self.centers_embedding(factor_params).view(
             -1, self._num_factors, 3
-        ) + centers_bias
+        )
         log_widths_predictions = self.log_widths_embedding(factor_params).\
-                                 view(-1, self._num_factors) + log_widths_bias
+                                 view(-1, self._num_factors)
         weight_predictions = self.weights_embedding(factor_params).view(
             -1, self._num_factors
         )
@@ -213,6 +194,25 @@ class DeepTFADecoder(nn.Module):
             origin = torch.zeros(num_particles, self._embedding_dim)
             origin = origin.to(device=self.device)
 
+        if 'template_factor_centers' not in trace:
+            template_factor_centers = trace.normal(
+                params['template_factor_centers']['mu'],
+                softplus(params['template_factor_centers']['sigma']),
+                value=utils.clamped('template_factor_centers', guide),
+                name='template_factor_centers',
+            )
+        else:
+            template_factor_centers = trace['template_factor_centers'].value
+        if 'template_factor_log_widths' not in trace:
+            template_factor_log_widths = trace.normal(
+                params['template_factor_log_widths']['mu'],
+                softplus(params['template_factor_log_widths']['sigma']),
+                value=utils.clamped('template_factor_log_widths', guide),
+                name='template_factor_log_widths',
+            )
+        else:
+            template_factor_log_widths = trace['template_factor_log_widths'].value
+
         if blocks:
             weights = [None for b in blocks]
             factor_centers = [None for b in blocks]
@@ -224,29 +224,28 @@ class DeepTFADecoder(nn.Module):
 
                 factor_centers[i], factor_log_widths[i], weight_predictions =\
                     self.predict(trace, params, guide, subject, task, origin)
+                factor_centers[i] = factor_centers[i] + template_factor_centers
+                factor_log_widths[i] = factor_log_widths[i] +\
+                                       template_factor_log_widths
 
                 weights_params = params['block']['weights']
-                weights[i] = trace.normal(
-                    weights_params['mu'][:, b, times[0]:times[1], :] +
-                    weight_predictions.unsqueeze(1),
+                weights[i] = weight_predictions.unsqueeze(1) + trace.normal(
+                    weights_params['mu'][:, b, times[0]:times[1], :],
                     softplus(weights_params['sigma'][:, b, times[0]:times[1], :]),
                     value=utils.clamped(
-                        'Weights%dt%d-%d' % (b or -1, times[0], times[1]), guide
+                        'WeightDeviations%dt%d-%d' % (b or -1, times[0], times[1]),
+                        guide
                     ),
-                    name='Weights%dt%d-%d' % (b or -1, times[0], times[1])
+                    name='WeightDeviations%dt%d-%d' % (b or -1, times[0], times[1])
                 )
         else:
-            factor_centers, factor_log_widths, weight_predictions =\
+            factor_centers, factor_log_widths, weights =\
                 self.predict(trace, params, guide, None, None, origin)
-
-            weights = trace.normal(
-                weight_predictions.unsqueeze(1),
-                torch.ones(*weight_predictions.shape).to(weight_predictions),
-                value=utils.clamped(
-                    'Weights%dt%d-%d' % (-1, times[0], times[1]), guide
-                ),
-                name='Weights%dt%d-%d' % (-1, times[0], times[1])
-            ).expand(-1, times[1]-times[0], self._num_factors)
+            factor_centers = factor_centers + template_factor_centers
+            factor_log_widths = factor_log_widths + template_factor_log_widths
+            weights = weights.unsqueeze(1).expand(
+                -1, times[1]-times[0], self._num_factors
+            )
 
         return weights, factor_centers, factor_log_widths
 
