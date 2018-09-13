@@ -65,7 +65,7 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
             },
             'template_factor_log_widths': {
                 'mu': torch.zeros(self._num_factors),
-                'sigma': torch.ones(self._num_factors),
+                'sigma': torch.ones(self._num_factors) / 3,
             }
         })
 
@@ -83,11 +83,11 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
 
         params = utils.vardict({
             'subject': {
-                'mu': torch.randn(self.num_subjects, self.embedding_dim),
+                'mu': torch.zeros(self.num_subjects, self.embedding_dim),
                 'sigma': torch.ones(self.num_subjects, self.embedding_dim),
             },
             'task': {
-                'mu': torch.randn(self.num_tasks, self.embedding_dim),
+                'mu': torch.zeros(self.num_tasks, self.embedding_dim),
                 'sigma': torch.ones(self.num_tasks, self.embedding_dim),
             },
             'block': {
@@ -109,7 +109,7 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
             },
             'template_factor_log_widths': {
                 'mu': hyper_means['factor_log_widths'],
-                'sigma': torch.ones(self._num_factors),
+                'sigma': torch.ones(self._num_factors) / 3,
             }
         })
 
