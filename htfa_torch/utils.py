@@ -37,6 +37,13 @@ import nilearn.image
 from nilearn.input_data import NiftiMasker
 import nilearn.signal
 
+def clamped(rv, guide=None, observations=None):
+    if not guide:
+        guide = {}
+    if not observations:
+        observations = {}
+    return observations.get(rv, guide.get(rv, None))
+
 def perturb_parameters(optimizer, noise=1e-3):
     for param_group in optimizer.param_groups:
         for param in param_group['params']:
@@ -84,7 +91,8 @@ def initial_hypermeans(activations, locations, num_factors):
     initial_factors = initial_radial_basis(locations, initial_centers,
                                            initial_widths)
 
-    initial_weights, _, _, _ = np.linalg.lstsq(initial_factors.T, activations)
+    initial_weights, _, _, _ = np.linalg.lstsq(initial_factors.T, activations,
+                                               rcond=None)
 
     return initial_centers, torch.log(torch.Tensor(initial_widths)),\
            initial_weights.T
