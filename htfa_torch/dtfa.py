@@ -204,8 +204,7 @@ class DeepTFA:
                     epoch_lls[batch] = epoch_lls[batch].data.numpy()
                     epoch_prior_kls[batch] = epoch_prior_kls[batch].data.numpy()
 
-            free_energies[epoch] = np.array(epoch_free_energies).sum(0)
-            free_energies[epoch] = free_energies[epoch].sum(0)
+            free_energies[epoch] = np.array(epoch_free_energies).mean(0)
             scheduler.step(free_energies[epoch])
 
             measure_occurrences = False
