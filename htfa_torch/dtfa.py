@@ -211,8 +211,8 @@ class DeepTFA:
 
             end = time.time()
             msg = EPOCH_MSG % (epoch + 1, (end - start) * 1000,
-                               free_energies[epoch], mean(epoch_prior_kls),
-                               mean(epoch_lls))
+                               free_energies[epoch], np.mean(epoch_prior_kls),
+                               np.mean(epoch_lls))
             logging.info(msg)
             if checkpoint_steps is not None and epoch % checkpoint_steps == 0:
                 now = datetime.datetime.now()
