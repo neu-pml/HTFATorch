@@ -124,7 +124,9 @@ class DeepTFADecoder(nn.Module):
         self._num_factors = num_factors
 
         self.factors_embedding = nn.Sequential(
-            nn.Linear(self._embedding_dim * 2, self._num_factors * 2),
+            nn.Linear(self._embedding_dim * 2, self._num_factors),
+            nn.Softsign(),
+            nn.Linear(self._num_factors, self._num_factors * 2),
             nn.Softsign(),
         )
         self.centers_embedding = nn.Linear(self._num_factors * 2,
