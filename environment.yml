@@ -139,7 +139,6 @@ dependencies:
     - numexpr==2.6.4
     - pandas==0.22.0
     - ppca==0.0.3
-    - probtorch==0.0+b259290
     - python-editor==1.0.3
     - seaborn==0.8.1
     - sqlalchemy==1.2.6
