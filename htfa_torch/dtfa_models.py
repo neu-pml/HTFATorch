@@ -115,7 +115,7 @@ class DeepTFADecoder(nn.Module):
         self._num_factors = num_factors
 
         self.factors_embedding = nn.Sequential(
-            nn.Linear(self._embedding_dim, self._num_factors),
+            nn.Linear(self._embedding_dim * 2, self._num_factors),
             nn.Softsign(),
             nn.Linear(self._num_factors, self._num_factors * 2),
             nn.Softsign(),
@@ -125,9 +125,9 @@ class DeepTFADecoder(nn.Module):
         self.log_widths_embedding = nn.Linear(self._num_factors * 2,
                                               self._num_factors)
         self.weights_embedding = nn.Sequential(
-            nn.Linear(self._embedding_dim * 2, self._num_factors),
+            nn.Linear(self._num_factors * 2, self._num_factors * 4),
             nn.Softsign(),
-            nn.Linear(self._num_factors, self._num_factors * 2),
+            nn.Linear(self._num_factors * 4, self._num_factors * 2),
             nn.Softsign(),
         )
 
@@ -154,16 +154,16 @@ class DeepTFADecoder(nn.Module):
             task_embed = trace['z^S_%d' % task].value
         else:
             task_embed = origin
-
-        factor_params = self.factors_embedding(subject_embed)
+        joint_embed = torch.cat((subject_embed, task_embed), dim=-1)
+        factor_params = self.factors_embedding(joint_embed)
 
         centers_predictions = self.centers_embedding(factor_params).view(
             -1, self._num_factors, 3
         )
         log_widths_predictions = self.log_widths_embedding(factor_params).\
                                  view(-1, self._num_factors)
-        joint_embed = torch.cat((subject_embed, task_embed), dim=-1)
-        weight_predictions = self.weights_embedding(joint_embed).view(
+
+        weight_predictions = self.weights_embedding(factor_params).view(
             -1, self._num_factors, 2
         )
 
