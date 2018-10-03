@@ -151,7 +151,7 @@ class DeepTFA:
                     if tfa.CUDA and use_cuda:
                         data = data.cuda()
                         for b in block_batch:
-                            generative.module.likelihoods[b].voxel_locations =\
+                            generative.likelihoods[b].voxel_locations =\
                                 cuda_locations
                     activations = [{'Y': Variable(data[:, b, :])}
                                    for b in block_batch]
@@ -187,7 +187,7 @@ class DeepTFA:
                     if tfa.CUDA and use_cuda:
                         del activations
                         for b in block_batch:
-                            generative.module.likelihoods[b].voxel_locations =\
+                            generative.likelihoods[b].voxel_locations =\
                                 self.voxel_locations
                         torch.cuda.empty_cache()
                 if tfa.CUDA and use_cuda:
