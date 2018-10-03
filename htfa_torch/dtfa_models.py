@@ -37,8 +37,8 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
             'subject': {
                 'mu': torch.zeros(self.num_subjects, self.embedding_dim),
                 'sigma': torch.ones(self.num_subjects, self.embedding_dim) *\
-                         tfa_models.SOURCE_WEIGHT_STD_DEV *\
-                         tfa_models.SOURCE_LOG_WIDTH_STD_DEV,
+                         np.sqrt(tfa_models.SOURCE_WEIGHT_STD_DEV**2 +\
+                                 tfa_models.SOURCE_LOG_WIDTH_STD_DEV**2),
             },
             'task': {
                 'mu': torch.zeros(self.num_tasks, self.embedding_dim),
@@ -56,11 +56,13 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
             },
             'template_factor_centers': {
                 'mu': torch.zeros(self._num_factors, 3),
-                'sigma': torch.ones(self._num_factors, 3),
+                'sigma': torch.ones(self._num_factors, 3) *\
+                         tfa_models.SOURCE_CENTER_STD_DEV,
             },
             'template_factor_log_widths': {
                 'mu': torch.zeros(self._num_factors),
-                'sigma': torch.ones(self._num_factors) / 3,
+                'sigma': torch.ones(self._num_factors) *\
+                         tfa_models.SOURCE_LOG_WIDTH_STD_DEV,
             }
         })
 
