@@ -125,7 +125,9 @@ class DeepTFADecoder(nn.Module):
         self.log_widths_embedding = nn.Linear(self._num_factors * 2,
                                               self._num_factors)
         self.weights_embedding = nn.Sequential(
-            nn.Linear(self._embedding_dim * 2, self._num_factors),
+            nn.Linear(self._embedding_dim * 2, self._num_factors // 2),
+            nn.Softsign(),
+            nn.Linear(self._num_factors // 2, self._num_factors),
             nn.Softsign(),
             nn.Linear(self._num_factors, self._num_factors * 2),
             nn.Softsign(),
