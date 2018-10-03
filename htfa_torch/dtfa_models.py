@@ -37,8 +37,8 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
             'subject': {
                 'mu': torch.zeros(self.num_subjects, self.embedding_dim),
                 'sigma': torch.ones(self.num_subjects, self.embedding_dim) *\
-                         tfa_models.SOURCE_WEIGHT_STD_DEV *\
-                         tfa_models.SOURCE_LOG_WIDTH_STD_DEV,
+                         np.sqrt(tfa_models.SOURCE_WEIGHT_STD_DEV**2 +\
+                                 tfa_models.SOURCE_LOG_WIDTH_STD_DEV**2),
             },
             'task': {
                 'mu': torch.zeros(self.num_tasks, self.embedding_dim),
@@ -46,13 +46,8 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
                          tfa_models.SOURCE_WEIGHT_STD_DEV,
             },
             'block': {
-                'weights': {
-                    'mu': torch.zeros(self.num_blocks, self.num_times,
-                                      self._num_factors),
-                    'sigma': torch.ones(self.num_blocks, self.num_times,
-                                        self._num_factors) *\
-                             tfa_models.SOURCE_WEIGHT_STD_DEV,
-                }
+                'weights': torch.zeros(self.num_blocks, self.num_times,
+                                       self._num_factors)
             },
             'voxel_noise': torch.ones(self.num_blocks) * tfa_models.VOXEL_NOISE,
             'origin': {
@@ -61,11 +56,13 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
             },
             'template_factor_centers': {
                 'mu': torch.zeros(self._num_factors, 3),
-                'sigma': torch.ones(self._num_factors, 3),
+                'sigma': torch.ones(self._num_factors, 3) *\
+                         tfa_models.SOURCE_CENTER_STD_DEV,
             },
             'template_factor_log_widths': {
                 'mu': torch.zeros(self._num_factors),
-                'sigma': torch.ones(self._num_factors) / 3,
+                'sigma': torch.ones(self._num_factors) *\
+                         tfa_models.SOURCE_LOG_WIDTH_STD_DEV,
             }
         })
 
@@ -84,20 +81,18 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
         params = utils.vardict({
             'subject': {
                 'mu': torch.zeros(self.num_subjects, self.embedding_dim),
-                'sigma': torch.ones(self.num_subjects, self.embedding_dim),
+                'sigma': torch.ones(self.num_subjects, self.embedding_dim) *\
+                         np.sqrt(tfa_models.SOURCE_WEIGHT_STD_DEV**2 +\
+                                 tfa_models.SOURCE_LOG_WIDTH_STD_DEV**2),
             },
             'task': {
                 'mu': torch.zeros(self.num_tasks, self.embedding_dim),
                 'sigma': torch.ones(self.num_tasks, self.embedding_dim),
             },
             'block': {
-                'weights': {
-                    'mu': hyper_means['weights'].expand(
-                        self.num_blocks, self.num_times, self._num_factors
-                    ),
-                    'sigma': torch.ones(self.num_blocks, self.num_times,
-                                        self._num_factors),
-                }
+                'weights': hyper_means['weights'].expand(
+                    self.num_blocks, self.num_times, self._num_factors
+                )
             },
             'origin': {
                 'mu': torch.zeros(self.embedding_dim),
@@ -105,11 +100,13 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
             },
             'template_factor_centers': {
                 'mu': hyper_means['factor_centers'],
-                'sigma': torch.ones(self._num_factors, 3),
+                'sigma': torch.ones(self._num_factors, 3) *\
+                         tfa_models.SOURCE_CENTER_STD_DEV,
             },
             'template_factor_log_widths': {
                 'mu': hyper_means['factor_log_widths'],
-                'sigma': torch.ones(self._num_factors) / 3,
+                'sigma': torch.ones(self._num_factors) *\
+                         tfa_models.SOURCE_LOG_WIDTH_STD_DEV,
             }
         })
 
@@ -124,15 +121,32 @@ class DeepTFADecoder(nn.Module):
         self._num_factors = num_factors
 
         self.factors_embedding = nn.Sequential(
-            nn.Linear(self._embedding_dim * 2, self._num_factors * 2),
+            nn.Linear(self._embedding_dim, self._num_factors),
+            nn.Softsign(),
+            nn.Linear(self._num_factors, self._num_factors * 2),
             nn.Softsign(),
         )
         self.centers_embedding = nn.Linear(self._num_factors * 2,
                                            self._num_factors * 3)
+        self.centers_embedding.bias = nn.Parameter(
+            torch.zeros(self._num_factors * 3)
+        )
         self.log_widths_embedding = nn.Linear(self._num_factors * 2,
                                               self._num_factors)
-        self.weights_embedding = nn.Linear(self._num_factors * 2,
-                                           self._num_factors)
+        self.log_widths_embedding.bias = nn.Parameter(
+            torch.zeros(self._num_factors)
+        )
+        self.weights_embedding = nn.Sequential(
+            nn.Linear(self._embedding_dim * 2, self._num_factors // 2),
+            nn.Softsign(),
+            nn.Linear(self._num_factors // 2, self._num_factors),
+            nn.Softsign(),
+            nn.Linear(self._num_factors, self._num_factors * 2),
+        )
+        self.weights_embedding[-1].bias = nn.Parameter(torch.cat(
+            (torch.zeros(self._num_factors), torch.ones(self._num_factors)),
+            dim=-1
+        ))
 
     def predict(self, trace, params, guide, subject, task, origin):
         if subject and ('z^P_%d' % subject) not in trace:
@@ -158,16 +172,16 @@ class DeepTFADecoder(nn.Module):
         else:
             task_embed = origin
 
-        embedding = torch.cat((subject_embed, task_embed), dim=-1)
-        factor_params = self.factors_embedding(embedding)
+        factor_params = self.factors_embedding(subject_embed)
 
         centers_predictions = self.centers_embedding(factor_params).view(
             -1, self._num_factors, 3
         )
         log_widths_predictions = self.log_widths_embedding(factor_params).\
                                  view(-1, self._num_factors)
-        weight_predictions = self.weights_embedding(factor_params).view(
-            -1, self._num_factors
+        joint_embed = torch.cat((subject_embed, task_embed), dim=-1)
+        weight_predictions = self.weights_embedding(joint_embed).view(
+            -1, self._num_factors, 2
         )
 
         return centers_predictions, log_widths_predictions, weight_predictions
@@ -227,21 +241,22 @@ class DeepTFADecoder(nn.Module):
                                        template_factor_log_widths
 
                 weights_params = params['block']['weights']
-                weights[i] = weight_predictions.unsqueeze(1) + trace.normal(
-                    weights_params['mu'][:, b, times[0]:times[1], :],
-                    softplus(weights_params['sigma'][:, b, times[0]:times[1], :]),
+                weights[i] = trace.normal(
+                    weight_predictions[:, :, 0].unsqueeze(1) +
+                    weights_params[:, b, times[0]:times[1], :],
+                    softplus(weight_predictions[:, :, 1].unsqueeze(1)),
                     value=utils.clamped(
-                        'WeightDeviations%dt%d-%d' % (b or -1, times[0], times[1]),
+                        'Weights%dt%d-%d' % (b or -1, times[0], times[1]),
                         guide
                     ),
-                    name='WeightDeviations%dt%d-%d' % (b or -1, times[0], times[1])
+                    name='Weights%dt%d-%d' % (b or -1, times[0], times[1])
                 )
         else:
             factor_centers, factor_log_widths, weights =\
                 self.predict(trace, params, guide, None, None, origin)
             factor_centers = factor_centers + template_factor_centers
             factor_log_widths = factor_log_widths + template_factor_log_widths
-            weights = weights.unsqueeze(1).expand(
+            weights = weights[:, :, 0].unsqueeze(1).expand(
                 -1, times[1]-times[0], self._num_factors
             )
 

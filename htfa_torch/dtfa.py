@@ -114,19 +114,14 @@ class DeepTFA:
             batch_size=batch_size,
             pin_memory=True,
         )
+        decoder = self.decoder
+        variational = self.variational
+        generative = self.generative
         if tfa.CUDA and use_cuda:
-            decoder = torch.nn.DataParallel(self.decoder)
-            variational = torch.nn.DataParallel(self.variational)
-            generative = torch.nn.DataParallel(self.generative)
             decoder.cuda()
             variational.cuda()
             generative.cuda()
             cuda_locations = self.voxel_locations.cuda()
-        else:
-            decoder = self.decoder
-            variational = self.variational
-            generative = self.generative
-
         optimizer = torch.optim.Adam(list(variational.parameters()),
                                      lr=learning_rate, amsgrad=True)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -156,7 +151,7 @@ class DeepTFA:
                     if tfa.CUDA and use_cuda:
                         data = data.cuda()
                         for b in block_batch:
-                            generative.module.likelihoods[b].voxel_locations =\
+                            generative.likelihoods[b].voxel_locations =\
                                 cuda_locations
                     activations = [{'Y': Variable(data[:, b, :])}
                                    for b in block_batch]
@@ -192,7 +187,7 @@ class DeepTFA:
                     if tfa.CUDA and use_cuda:
                         del activations
                         for b in block_batch:
-                            generative.module.likelihoods[b].voxel_locations =\
+                            generative.likelihoods[b].voxel_locations =\
                                 self.voxel_locations
                         torch.cuda.empty_cache()
                 if tfa.CUDA and use_cuda:
@@ -204,16 +199,15 @@ class DeepTFA:
                     epoch_lls[batch] = epoch_lls[batch].data.numpy()
                     epoch_prior_kls[batch] = epoch_prior_kls[batch].data.numpy()
 
-            free_energies[epoch] = np.array(epoch_free_energies).sum(0)
-            free_energies[epoch] = free_energies[epoch].sum(0)
+            free_energies[epoch] = np.array(epoch_free_energies).mean(0)
             scheduler.step(free_energies[epoch])
 
             measure_occurrences = False
 
             end = time.time()
             msg = EPOCH_MSG % (epoch + 1, (end - start) * 1000,
-                               free_energies[epoch], sum(epoch_prior_kls),
-                               sum(epoch_lls))
+                               free_energies[epoch], np.mean(epoch_prior_kls),
+                               np.mean(epoch_lls))
             logging.info(msg)
             if checkpoint_steps is not None and epoch % checkpoint_steps == 0:
                 now = datetime.datetime.now()
