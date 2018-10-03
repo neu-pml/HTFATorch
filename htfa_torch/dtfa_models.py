@@ -124,16 +124,25 @@ class DeepTFADecoder(nn.Module):
         )
         self.centers_embedding = nn.Linear(self._num_factors * 2,
                                            self._num_factors * 3)
+        self.centers_embedding.bias = nn.Parameter(
+            torch.zeros(self._num_factors * 3)
+        )
         self.log_widths_embedding = nn.Linear(self._num_factors * 2,
                                               self._num_factors)
+        self.log_widths_embedding.bias = nn.Parameter(
+            torch.zeros(self._num_factors)
+        )
         self.weights_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim * 2, self._num_factors // 2),
             nn.Softsign(),
             nn.Linear(self._num_factors // 2, self._num_factors),
             nn.Softsign(),
             nn.Linear(self._num_factors, self._num_factors * 2),
-            nn.Softsign(),
         )
+        self.weights_embedding[-1].bias = nn.Parameter(torch.cat(
+            (torch.zeros(self._num_factors), torch.ones(self._num_factors)),
+            dim=-1
+        ))
 
     def predict(self, trace, params, guide, subject, task, origin):
         if subject and ('z^P_%d' % subject) not in trace:
