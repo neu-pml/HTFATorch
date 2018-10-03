@@ -114,19 +114,14 @@ class DeepTFA:
             batch_size=batch_size,
             pin_memory=True,
         )
+        decoder = self.decoder
+        variational = self.variational
+        generative = self.generative
         if tfa.CUDA and use_cuda:
-            decoder = torch.nn.DataParallel(self.decoder)
-            variational = torch.nn.DataParallel(self.variational)
-            generative = torch.nn.DataParallel(self.generative)
             decoder.cuda()
             variational.cuda()
             generative.cuda()
             cuda_locations = self.voxel_locations.cuda()
-        else:
-            decoder = self.decoder
-            variational = self.variational
-            generative = self.generative
-
         optimizer = torch.optim.Adam(list(variational.parameters()),
                                      lr=learning_rate, amsgrad=True)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
