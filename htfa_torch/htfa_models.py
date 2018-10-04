@@ -179,17 +179,12 @@ class HTFAGenerativeHyperParams(tfa_models.HyperParams):
         params['template']['factor_log_widths']['sigma'] =\
             torch.ones(self._num_factors)
 
-        params['block'] = {
-            'factor_center_noise': torch.eye(3).expand(self._num_blocks, 3, 3),
-            'factor_log_width_noise': torch.ones(self._num_blocks),
-            'weights': {
-                'mu': torch.zeros(self._num_blocks, self._num_factors),
-                'sigma': torch.ones(self._num_blocks, self._num_factors)
-            },
+        params['weights'] = {
+            'mu': torch.zeros(self._num_factors),
+            'sigma': torch.ones(self._num_factors)
         }
 
-        params['voxel_noise'] = torch.ones(self._num_blocks) *\
-                                tfa_models.VOXEL_NOISE
+        params['voxel_noise'] = torch.ones(()) * tfa_models.VOXEL_NOISE
 
         super(self.__class__, self).__init__(params, guide=False)
 
@@ -234,15 +229,19 @@ class HTFAGenerativeSubjectPrior(tfa_models.GenerativePrior):
             sparams = utils.vardict({
                 'factor_centers': {
                     'mu': template['factor_centers'],
-                    'sigma': params['block']['factor_center_noise'][b],
+                    'sigma': torch.eye(3).expand(
+                        template['factor_centers'].shape[0], 3, 3
+                    ).unsqueeze(1).to(template['factor_centers']),
                 },
                 'factor_log_widths': {
                     'mu': template['factor_log_widths'],
-                    'sigma': params['block']['factor_log_width_noise'][b],
+                    'sigma': torch.ones(template['factor_log_widths'].shape).to(
+                        template['factor_log_widths']
+                    ),
                 },
                 'weights': {
-                    'mu': params['block']['weights']['mu'][b],
-                    'sigma': params['block']['weights']['sigma'][b],
+                    'mu': params['weights']['mu'],
+                    'sigma': params['weights']['sigma'],
                 },
             })
             if weights_params is not None:
