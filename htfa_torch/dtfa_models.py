@@ -149,25 +149,25 @@ class DeepTFADecoder(nn.Module):
         ))
 
     def predict(self, trace, params, guide, subject, task, origin):
-        if subject and ('z^P_%d' % subject) not in trace:
+        if subject is not None and ('z^P_%d' % subject) not in trace:
             subject_embed = origin + trace.normal(
                 params['subject']['mu'][:, subject],
                 softplus(params['subject']['sigma'][:, subject]),
                 value=utils.clamped('z^P_%d' % subject, guide),
                 name='z^P_%d' % subject
             )
-        elif subject:
+        elif subject is not None:
             subject_embed = trace['z^P_%d' % subject].value
         else:
             subject_embed = origin
-        if task and ('z^S_%d' % task) not in trace:
+        if task is not None and ('z^S_%d' % task) not in trace:
             task_embed = origin + trace.normal(
                 params['task']['mu'][:, task],
                 softplus(params['task']['sigma'][:, task]),
                 value=utils.clamped('z^S_%d' % task, guide),
                 name='z^S_%d' % task
             )
-        elif task:
+        elif task is not None:
             task_embed = trace['z^S_%d' % task].value
         else:
             task_embed = origin
