@@ -75,6 +75,8 @@ class HTFAGuideTemplatePrior(tfa_models.GuidePrior):
             )
         template = template_shape.copy()
         for (k, _) in template.iteritems():
+            if 'template_' + k in trace:
+                continue
             template[k] = trace.normal(
                 template_params[k]['mu'],
                 softplus(template_params[k]['sigma']),
@@ -193,6 +195,8 @@ class HTFAGenerativeTemplatePrior(tfa_models.GenerativePrior):
                 guide=probtorch.Trace()):
         template = utils.vardict(template_shape.copy())
         for (k, _) in template.iteritems():
+            if 'template_' + k in trace:
+                continue
             if len(params['template'][k]['mu'].shape) > 1:
                 template[k] = trace.multivariate_normal(
                     params['template'][k]['mu'], params['template'][k]['sigma'],
