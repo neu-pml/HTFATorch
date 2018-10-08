@@ -231,8 +231,8 @@ class DeepTFADecoder(nn.Module):
             factor_log_widths = [None for b in blocks]
 
             for (i, b) in enumerate(blocks):
-                subject = block_subjects[i] if b else None
-                task = block_tasks[i] if b else None
+                subject = block_subjects[i] if b is not None else None
+                task = block_tasks[i] if b is not None else None
 
                 factor_centers[i], factor_log_widths[i], weight_predictions =\
                     self.predict(trace, params, guide, subject, task, origin)
