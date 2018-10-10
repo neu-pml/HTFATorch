@@ -361,6 +361,31 @@ class DeepTFA:
 
         return plot
 
+    def average_reconstruction_error(self):
+        if self.activation_normalizers is None:
+            self.normalize_activations()
+
+        image_norm = 0.0
+        reconstruction_error = 0.0
+
+        for block in range(self.num_blocks):
+            results = self.results(block)
+            reconstruction = results['weights'] @ results['factors']
+
+            reconstruction_error += np.linalg.norm(
+                (self.voxel_activations[block] - reconstruction).numpy()
+            )
+            image_norm += np.linalg.norm(self.voxel_activations[block].numpy())
+
+        reconstruction_error /= self.num_blocks
+        image_norm /= self.num_blocks
+
+        logging.info('Average reconstruction Error (Frobenius Norm): %.8e',
+                     reconstruction_error)
+        logging.info('Average data norm (Frobenius norm): %.8e', image_norm)
+
+        return reconstruction_error, image_norm
+
     def plot_reconstruction(self, block=None, filename=None, show=True,
                             plot_abs=False, t=0, labeler=None, **kwargs):
         if labeler is None:
