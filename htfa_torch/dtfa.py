@@ -383,6 +383,8 @@ class DeepTFA:
         logging.info('Average reconstruction Error (Frobenius Norm): %.8e',
                      reconstruction_error)
         logging.info('Average data norm (Frobenius norm): %.8e', image_norm)
+        logging.info('Percent average reconstruction error: %f',
+                     reconstruction_error / image_norm * 100.0)
 
         return reconstruction_error, image_norm
 
