@@ -482,6 +482,31 @@ class HierarchicalTopographicFactorAnalysis:
         if show:
             plt.show()
 
+    def average_reconstruction_error(self):
+        if self.activation_normalizers is None:
+            self.normalize_activations()
+
+        image_norm = 0.0
+        reconstruction_error = 0.0
+
+        for block in range(self.num_blocks):
+            results = self.results(block)
+            reconstruction = results['weights'] @ results['factors']
+
+            reconstruction_error += np.linalg.norm(
+                (self.voxel_activations[block] - reconstruction).numpy()
+            )
+            image_norm += np.linalg.norm(self.voxel_activations[block].numpy())
+
+        reconstruction_error /= self.num_blocks
+        image_norm /= self.num_blocks
+
+        logging.info('Average reconstruction Error (Frobenius Norm): %.8e',
+                     reconstruction_error)
+        logging.info('Average data norm (Frobenius norm): %.8e', image_norm)
+        logging.info('Percent average reconstruction error: %f',
+                     reconstruction_error / image_norm * 100.0)
+
     def decoding_accuracy(self, restvtask=False, window_size=5):
         """
         :return: accuracy: a dict containing decoding accuracies for each task [activity,isfc,mixed]
