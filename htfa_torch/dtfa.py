@@ -486,7 +486,7 @@ class DeepTFA:
 
     def visualize_factor_embedding(self, filename=None, show=True,
                                    hist_log_widths=True, **kwargs):
-        results = self.results(block=None, subject=0, task=None)
+        results = self.results(block=None, subject=None, task=None)
         centers = results['factor_centers']
         log_widths = results['factor_log_widths']
         widths = torch.exp(log_widths)
