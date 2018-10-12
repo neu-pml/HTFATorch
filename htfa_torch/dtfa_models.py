@@ -71,14 +71,23 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
                 'mu': torch.zeros(self.num_tasks, self.embedding_dim),
                 'sigma': torch.ones(self.num_tasks, self.embedding_dim),
             },
-            'block': {
-                'weights': hyper_means['weights'].expand(
-                    self.num_blocks, self.num_times, self._num_factors
-                )
+            'factor_centers': {
+                'mu': hyper_means['factor_centers'].expand(self.num_subjects,
+                                                           self._num_factors,
+                                                           3),
+                'sigma': torch.ones(self.num_subjects, self._num_factors, 3),
             },
-            'origin': {
-                'mu': torch.zeros(self.embedding_dim),
-                'sigma': torch.ones(self.embedding_dim),
+            'factor_log_widths': {
+                'mu': hyper_means['factor_log_widths'].expand(
+                    self.num_subjects, self._num_factors
+                ),
+                'sigma': torch.ones(self.num_subjects, self._num_factors),
+            },
+            'weights': {
+                'mu': torch.zeros(self.num_blocks, self.num_times,
+                                  self._num_factors),
+                'sigma': torch.ones(self.num_blocks, self.num_times,
+                                    self._num_factors),
             },
         })
 
