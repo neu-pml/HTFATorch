@@ -228,6 +228,33 @@ class HierarchicalTopographicFactorAnalysis:
 
         return result
 
+    def visualize_factor_template(self, filename=None, show=True,
+                                  hist_log_widths=True, **kwargs):
+        results = self.results(block=None)
+        centers = results['factor_centers']
+        log_widths = results['factor_log_widths']
+        widths = torch.exp(log_widths)
+
+        plot = niplot.plot_connectome(
+            np.eye(self.num_factors),
+            centers.view(self.num_factors, 3).numpy(),
+            node_size=widths.view(self.num_factors).numpy(),
+            title="$x^F$ std-dev %.8e, $\\rho^F$ std-dev %.8e" %
+            (centers.std(0).norm(), log_widths.std(0).norm()),
+            **kwargs
+        )
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        if hist_log_widths:
+            plt.hist(log_widths.view(log_widths.numel()).numpy())
+            plt.show()
+
+        return plot, centers, log_widths
+
     def normalize_activations(self):
         subject_runs = list(set([(block.subject, block.run)
                                  for block in self._blocks]))
@@ -481,6 +508,31 @@ class HierarchicalTopographicFactorAnalysis:
             fig.savefig(filename)
         if show:
             plt.show()
+
+    def average_reconstruction_error(self):
+        if self.activation_normalizers is None:
+            self.normalize_activations()
+
+        image_norm = 0.0
+        reconstruction_error = 0.0
+
+        for block in range(self.num_blocks):
+            results = self.results(block)
+            reconstruction = results['weights'] @ results['factors']
+
+            reconstruction_error += np.linalg.norm(
+                (self.voxel_activations[block] - reconstruction).numpy()
+            )
+            image_norm += np.linalg.norm(self.voxel_activations[block].numpy())
+
+        reconstruction_error /= self.num_blocks
+        image_norm /= self.num_blocks
+
+        logging.info('Average reconstruction Error (Frobenius Norm): %.8e',
+                     reconstruction_error)
+        logging.info('Average data norm (Frobenius norm): %.8e', image_norm)
+        logging.info('Percent average reconstruction error: %f',
+                     reconstruction_error / image_norm * 100.0)
 
     def decoding_accuracy(self, restvtask=False, window_size=5):
         """
