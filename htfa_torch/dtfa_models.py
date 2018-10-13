@@ -80,16 +80,6 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
                 'mu': torch.zeros(self.embedding_dim),
                 'sigma': torch.ones(self.embedding_dim),
             },
-            'template_factor_centers': {
-                'mu': hyper_means['factor_centers'],
-                'sigma': torch.ones(self._num_factors, 3) *\
-                         tfa_models.SOURCE_CENTER_STD_DEV,
-            },
-            'template_factor_log_widths': {
-                'mu': hyper_means['factor_log_widths'],
-                'sigma': torch.ones(self._num_factors) *\
-                         tfa_models.SOURCE_LOG_WIDTH_STD_DEV,
-            }
         })
 
         super(self.__class__, self).__init__(params, guide=True)
