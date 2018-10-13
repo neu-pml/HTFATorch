@@ -208,9 +208,9 @@ class DeepTFADecoder(nn.Module):
 
     def forward(self, trace, blocks, block_subjects, block_tasks, params, times,
                 guide=None, num_particles=tfa_models.NUM_PARTICLES,
-                expand_params=False):
+                generative=False):
         params = utils.vardict(params)
-        if expand_params:
+        if generative:
             for k, v in params.items():
                 params[k] = v.expand(num_particles, *v.shape)
 
@@ -228,7 +228,8 @@ class DeepTFADecoder(nn.Module):
                                  generative)
         else:
             factor_centers, factor_log_widths, weights =\
-                self.predict(trace, params, guide, None, None, times)
+                self.predict(trace, params, guide, None, None, times,
+                             generative=generative)
 
         return weights, factor_centers, factor_log_widths
 
@@ -315,7 +316,7 @@ class DeepTFAModel(nn.Module):
                                                block_tasks, params, times,
                                                guide=guide,
                                                num_particles=1,
-                                               expand_params=True)
+                                               generative=True)
 
         return [self.likelihoods[b](trace, weights[i], centers[i],
                                     log_widths[i], params, times=times,
