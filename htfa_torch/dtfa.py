@@ -122,7 +122,8 @@ class DeepTFA:
             variational.cuda()
             generative.cuda()
             cuda_locations = self.voxel_locations.cuda()
-        optimizer = torch.optim.Adam(list(variational.parameters()),
+        optimizer = torch.optim.Adam(list(variational.parameters()) +
+                                     list(decoder.parameters()),
                                      lr=learning_rate, amsgrad=True)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, factor=0.5, min_lr=1e-5, patience=patience,
