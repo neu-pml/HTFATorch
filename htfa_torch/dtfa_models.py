@@ -157,7 +157,6 @@ class DeepTFADecoder(nn.Module):
         origin = torch.zeros(params['subject']['mu'].shape[0],
                              self._embedding_dim)
         origin = origin.to(params['subject']['mu'])
-        tag = (block, times[0], times[1])
         if subject is not None:
             subject_embed = self._predict_param(params, 'subject', subject,
                                                 None, 'z^P_%d' % subject, trace,
@@ -190,18 +189,18 @@ class DeepTFADecoder(nn.Module):
 
         centers_predictions = self._predict_param(
             params, 'factor_centers', subject, centers_predictions,
-            'FactorCenters%d_%d-%d' % tag, trace, predict=generative,
+            'FactorCenters%d' % block, trace, predict=generative,
             guide=guide,
         )
         log_widths_predictions = self._predict_param(
             params, 'factor_log_widths', subject, log_widths_predictions,
-            'FactorLogWidths%d_%d-%d' % tag, trace, predict=generative,
+            'FactorLogWidths%d' % block, trace, predict=generative,
             guide=guide,
         )
         weight_predictions = self._predict_param(
             params, 'weights', block, weight_predictions,
-            'Weights%d_%d-%d' % tag, trace, predict=generative or block < 0,
-            guide=guide,
+            'Weights%d_%d-%d' % (block, times[0], times[1]), trace,
+            predict=generative or block < 0, guide=guide,
         )
 
         return centers_predictions, log_widths_predictions, weight_predictions
