@@ -84,10 +84,10 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
                 'sigma': torch.ones(self.num_subjects, self._num_factors),
             },
             'weights': {
-                'mu': torch.zeros(self.num_blocks, self.num_times,
-                                  self._num_factors),
-                'sigma': torch.ones(self.num_blocks, self.num_times,
-                                    self._num_factors),
+                'mu': torch.zeros(self.num_subjects, self.num_tasks,
+                                  self.num_times, self._num_factors),
+                'sigma': torch.ones(self.num_subjects, self.num_tasks,
+                                    self.num_times, self._num_factors),
             },
         })
 
@@ -150,8 +150,13 @@ class DeepTFADecoder(nn.Module):
                 mu = mu.mean(dim=1)
                 sigma = sigma.mean(dim=1)
             else:
-                mu = mu[:, index]
-                sigma = sigma[:, index]
+                if isinstance(index, tuple):
+                    for i in index:
+                        mu = mu.select(1, i)
+                        sigma = sigma.select(1, i)
+                else:
+                    mu = mu[:, index]
+                    sigma = sigma[:, index]
         result = trace.normal(mu, softplus(sigma),
                               value=utils.clamped(name, guide), name=name)
         return result
@@ -202,7 +207,7 @@ class DeepTFADecoder(nn.Module):
             guide=guide,
         )
         weight_predictions = self._predict_param(
-            params, 'weights', block, weight_predictions,
+            params, 'weights', (subject, task), weight_predictions,
             'Weights%d_%d-%d' % (block, times[0], times[1]), trace,
             predict=generative or block < 0, guide=guide,
         )
@@ -273,7 +278,7 @@ class DeepTFAGuide(nn.Module):
                        if b in blocks]
         if times:
             for k, v in params['weights'].items():
-                params['weights'][k] = v[:, :, times[0]:times[1], :]
+                params['weights'][k] = v[:, :, :, times[0]:times[1], :]
 
         return decoder(trace, blocks, block_subjects, block_tasks, params,
                        times=times, num_particles=num_particles)
