@@ -149,13 +149,13 @@ class DeepTFA:
                 block_batches = utils.chunks(list(range(self.num_blocks)),
                                              n=blocks_batch_size)
                 for block_batch in block_batches:
+                    activations = [{'Y': data[:, b, :]} for b in block_batch]
                     if tfa.CUDA and use_cuda:
-                        data = data.cuda()
                         for b in block_batch:
                             generative.likelihoods[b].voxel_locations =\
                                 cuda_locations
-                    activations = [{'Y': Variable(data[:, b, :])}
-                                   for b in block_batch]
+                        for acts in activations:
+                            acts['Y'] = acts['Y'].cuda()
                     trs = (batch * batch_size, None)
                     trs = (trs[0], trs[0] + activations[0]['Y'].shape[0])
 
