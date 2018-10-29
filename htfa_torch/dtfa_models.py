@@ -173,7 +173,7 @@ class DeepTFADecoder(nn.Module):
         else:
             subject_embed = origin
         if task is not None:
-            task_embed = self._predict_param(params, 'task', task,None,
+            task_embed = self._predict_param(params, 'task', task, None,
                                              'z^S_%d' % task, trace, False,
                                              guide)
         else:
