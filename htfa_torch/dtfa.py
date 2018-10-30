@@ -77,8 +77,15 @@ class DeepTFA:
 
         b = max(range(self.num_blocks), key=lambda b: self.num_times[b])
         self._blocks[b].load()
+        init_activations = self.voxel_activations.copy()
+        max_times = max(self.num_times)
+        for i, acts in enumerate(init_activations):
+            if acts.shape[0] < max_times:
+                buffer = torch.zeros(max_times - acts.shape[0], self.num_voxels)
+                init_activations[i] = torch.cat((acts, buffer))
+        init_activations = torch.stack(init_activations)
         centers, widths, weights = utils.initial_hypermeans(
-            self._blocks[b].activations.numpy().T, self._blocks[b].locations.numpy(),
+            init_activations.mean(dim=0).numpy().T, self.voxel_locations.numpy(),
             num_factors
         )
         hyper_means = {
