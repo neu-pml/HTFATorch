@@ -239,9 +239,13 @@ class DeepTFA:
             task = self.generative.block_tasks[block]
             times = (0, self.num_times[block])
             blocks = [block]
+            block_subjects = [self.generative.block_subjects[block]]
+            block_tasks = [self.generative.block_tasks[block]]
         else:
             times = (0, max(self.num_times))
             blocks = []
+            block_subjects = self.generative.block_subjects
+            block_tasks = self.generative.block_tasks
 
         if subject is not None:
             guide.variable(torch.distributions.Normal,
@@ -257,10 +261,8 @@ class DeepTFA:
                            name='z^S_%d' % task)
 
         weights, factor_centers, factor_log_widths =\
-            self.decoder(probtorch.Trace(), blocks,
-                         self.generative.block_subjects,
-                         self.generative.block_tasks, hyperparams, times,
-                         guide=guide, num_particles=1)
+            self.decoder(probtorch.Trace(), blocks, block_subjects, block_tasks,
+                         hyperparams, times, guide=guide, num_particles=1)
 
         if block is not None:
             weights = weights[0]
