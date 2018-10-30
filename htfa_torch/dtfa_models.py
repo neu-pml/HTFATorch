@@ -63,9 +63,7 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
         params = utils.vardict({
             'subject': {
                 'mu': torch.zeros(self.num_subjects, self.embedding_dim),
-                'sigma': torch.ones(self.num_subjects, self.embedding_dim) *\
-                         np.sqrt(tfa_models.SOURCE_WEIGHT_STD_DEV**2 +\
-                                 tfa_models.SOURCE_LOG_WIDTH_STD_DEV**2),
+                'sigma': torch.ones(self.num_subjects, self.embedding_dim),
             },
             'task': {
                 'mu': torch.zeros(self.num_tasks, self.embedding_dim),
@@ -81,7 +79,8 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
                 'mu': hyper_means['factor_log_widths'].expand(
                     self.num_subjects, self._num_factors
                 ),
-                'sigma': torch.ones(self.num_subjects, self._num_factors),
+                'sigma': torch.ones(self.num_subjects, self._num_factors) *\
+                         hyper_means['factor_log_widths'].std(),
             },
             'weights': {
                 'mu': torch.zeros(self.num_subjects, self.num_tasks,
@@ -119,19 +118,20 @@ class DeepTFADecoder(nn.Module):
             )
         )
         self.factor_log_widths_embedding.bias = nn.Parameter(
-            torch.stack((hyper_means['factor_log_widths'],
-                         torch.ones(self._num_factors)), dim=-1).view(
-                self._num_factors * 2
-            )
+            torch.stack(
+                (hyper_means['factor_log_widths'],
+                 torch.ones(self._num_factors) *
+                 hyper_means['factor_log_widths'].std()),
+                dim=-1
+            ).view(self._num_factors * 2)
         )
         self.weights_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim * 2, self._num_factors),
             nn.Softsign(),
             nn.Linear(self._num_factors, self._num_factors * 2)
         )
-        weights_std = torch.ones(self._num_factors)
         weights_prior = torch.stack((torch.zeros(self._num_factors),
-                                     weights_std), dim=-1)
+                                     torch.ones(self._num_factors)), dim=-1)
         self.weights_embedding[-1].bias = nn.Parameter(
             weights_prior.view(self._num_factors * 2)
         )
