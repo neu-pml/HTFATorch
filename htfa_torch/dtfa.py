@@ -68,7 +68,7 @@ class DeepTFA:
         # Pull out relevant dimensions: the number of time instants and the
         # number of voxels in each timewise "slice"
         self.num_times = [acts.shape[0] for acts in self.voxel_activations]
-        self.num_voxels = [acts.shape[1] for acts in self.voxel_activations]
+        self.num_voxels = self.voxel_locations.shape[0]
 
         subjects = list(set([b.subject for b in self._blocks]))
         tasks = list(set([b.task for b in self._blocks]))
