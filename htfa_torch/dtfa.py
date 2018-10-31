@@ -375,34 +375,43 @@ class DeepTFA:
         if self.activation_normalizers is None:
             self.normalize_activations()
 
-        image_norm = 0.0
-        reconstruction_error = 0.0
-        normed_error = 0.0
+        image_norm = np.zeros(self.num_blocks)
+        reconstruction_error = np.zeros(self.num_blocks)
+        normed_error = np.zeros(self.num_blocks)
 
         for block in range(self.num_blocks):
             results = self.results(block)
             reconstruction = results['weights'] @ results['factors']
 
-            diff = (reconstruction - self.voxel_activations[block]) ** 2
-            normalizer = self.voxel_activations[block] ** 2
+            for t in range(results['weights'].shape[0]):
+                diff = np.linalg.norm(
+                    reconstruction[t] - self.voxel_activations[block][t]
+                ) ** 2
+                normalizer = np.linalg.norm(
+                    self.voxel_activations[block][t]
+                ) ** 2
 
-            reconstruction_error += diff.sum()
-            image_norm += normalizer.sum()
-            normed_error += (diff / normalizer).sum()
+                reconstruction_error[block] += diff
+                image_norm[block] += normalizer
+                normed_error[block] += (diff / normalizer)
 
-        image_norm /= self.num_blocks * min(self.num_times) * self.num_voxels
+            reconstruction_error[block] /= self.num_times[block]
+            image_norm[block] /= self.num_times[block]
+            normed_error[block] /= self.num_times[block]
+
+        image_norm = sum(image_norm) / (self.num_blocks * self.num_voxels)
         image_norm = np.sqrt(image_norm)
-        reconstruction_error /= self.num_blocks * min(self.num_times) *\
-                                self.num_voxels
+        reconstruction_error = sum(reconstruction_error)
+        reconstruction_error /= self.num_blocks * self.num_voxels
         reconstruction_error = np.sqrt(reconstruction_error)
-        normed_error /= self.num_blocks * min(self.num_times) * self.num_voxels
+        normed_error = sum(normed_error) / (self.num_blocks * self.num_voxels)
         normed_error = np.sqrt(normed_error)
 
         logging.info('Average reconstruction error (MSE): %.8e',
                      reconstruction_error)
         logging.info('Average data norm (Euclidean): %.8e', image_norm)
         logging.info('Percent average reconstruction error: %f',
-                     reconstruction_error / image_norm * 100.0)
+                     normed_error * 100.0)
 
         return reconstruction_error, image_norm, normed_error
 
