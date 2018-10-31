@@ -284,7 +284,7 @@ class DeepTFA:
             plt.show()
 
         result = {
-            'weights': weights.data,
+            'weights': weights[:times[1]].data,
             'factors': tfa_models.radial_basis(self.voxel_locations,
                                                factor_centers.data,
                                                factor_log_widths.data),
