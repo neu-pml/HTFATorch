@@ -297,6 +297,44 @@ class DeepTFA:
             result['z^S_%d' % task] = hyperparams['task']['mu'][:, task]
         return result
 
+    def reconstruction(self, block=None, subject=None, task=None):
+        results = self.results(block, subject, task)
+        return results['weights'] @ results['factors']
+
+    def reconstruction_diff(self, block):
+        reconstruction = self.reconstruction(block)
+        return self.voxel_activations[block] - reconstruction
+
+    def plot_reconstruction_diff(self, block, filename=None, show=True, t=0,
+                                 plot_abs=False, labeler=lambda b: b.task,
+                                 **kwargs):
+        diff = self.reconstruction_diff(block)
+        image = utils.cmu2nii(diff.numpy(), self.voxel_locations.numpy(),
+                              self._templates[block])
+        image_slice = nilearn.image.index_img(image, t)
+        plot = niplot.plot_glass_brain(
+            image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
+            title="Reconstruction Error of %d (Participant %d, Run %d, Stimulus: %s)" %\
+                  (block, self._blocks[block].subject, self._blocks[block].run,
+                   labeler(self._blocks[block])),
+            vmin=-self.activation_normalizers[block],
+            vmax=self.activation_normalizers[block],
+            **kwargs,
+        )
+
+        logging.info(
+            'Reconstruction Error (Frobenius Norm): %.8e out of %.8e',
+            np.linalg.norm(diff.numpy()),
+            np.linalg.norm(self.voxel_activations[block].numpy())
+        )
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
+
     def normalize_activations(self):
         subject_runs = list(set([(block.subject, block.run)
                                  for block in self._blocks]))
