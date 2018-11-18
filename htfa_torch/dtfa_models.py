@@ -24,13 +24,9 @@ from . import tfa_models
 from . import utils
 
 class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
-    def __init__(self, num_blocks, num_subjects, num_tasks, num_times,
-                 num_factors, embedding_dim=2):
-        self.num_blocks = num_blocks
+    def __init__(self, num_subjects, num_tasks, embedding_dim=2):
         self.num_subjects = num_subjects
         self.num_tasks = num_tasks
-        self.num_times = max(num_times)
-        self._num_factors = num_factors
         self.embedding_dim = embedding_dim
 
         params = utils.vardict({
@@ -45,7 +41,7 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
                 'sigma': torch.ones(self.num_tasks, self.embedding_dim) *\
                          tfa_models.SOURCE_WEIGHT_STD_DEV,
             },
-            'voxel_noise': torch.ones(self.num_blocks) * tfa_models.VOXEL_NOISE,
+            'voxel_noise': torch.ones(1) * tfa_models.VOXEL_NOISE,
         })
 
         super(self.__class__, self).__init__(params, guide=False)
@@ -83,10 +79,10 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
                          hyper_means['factor_log_widths'].std(),
             },
             'weights': {
-                'mu': torch.zeros(self.num_subjects, self.num_tasks,
-                                  self.num_times, self._num_factors),
-                'sigma': torch.ones(self.num_subjects, self.num_tasks,
-                                    self.num_times, self._num_factors),
+                'mu': torch.zeros(self.num_blocks, self.num_times,
+                                  self._num_factors),
+                'sigma': torch.ones(self.num_blocks, self.num_times,
+                                    self._num_factors),
             },
         })
 
@@ -204,7 +200,7 @@ class DeepTFADecoder(nn.Module):
             guide=guide,
         )
         weight_predictions = self._predict_param(
-            params, 'weights', (subject, task), weight_predictions,
+            params, 'weights', block, weight_predictions,
             'Weights%d_%d-%d' % (block, times[0], times[1]), trace,
             predict=generative or block < 0, guide=guide,
         )
@@ -275,7 +271,7 @@ class DeepTFAGuide(nn.Module):
                        if b in blocks]
         if times:
             for k, v in params['weights'].items():
-                params['weights'][k] = v[:, :, :, times[0]:times[1], :]
+                params['weights'][k] = v[:, :, times[0]:times[1], :]
 
         return decoder(trace, blocks, block_subjects, block_tasks, params,
                        times=times, num_particles=num_particles)
@@ -294,8 +290,7 @@ class DeepTFAModel(nn.Module):
         self.block_tasks = block_tasks
 
         self.hyperparams = DeepTFAGenerativeHyperparams(
-            self._num_blocks, len(set(block_subjects)), len(set(block_tasks)),
-            self._num_times, self._num_factors, embedding_dim
+            len(set(block_subjects)), len(set(block_tasks)), embedding_dim
         )
         self.likelihoods = [tfa_models.TFAGenerativeLikelihood(
             locations, self._num_times[b], block=b, register_locations=False
