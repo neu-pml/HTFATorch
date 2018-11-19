@@ -121,7 +121,9 @@ class DeepTFADecoder(nn.Module):
         self.weights_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim * 2, self._num_factors),
             nn.Softsign(),
-            nn.Linear(self._num_factors, self._num_factors * 2)
+            nn.Linear(self._num_factors, self._num_factors * 2),
+            nn.Softsign(),
+            nn.Linear(self._num_factors * 2, self._num_factors * 2),
         )
         weights_prior = torch.stack((torch.zeros(self._num_factors),
                                      torch.ones(self._num_factors)), dim=-1)
