@@ -518,14 +518,21 @@ def hasnan(tensor):
 class TFADataset(torch.utils.data.Dataset):
     def __init__(self, activations):
         self._activations = activations
-        self._num_subjects = len(self._activations)
-        self.num_times = min([acts.shape[0] for acts in self._activations])
+        self._num_blocks = len(self._activations)
+        self.num_times = max([acts.shape[0] for acts in self._activations])
 
     def __len__(self):
         return self.num_times
 
+    def slice_activations(self, i):
+        for acts in self._activations:
+            if acts.shape[0] > i:
+                yield acts[i]
+            else:
+                yield torch.zeros(acts.shape[1])
+
     def __getitem__(self, i):
-        return torch.stack([acts[i] for acts in self._activations], dim=0)
+        return torch.stack(list(self.slice_activations(i)), dim=0)
 
 def chunks(chunkable, n):
     for i in range(0, len(chunkable), n):
