@@ -1,0 +1,4 @@
+data/*.htfa_model filter=lfs diff=lfs merge=lfs -text
+data/*.htfa_guide filter=lfs diff=lfs merge=lfs -text
+data/*.dtfa_guide filter=lfs diff=lfs merge=lfs -text
+data/*.dtfa_model filter=lfs diff=lfs merge=lfs -text
