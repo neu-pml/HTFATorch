@@ -7,6 +7,7 @@ __email__ = ('j.vandemeent@northeastern.edu',
              'sennesh.e@husky.neu.edu',
              'khan.zu@husky.neu.edu')
 from functools import lru_cache
+import json
 import logging
 import types
 
@@ -35,6 +36,7 @@ class FMriActivationBlock(object):
         self.end_time = None
         self.activations = None
         self.locations = None
+        self.individual_differences = {}
 
     def load(self):
         self.activations, self.locations, _, _ =\
@@ -91,8 +93,11 @@ class FMriActivationsDb:
         block_dict = block.__dict__.copy()
         del block_dict['activations']
         del block_dict['locations']
+        block_dict['individual_differences'] =\
+            json.dumps(block_dict['individual_differences'])
         self._table.upsert(block_dict, ['subject', 'run', 'task', 'block',
-                                        'start_time', 'end_time'])
+                                        'start_time', 'end_time',
+                                        'individual_differences'])
 
     def __getattr__(self, name):
         attr = getattr(self._table, name)
@@ -105,6 +110,8 @@ class FMriActivationsDb:
                     for block_dict in block_dicts:
                         block = FMriActivationBlock()
                         block.__dict__.update(**block_dict)
+                        block.individual_differences =\
+                            json.loads(block.individual_differences)
                         if self.mask is not None:
                             block.mask = self.mask
                         yield block
