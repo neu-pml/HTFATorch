@@ -35,6 +35,7 @@ class FMriActivationBlock(object):
         self.end_time = None
         self.activations = None
         self.locations = None
+        self.individual_differences = {}
 
     def load(self):
         self.activations, self.locations, _, _ =\
@@ -92,7 +93,8 @@ class FMriActivationsDb:
         del block_dict['activations']
         del block_dict['locations']
         self._table.upsert(block_dict, ['subject', 'run', 'task', 'block',
-                                        'start_time', 'end_time'])
+                                        'start_time', 'end_time',
+                                        'individual_differences'])
 
     def __getattr__(self, name):
         attr = getattr(self._table, name)
