@@ -165,7 +165,7 @@ def nii2cmu(nifti_file, mask_file=None, smooth=None, zscore=False):
     vmask = np.nonzero(np.array(np.reshape(
         mask.mask_img_.dataobj,
         (1, np.prod(mask.mask_img_.shape)),
-        order='C'
+        order='F'
     )))[1]
     voxel_coordinates = full_fact(image.shape[0:3])[vmask] - 1
     voxel_coordinates = np.hstack((voxel_coordinates,
