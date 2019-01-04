@@ -110,8 +110,9 @@ class FMriActivationsDb:
                     for block_dict in block_dicts:
                         block = FMriActivationBlock()
                         block.__dict__.update(**block_dict)
-                        block.individual_differences =\
-                            json.loads(block.individual_differences)
+                        if block.individual_differences:
+                            block.individual_differences =\
+                                json.loads(block.individual_differences)
                         if self.mask is not None:
                             block.mask = self.mask
                         yield block
