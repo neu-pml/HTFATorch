@@ -167,8 +167,10 @@ def nii2cmu(nifti_file, mask_file=None, smooth=None, zscore=False):
         (1, np.prod(mask.mask_img_.shape)),
         order='C'
     )))[1]
-    voxel_coordinates = full_fact(image.shape[0:3])[vmask, :] - 1
-    voxel_locations = np.array(np.dot(voxel_coordinates, sform[0:3, 0:3])) + sform[:3, 3]
+    voxel_coordinates = full_fact(image.shape[0:3])[vmask] - 1
+    voxel_coordinates = np.hstack((voxel_coordinates,
+                                   np.ones((voxel_coordinates.shape[0], 1))))
+    voxel_locations = (voxel_coordinates @ sform.T)[:, :3]
 
     return {'data': voxel_activations, 'R': voxel_locations}
 
