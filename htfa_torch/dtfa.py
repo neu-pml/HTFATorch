@@ -108,14 +108,16 @@ class DeepTFA:
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
               log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES,
               batch_size=64, use_cuda=True, checkpoint_steps=None,
-              blocks_batch_size=4, patience=10, train_generative=True):
+              blocks_batch_size=4, patience=10, train_generative=True,
+              blocks_filter=lambda block: True):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
                             level=log_level)
         # S x T x V -> T x S x V
+        training_blocks = list(filter(blocks_filter, self._blocks))
         activations_loader = torch.utils.data.DataLoader(
-            utils.TFADataset(self.voxel_activations),
+            utils.TFADataset([block.activations for block in training_blocks]),
             batch_size=batch_size,
             pin_memory=True,
         )
@@ -154,7 +156,7 @@ class DeepTFA:
                 epoch_free_energies[batch] = 0.0
                 epoch_lls[batch] = 0.0
                 epoch_prior_kls[batch] = 0.0
-                block_batches = utils.chunks(list(range(self.num_blocks)),
+                block_batches = utils.chunks(list(range(len(training_blocks))),
                                              n=blocks_batch_size)
                 for block_batch in block_batches:
                     activations = [{'Y': data[:, b, :]} for b in block_batch]
