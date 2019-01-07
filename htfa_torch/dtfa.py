@@ -76,7 +76,6 @@ class DeepTFA:
         block_tasks = [tasks.index(b.task) for b in self._blocks]
 
         b = max(range(self.num_blocks), key=lambda b: self.num_times[b])
-        self._blocks[b].load()
         init_activations = self.voxel_activations.copy()
         max_times = max(self.num_times)
         for i, acts in enumerate(init_activations):
@@ -93,7 +92,6 @@ class DeepTFA:
             'factor_centers': torch.Tensor(centers),
             'factor_log_widths': widths,
         }
-        self._blocks[b].unload()
 
         self.decoder = dtfa_models.DeepTFADecoder(self.num_factors, hyper_means,
                                                   embedding_dim)
