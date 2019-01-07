@@ -110,7 +110,7 @@ class DeepTFA:
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
               log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES,
               batch_size=64, use_cuda=True, checkpoint_steps=None,
-              blocks_batch_size=4, patience=10):
+              blocks_batch_size=4, patience=10, train_generative=True):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
@@ -129,8 +129,10 @@ class DeepTFA:
             variational.cuda()
             generative.cuda()
             cuda_locations = self.voxel_locations.cuda()
-        param_groups = [{'params': variational.parameters()},
-                        {'params': decoder.parameters(), 'lr': learning_rate/10}]
+        param_groups = [{'params': variational.parameters()}]
+        if train_generative:
+            param_groups.append({'params': decoder.parameters(),
+                                 'lr': learning_rate/10})
         optimizer = torch.optim.Adam(param_groups, lr=learning_rate,
                                      amsgrad=True)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
