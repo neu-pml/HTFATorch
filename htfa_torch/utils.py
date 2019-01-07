@@ -24,6 +24,9 @@ import scipy.spatial.distance as sd
 import scipy.special as spspecial
 import scipy.stats as stats
 from sklearn.cluster import KMeans
+import sklearn
+from scipy.spatial.distance import squareform
+from scipy.stats import entropy
 import torch
 from torch import distributions
 import probtorch
@@ -36,6 +39,10 @@ import nibabel as nib
 import nilearn.image
 from nilearn.input_data import NiftiMasker
 import nilearn.signal
+
+
+MACHINE_EPSILON = np.finfo(np.double).eps
+
 
 def clamped(rv, guide=None, observations=None):
     if not guide:
@@ -547,3 +554,65 @@ def inverse(func, args):
         else:
             result[val] = [arg]
     return result
+
+
+def compare_embeddings(gt_embeddings, lr_embeddings, embedding_type='Stimulus', show=True):
+
+    """
+
+    :param gt_embeddings: ground_truth embeddings
+    :param lr_embeddings: learned_embeddings
+    :param embedding_type: stimulus/participant
+    :param show: True if just want to view, False to savefig
+    :return: KL_divergence: between gt joint probability and learned joint probability, a measure of how similar the
+    learned distances are to the ground truth distances in the embeddings
+    """
+
+    D_gt = sklearn.metrics.pairwise.pairwise_distances(gt_embeddings)
+    D_lr = sklearn.metrics.pairwise.pairwise_distances(lr_embeddings)
+
+    f, axarr = plt.subplots(1, 2, sharex=False, sharey=False)
+
+    f.set_size_inches(10, 10)
+    axarr[0].imshow(D_gt)
+    axarr[0].set_title('Ground Truth ' + embedding_type + ' Embedding')
+    axarr[1].imshow(D_lr)
+    axarr[1].set_title('Learned ' + embedding_type + ' Embedding')
+    plt.tight_layout()
+    if show:
+        plt.show()
+    else:
+        plt.savefig(embedding_type + ' embedding pairwise distance matrix', format='pdf', dpi=100)
+
+    P_gt = joint_probabilities(D_gt)
+    P_lr = joint_probabilities(D_lr)
+
+    KL_divergence = entropy(P_gt, P_lr)
+    print(KL_divergence)
+
+    return KL_divergence
+
+
+def joint_probabilities(distance_matrix):
+    sigma = np.median(distance_matrix)
+    P = rbk_from_distance(distance_matrix,sigma)
+    P[np.diag_indices(len(P))] = 0
+    P = P + P.T
+    P = squareform(P)
+    sum_P = np.maximum(P.sum(),MACHINE_EPSILON)
+    P/= sum_P
+
+    return P
+
+
+def rbk_from_distance(distance_matrix, sigma):
+    gammaV = 1.0 / (2 * sigma * sigma)
+    distance_matrix = distance_matrix ** 2
+    distance_matrix *= -gammaV
+    np.exp(distance_matrix,distance_matrix)
+    return distance_matrix
+
+
+def median_of_pairwise_distance(D):
+    vv = np.median(squareform((D + D.T) / 2))
+    return vv
