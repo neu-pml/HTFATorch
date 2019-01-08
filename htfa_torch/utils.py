@@ -432,6 +432,7 @@ def vardict_keys(vdict):
 
 def register_vardict(vdict, module, parameter=True):
     for (k, v) in vdict.iteritems():
+        v = v.contiguous()
         if parameter:
             module.register_parameter(k, Parameter(v))
         else:
