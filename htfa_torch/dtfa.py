@@ -308,9 +308,11 @@ class DeepTFA:
         reconstruction = self.reconstruction(block)
         return self.voxel_activations[block] - reconstruction
 
-    def plot_reconstruction_diff(self, block, filename=None, show=True, t=0,
+    def plot_reconstruction_diff(self, block, filename='', show=True, t=0,
                                  plot_abs=False, labeler=lambda b: b.task,
                                  **kwargs):
+        if filename == '':
+            filename = self.common_name() + '_reconstruction_diff.pdf'
         diff = self.reconstruction_diff(block)
         image = utils.cmu2nii(diff.numpy(), self.voxel_locations.numpy(),
                               self._templates[block])
@@ -355,8 +357,10 @@ class DeepTFA:
              for block in self._blocks]
         return self.activation_normalizers
 
-    def plot_factor_centers(self, block, filename=None, show=True, t=None,
+    def plot_factor_centers(self, block, filename='', show=True, t=None,
                             labeler=None):
+        if filename == '':
+            filename = self.common_name() + '_factor_centers.pdf'
         if labeler is None:
             labeler = lambda b: b.task
         results = self.results(block)
@@ -382,8 +386,10 @@ class DeepTFA:
 
         return plot
 
-    def plot_original_brain(self, block=None, filename=None, show=True,
+    def plot_original_brain(self, block=None, filename='', show=True,
                             plot_abs=False, t=0, labeler=None, **kwargs):
+        if filename == '':
+            filename = self.common_name() + '_original_brain.pdf'
         if labeler is None:
             labeler = lambda b: b.task
         if block is None:
@@ -456,8 +462,10 @@ class DeepTFA:
 
         return reconstruction_error, image_norm, normed_error
 
-    def plot_reconstruction(self, block=None, filename=None, show=True,
+    def plot_reconstruction(self, block=None, filename='', show=True,
                             plot_abs=False, t=0, labeler=None, **kwargs):
+        if filename == '':
+            filename = self.common_name() + '_reconstruction.pdf'
         if labeler is None:
             labeler = lambda b: b.task
         if block is None:
@@ -498,8 +506,10 @@ class DeepTFA:
 
         return plot
 
-    def plot_subject_template(self, subject, filename=None, show=True,
+    def plot_subject_template(self, subject, filename='', show=True,
                               plot_abs=False, **kwargs):
+        if filename == '':
+            filename = self.common_name() + '_subject_template.pdf'
         i = list(set([block.subject for block in self._blocks])).index(subject)
         results = self.results(block=None, task=None, subject=i)
         template = [i for (i, b) in enumerate(self._blocks)
@@ -525,8 +535,10 @@ class DeepTFA:
 
         return plot
 
-    def plot_task_template(self, task, filename=None, show=True, plot_abs=False,
+    def plot_task_template(self, task, filename='', show=True, plot_abs=False,
                            labeler=lambda x: x, **kwargs):
+        if filename == '':
+            filename = self.common_name() + '_task_template.pdf'
         i = self._tasks.index(task)
         results = self.results(block=None, subject=None, task=i)
         template = [i for (i, b) in enumerate(self._blocks)
@@ -552,8 +564,10 @@ class DeepTFA:
 
         return plot
 
-    def visualize_factor_embedding(self, filename=None, show=True,
+    def visualize_factor_embedding(self, filename='', show=True,
                                    hist_log_widths=True, **kwargs):
+        if filename == '':
+            filename = self.common_name() + '_factor_embedding.pdf'
         results = self.results(block=None, subject=None, task=None)
         centers = results['factor_centers']
         log_widths = results['factor_log_widths']
@@ -579,9 +593,11 @@ class DeepTFA:
 
         return plot, centers, log_widths
 
-    def scatter_subject_embedding(self, labeler=None, filename=None, show=True,
+    def scatter_subject_embedding(self, labeler=None, filename='', show=True,
                                   xlims=None, ylims=None, figsize=(3.75, 2.75),
                                   colormap='Set1'):
+        if filename == '':
+            filename = self.common_name() + '_subject_embedding.pdf'
         hyperparams = self.variational.hyperparams.state_vardict()
         z_p_mu = hyperparams['subject']['mu'].data
         z_p_sigma = softplus(hyperparams['subject']['sigma'].data)
@@ -620,9 +636,11 @@ class DeepTFA:
         if show:
             fig.show()
 
-    def scatter_task_embedding(self, labeler=None, filename=None, show=True,
+    def scatter_task_embedding(self, labeler=None, filename='', show=True,
                                xlims=None, ylims=None, figsize=(3.75, 2.75),
                                colormap='Set1'):
+        if filename == '':
+            filename = self.common_name() + '_task_embedding.pdf'
         hyperparams = self.variational.hyperparams.state_vardict()
         z_s_mu = hyperparams['task']['mu'].data
         z_s_sigma = softplus(hyperparams['task']['sigma'].data)
