@@ -312,7 +312,7 @@ class DeepTFA:
                                  plot_abs=False, labeler=lambda b: b.task,
                                  **kwargs):
         if filename == '':
-            filename = self.common_name() + '_reconstruction_diff.pdf'
+            filename = self.common_name() + str(block) + '_reconstruction_diff.pdf'
         diff = self.reconstruction_diff(block)
         image = utils.cmu2nii(diff.numpy(), self.voxel_locations.numpy(),
                               self._templates[block])
@@ -360,7 +360,7 @@ class DeepTFA:
     def plot_factor_centers(self, block, filename='', show=True, t=None,
                             labeler=None):
         if filename == '':
-            filename = self.common_name() + '_factor_centers.pdf'
+            filename = self.common_name() + str(block) + '_factor_centers.pdf'
         if labeler is None:
             labeler = lambda b: b.task
         results = self.results(block)
@@ -389,7 +389,7 @@ class DeepTFA:
     def plot_original_brain(self, block=None, filename='', show=True,
                             plot_abs=False, t=0, labeler=None, **kwargs):
         if filename == '':
-            filename = self.common_name() + '_original_brain.pdf'
+            filename = self.common_name() + str(block) + '_original_brain.pdf'
         if labeler is None:
             labeler = lambda b: b.task
         if block is None:
@@ -465,7 +465,7 @@ class DeepTFA:
     def plot_reconstruction(self, block=None, filename='', show=True,
                             plot_abs=False, t=0, labeler=None, **kwargs):
         if filename == '':
-            filename = self.common_name() + '_reconstruction.pdf'
+            filename = self.common_name() + str(block) + '_reconstruction.pdf'
         if labeler is None:
             labeler = lambda b: b.task
         if block is None:
@@ -509,7 +509,7 @@ class DeepTFA:
     def plot_subject_template(self, subject, filename='', show=True,
                               plot_abs=False, **kwargs):
         if filename == '':
-            filename = self.common_name() + '_subject_template.pdf'
+            filename = self.common_name() + str(subject) + '_subject_template.pdf'
         i = list(set([block.subject for block in self._blocks])).index(subject)
         results = self.results(block=None, task=None, subject=i)
         template = [i for (i, b) in enumerate(self._blocks)
@@ -538,7 +538,7 @@ class DeepTFA:
     def plot_task_template(self, task, filename='', show=True, plot_abs=False,
                            labeler=lambda x: x, **kwargs):
         if filename == '':
-            filename = self.common_name() + '_task_template.pdf'
+            filename = self.common_name() + str(task) + '_task_template.pdf'
         i = self._tasks.index(task)
         results = self.results(block=None, subject=None, task=i)
         template = [i for (i, b) in enumerate(self._blocks)
