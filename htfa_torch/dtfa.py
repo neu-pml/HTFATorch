@@ -670,21 +670,21 @@ class DeepTFA:
         variational_state = self.variational.state_dict()
         torch.save(variational_state,
                    path + '/' + name + '.dtfa_guide')
-        torch.save(self.generative.state_dict(),
+        torch.save(self.decoder.state_dict(),
                    path + '/' + name + '.dtfa_model')
 
     def save(self, path='.'):
         name = self.common_name()
         torch.save(self.variational.state_dict(),
                    path + '/' + name + '.dtfa_guide')
-        torch.save(self.generative.state_dict(),
+        torch.save(self.decoder.state_dict(),
                    path + '/' + name + '.dtfa_model')
         with open(path + '/' + name + '.dtfa', 'wb') as pickle_file:
             pickle.dump(self, pickle_file)
 
     def load_state(self, basename):
         model_state = torch.load(basename + '.dtfa_model')
-        self.generative.load_state_dict(model_state)
+        self.decoder.load_state_dict(model_state)
 
         guide_state = torch.load(basename + '.dtfa_guide')
         self.variational.load_state_dict(guide_state)
