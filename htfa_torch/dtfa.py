@@ -115,9 +115,11 @@ class DeepTFA:
                             datefmt='%m/%d/%Y %H:%M:%S',
                             level=log_level)
         # S x T x V -> T x S x V
-        training_blocks = list(filter(blocks_filter, self._blocks))
+        training_blocks = [(b, block) for (b, block) in enumerate(self._blocks)
+                           if blocks_filter(block)]
         activations_loader = torch.utils.data.DataLoader(
-            utils.TFADataset([block.activations for block in training_blocks]),
+            utils.TFADataset([block.activations
+                              for (_, block) in training_blocks]),
             batch_size=batch_size,
             pin_memory=True,
         )
@@ -156,10 +158,11 @@ class DeepTFA:
                 epoch_free_energies[batch] = 0.0
                 epoch_lls[batch] = 0.0
                 epoch_prior_kls[batch] = 0.0
-                block_batches = utils.chunks(training_blocks,
+                block_batches = utils.chunks(list(range(len(training_blocks))),
                                              n=blocks_batch_size)
                 for block_batch in block_batches:
                     activations = [{'Y': data[:, b, :]} for b in block_batch]
+                    block_batch = [training_blocks[b][0] for b in block_batch]
                     if tfa.CUDA and use_cuda:
                         for b in block_batch:
                             generative.likelihoods[b].voxel_locations =\
