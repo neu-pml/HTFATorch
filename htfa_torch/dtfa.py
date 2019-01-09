@@ -156,7 +156,7 @@ class DeepTFA:
                 epoch_free_energies[batch] = 0.0
                 epoch_lls[batch] = 0.0
                 epoch_prior_kls[batch] = 0.0
-                block_batches = utils.chunks(list(range(len(training_blocks))),
+                block_batches = utils.chunks(training_blocks,
                                              n=blocks_batch_size)
                 for block_batch in block_batches:
                     activations = [{'Y': data[:, b, :]} for b in block_batch]
