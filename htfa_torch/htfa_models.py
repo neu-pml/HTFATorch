@@ -186,7 +186,7 @@ class HTFAGenerativeHyperParams(tfa_models.HyperParams):
             'sigma': torch.ones(self._num_factors)
         }
 
-        params['voxel_noise'] = torch.ones(()) * tfa_models.VOXEL_NOISE
+        params['voxel_noise'] = torch.ones(1) * tfa_models.VOXEL_NOISE
 
         super(self.__class__, self).__init__(params, guide=False)
 
