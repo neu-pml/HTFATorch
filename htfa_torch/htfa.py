@@ -537,12 +537,12 @@ class HierarchicalTopographicFactorAnalysis:
             image_norm[block] /= self.num_times[block]
             normed_error[block] /= self.num_times[block]
 
-        image_norm = sum(image_norm) / (self.num_blocks * self.num_voxels)
+        image_norm = sum(image_norm) / sum(self.num_voxels)
         image_norm = np.sqrt(image_norm)
         reconstruction_error = sum(reconstruction_error)
-        reconstruction_error /= self.num_blocks * self.num_voxels
+        reconstruction_error /= sum(self.num_voxels)
         reconstruction_error = np.sqrt(reconstruction_error)
-        normed_error = sum(normed_error) / (self.num_blocks * self.num_voxels)
+        normed_error = sum(normed_error) / sum(self.num_voxels)
         normed_error = np.sqrt(normed_error)
 
         logging.info('Average reconstruction error (MSE): %.8e',
