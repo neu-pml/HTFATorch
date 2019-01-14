@@ -464,7 +464,7 @@ class DeepTFA:
     def plot_reconstruction(self, block=None, filename='', show=True,
                             plot_abs=False, t=0, labeler=None, **kwargs):
         if filename == '':
-            filename = self.common_name() + str(block) + '_reconstruction.pdf'
+            filename = self.common_name() + str(block) + '_ntfa_reconstruction.pdf'
         if labeler is None:
             labeler = lambda b: None
         if block is None:
