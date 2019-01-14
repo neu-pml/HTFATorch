@@ -393,7 +393,7 @@ class HierarchicalTopographicFactorAnalysis:
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
             title=utils.title_brain_plot(block, self._blocks[block], labeler,
-                                         'Reconstruction'),
+                                         'HTFA'),
             vmin=-self.activation_normalizers[block],
             vmax=self.activation_normalizers[block],
         )
