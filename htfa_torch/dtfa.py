@@ -312,7 +312,7 @@ class DeepTFA:
         return self.voxel_activations[block] - reconstruction
 
     def plot_reconstruction_diff(self, block, filename='', show=True, t=0,
-                                 plot_abs=False, labeler=lambda b: b.task,
+                                 plot_abs=False, labeler=lambda b: None,
                                  **kwargs):
         if filename == '':
             filename = self.common_name() + str(block) + '_reconstruction_diff.pdf'
@@ -322,9 +322,8 @@ class DeepTFA:
         image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
-            title="Reconstruction Error of %d (Participant %d, Run %d, Stimulus: %s)" %\
-                  (block, self._blocks[block].subject, self._blocks[block].run,
-                   labeler(self._blocks[block])),
+            title=utils.title_brain_plot(block, self._blocks[block], labeler,
+                                         'Reconstruction Error'),
             vmin=-self.activation_normalizers[block],
             vmax=self.activation_normalizers[block],
             **kwargs,
@@ -365,7 +364,7 @@ class DeepTFA:
         if filename == '':
             filename = self.common_name() + str(block) + '_factor_centers.pdf'
         if labeler is None:
-            labeler = lambda b: b.task
+            labeler = lambda b: None
         results = self.results(block)
 
         centers_sizes = np.repeat([50], self.num_factors)
@@ -377,9 +376,8 @@ class DeepTFA:
             np.eye(self.num_factors * 2),
             np.vstack([centers, centers]),
             node_size=np.vstack([sizes, centers_sizes]),
-            title="Block %d (Participant %d, Run %d, Stimulus: %s)" %\
-                  (block, self._blocks[block].subject, self._blocks[block].run,
-                   labeler(self._blocks[block]))
+            title=utils.title_brain_plot(block, self._blocks[block], labeler,
+                                         'Factor Centers'),
         )
 
         if filename is not None:
@@ -394,7 +392,7 @@ class DeepTFA:
         if filename == '':
             filename = self.common_name() + str(block) + '_original_brain.pdf'
         if labeler is None:
-            labeler = lambda b: b.task
+            labeler = lambda b: None
         if block is None:
             block = np.random.choice(self.num_blocks, 1)[0]
         if self.activation_normalizers is None:
@@ -406,9 +404,7 @@ class DeepTFA:
         image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
-            title="Block %d (Participant %d, Run %d, Stimulus: %s)" %\
-                  (block, self._blocks[block].subject, self._blocks[block].run,
-                   labeler(self._blocks[block])),
+            title=utils.title_brain_plot(block, self._blocks[block], labeler),
             vmin=-self.activation_normalizers[block],
             vmax=self.activation_normalizers[block],
             **kwargs,
@@ -470,7 +466,7 @@ class DeepTFA:
         if filename == '':
             filename = self.common_name() + str(block) + '_reconstruction.pdf'
         if labeler is None:
-            labeler = lambda b: b.task
+            labeler = lambda b: None
         if block is None:
             block = np.random.choice(self.num_blocks, 1)[0]
         if self.activation_normalizers is None:
@@ -486,9 +482,8 @@ class DeepTFA:
         image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
-            title="Block %d (Participant %d, Run %d, Stimulus: %s)" %\
-                  (block, self._blocks[block].subject, self._blocks[block].run,
-                   labeler(self._blocks[block])),
+            title=utils.title_brain_plot(block, self._blocks[block], labeler,
+                                         'Reconstruction'),
             vmin=-self.activation_normalizers[block],
             vmax=self.activation_normalizers[block],
             **kwargs,
