@@ -332,11 +332,13 @@ class HierarchicalTopographicFactorAnalysis:
         return p, q
 
     def plot_original_brain(self, block=None, filename=None, show=True,
-                            plot_abs=False, t=0):
+                            plot_abs=False, t=0, labeler=None):
         if block is None:
             block = np.random.choice(self.num_blocks, 1)[0]
         if self.activation_normalizers is None:
             self.normalize_activations()
+        if labeler is None:
+            labeler = lambda b: None
 
         image = utils.cmu2nii(self.voxel_activations[block].numpy(),
                               self.voxel_locations.numpy(),
@@ -344,6 +346,7 @@ class HierarchicalTopographicFactorAnalysis:
         image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
+            title=utils.title_brain_plot(block, self._blocks[block], labeler),
             vmin=-self.activation_normalizers[block],
             vmax=self.activation_normalizers[block],
         )
@@ -356,10 +359,12 @@ class HierarchicalTopographicFactorAnalysis:
         return plot
 
     def plot_reconstruction(self, block=None, filename=None, show=True,
-                            plot_abs=False, t=0):
+                            plot_abs=False, t=0, labeler=None):
         results = self.results()
         if self.activation_normalizers is None:
             self.normalize_activations()
+        if labeler is None:
+            labeler = lambda b: None
 
         results = self.results(block)
         factor_centers = results['factor_centers']
@@ -383,6 +388,8 @@ class HierarchicalTopographicFactorAnalysis:
         image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
+            title=utils.title_brain_plot(block, self._blocks[block], labeler,
+                                         'Reconstruction'),
             vmin=-self.activation_normalizers[block],
             vmax=self.activation_normalizers[block],
         )
