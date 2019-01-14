@@ -43,6 +43,14 @@ import nilearn.signal
 
 MACHINE_EPSILON = np.finfo(np.double).eps
 
+BRAIN_PLOT_TITLE_TEMPLATE = "(Participant %s, Run %d, Stimulus: %s, %s)"
+
+def title_brain_plot(n, block, labeler, kind='Original'):
+    label = labeler(block)
+    if label:
+        return '%s (%s, Block %d)' % (label, kind, n)
+    params = (block.subject, block.run, block.task, kind)
+    return BRAIN_PLOT_TITLE_TEMPLATE % params
 
 def clamped(rv, guide=None, observations=None):
     if not guide:
