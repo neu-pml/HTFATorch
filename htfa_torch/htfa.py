@@ -331,7 +331,7 @@ class HierarchicalTopographicFactorAnalysis:
                  observations=[q for b in range(self.num_blocks)])
         return p, q
 
-    def plot_original_brain(self, block=None, filename=None, show=True,
+    def plot_original_brain(self, block=None, filename='', show=True,
                             plot_abs=False, t=0, labeler=None):
         if block is None:
             block = np.random.choice(self.num_blocks, 1)[0]
@@ -339,6 +339,8 @@ class HierarchicalTopographicFactorAnalysis:
             self.normalize_activations()
         if labeler is None:
             labeler = lambda b: None
+        if filename == '':
+            filename = self.common_name() + str(block) + '_original_brain.pdf'
 
         image = utils.cmu2nii(self.voxel_activations[block].numpy(),
                               self.voxel_locations.numpy(),
@@ -358,13 +360,15 @@ class HierarchicalTopographicFactorAnalysis:
 
         return plot
 
-    def plot_reconstruction(self, block=None, filename=None, show=True,
+    def plot_reconstruction(self, block=None, filename='', show=True,
                             plot_abs=False, t=0, labeler=None):
         results = self.results()
         if self.activation_normalizers is None:
             self.normalize_activations()
         if labeler is None:
             labeler = lambda b: None
+        if filename == '':
+            filename = self.common_name() + str(block) + '_htfa_reconstruction.pdf'
 
         results = self.results(block)
         factor_centers = results['factor_centers']
