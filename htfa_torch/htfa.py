@@ -114,7 +114,7 @@ class HierarchicalTopographicFactorAnalysis:
                         for acts in activations:
                             acts['Y'] = acts['Y'].cuda()
                         for b in block_batch:
-                            dec.module.likelihoods[b].voxel_locations =\
+                            dec.likelihoods[b].voxel_locations =\
                                 self.voxel_locations.cuda()
                     trs = (batch * batch_size, None)
                     trs = (trs[0], trs[0] + activations[0]['Y'].shape[0])
@@ -146,8 +146,8 @@ class HierarchicalTopographicFactorAnalysis:
                     if tfa.CUDA and use_cuda:
                         del activations
                         for b in block_batch:
-                            locs = dec.module.likelihoods[b].voxel_locations
-                            dec.module.likelihoods[b].voxel_locations =\
+                            locs = dec.likelihoods[b].voxel_locations
+                            dec.likelihoods[b].voxel_locations =\
                                 locs.cpu()
                             del locs
                         torch.cuda.empty_cache()
