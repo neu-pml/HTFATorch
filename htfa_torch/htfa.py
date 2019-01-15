@@ -82,14 +82,11 @@ class HierarchicalTopographicFactorAnalysis:
             utils.TFADataset(self.voxel_activations),
             batch_size=batch_size
         )
+        enc = self.enc
+        dec = self.dec
         if tfa.CUDA and use_cuda:
-            enc = torch.nn.DataParallel(self.enc)
-            dec = torch.nn.DataParallel(self.dec)
             enc.cuda()
             dec.cuda()
-        else:
-            enc = self.enc
-            dec = self.dec
         optimizer = torch.optim.Adam(list(self.enc.parameters()),
                                      lr=learning_rate, amsgrad=True)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
