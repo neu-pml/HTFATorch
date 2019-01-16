@@ -72,14 +72,17 @@ class HierarchicalTopographicFactorAnalysis:
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
               log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES,
               batch_size=64, use_cuda=True, blocks_batch_size=4,
-              checkpoint_steps=None):
+              checkpoint_steps=None, blocks_filter=lambda block: True):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
                             level=log_level)
         # S x T x V -> T x S x V
+        training_blocks = [(b, block) for (b, block) in enumerate(self._blocks)
+                           if blocks_filter(block)]
         activations_loader = torch.utils.data.DataLoader(
-            utils.TFADataset(self.voxel_activations),
+            utils.TFADataset([block.activations
+                              for (_, block) in training_blocks]),
             batch_size=batch_size
         )
         enc = self.enc
@@ -105,11 +108,11 @@ class HierarchicalTopographicFactorAnalysis:
 
             for (batch, data) in enumerate(activations_loader):
                 epoch_free_energies[batch] = 0.0
-                block_batches = utils.chunks(list(range(self.num_blocks)),
+                block_batches = utils.chunks(list(range(len(training_blocks))),
                                              n=blocks_batch_size)
                 for block_batch in block_batches:
-                    activations = [{'Y': Variable(data[:, b, :])}
-                                   for b in block_batch]
+                    activations = [{'Y': data[:, b, :]} for b in block_batch]
+                    block_batch = [training_blocks[b][0] for b in block_batch]
                     if tfa.CUDA and use_cuda:
                         for acts in activations:
                             acts['Y'] = acts['Y'].cuda()
