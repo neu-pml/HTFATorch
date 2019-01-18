@@ -17,6 +17,7 @@ try:
 finally:
     import matplotlib.cm as cm
     import matplotlib.colors
+    import matplotlib.gridspec as gridspec
     import matplotlib.patches as mpatches
     import matplotlib.pyplot as plt
 import numpy as np
@@ -41,8 +42,35 @@ import nilearn.image
 from nilearn.input_data import NiftiMasker
 import nilearn.signal
 
-
 MACHINE_EPSILON = np.finfo(np.double).eps
+
+def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
+    def eigsorted(cov):
+        vals, vecs = np.linalg.eigh(cov)
+        order = vals.argsort()[::-1]
+        return vals[order], vecs[:, order]
+    if ax is None:
+        ax = plt.gca()
+    vals, vecs = eigsorted(cov)
+    theta = np.degrees(np.arctan2(*vecs[:, 0][::-1]))
+
+    # Width and height are "full" widths, not radius
+    width, height = 2 * nstd * np.sqrt(vals)
+    ellip = mpatches.Ellipse(xy=pos, width=width, height=height, angle=theta,
+                             **kwargs)
+    ax.add_artist(ellip)
+    return ellip
+
+def plot_clusters(Xs, mus, covs, K, figsize=(4, 4), xlim=(-10, 10),
+                  ylim=(-10, 10)):
+    _, ax = plt.subplots(figsize=figsize)
+    ax.set_xlim(*xlim)
+    ax.set_ylim(*ylim)
+    ax.axis('equal')
+    ax.plot(Xs[:, 0], Xs[:, 1], 'ro')
+    for k in range(K):
+        plot_cov_ellipse(cov=covs[k], pos=mus[k], nstd=2, ax=ax, alpha=0.5)
+    plt.show()
 
 def sorted_glob(pattern):
     return sorted(glob.glob(pattern))
