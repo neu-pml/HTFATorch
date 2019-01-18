@@ -5,6 +5,7 @@ __author__ = 'Eli Sennesh'
 __email__ = 'e.sennesh@northeastern.edu'
 
 import flatdict
+import glob
 import math
 import os
 import warnings
@@ -42,6 +43,9 @@ import nilearn.signal
 
 
 MACHINE_EPSILON = np.finfo(np.double).eps
+
+def sorted_glob(pattern):
+    return sorted(glob.glob(pattern))
 
 BRAIN_PLOT_TITLE_TEMPLATE = "(Participant %s, Run %d, Stimulus: %s, %s)"
 
