@@ -618,22 +618,10 @@ class DeepTFA:
         block_colors = [palette[labeler(b)] for b in self._blocks
                         if labeler(b) is not None]
 
-        fig = plt.figure(1, figsize=figsize)
-        ax = fig.add_subplot(111, facecolor='white')
-        fig.axes[0].set_xlabel('$z^P_1$')
-        if xlims is not None:
-            fig.axes[0].set_xlim(*xlims)
-        fig.axes[0].set_ylabel('$z^P_2$')
-        if ylims is not None:
-            fig.axes[0].set_ylim(*ylims)
-        fig.axes[0].set_title('Participant Embeddings')
-        ax.scatter(x=z_ps[:, 0], y=z_ps[:, 1], c=block_colors)
-        utils.palette_legend(list(palette.keys()), list(palette.values()))
-
-        if filename is not None:
-            fig.savefig(filename)
-        if show:
-            fig.show()
+        utils.plot_embedding_clusters(z_ps, z_p_mu, z_p_sigma, block_colors,
+                                      'z^P', 'Participant Embeddings', palette,
+                                      filename=filename, show=show, xlims=xlims,
+                                      ylims=ylims, figsize=figsize)
 
     def scatter_task_embedding(self, labeler=None, filename='', show=True,
                                xlims=None, ylims=None, figsize=(3.75, 2.75),
@@ -661,22 +649,10 @@ class DeepTFA:
         block_colors = [palette[labeler(b)] for b in self._blocks
                         if labeler(b) is not None]
 
-        fig = plt.figure(1, figsize=figsize)
-        ax = fig.add_subplot(111, facecolor='white')
-        fig.axes[0].set_xlabel('$z^S_1$')
-        if xlims is not None:
-            fig.axes[0].set_xlim(*xlims)
-        fig.axes[0].set_ylabel('$z^S_2$')
-        if ylims is not None:
-            fig.axes[0].set_ylim(*ylims)
-        fig.axes[0].set_title('Stimulus Embeddings')
-        ax.scatter(x=z_ss[:, 0], y=z_ss[:, 1], c=block_colors)
-        utils.palette_legend(list(palette.keys()), list(palette.values()))
-
-        if filename is not None:
-            fig.savefig(filename)
-        if show:
-            fig.show()
+        utils.plot_embedding_clusters(z_ss, z_p_mu, z_p_sigma, block_colors,
+                                      'z^S', 'Stimulus Embeddings', palette,
+                                      filename=filename, show=show, xlims=xlims,
+                                      ylims=ylims, figsize=figsize)
 
     def common_name(self):
         return os.path.commonprefix([os.path.basename(b.filename)
