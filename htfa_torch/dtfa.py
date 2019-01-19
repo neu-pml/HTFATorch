@@ -649,7 +649,7 @@ class DeepTFA:
         block_colors = [palette[labeler(b)] for b in self._blocks
                         if labeler(b) is not None]
 
-        utils.plot_embedding_clusters(z_ss, z_p_mu, z_p_sigma, block_colors,
+        utils.plot_embedding_clusters(z_ss, z_s_mu, z_s_sigma, block_colors,
                                       'z^S', 'Stimulus Embeddings', palette,
                                       filename=filename, show=show, xlims=xlims,
                                       ylims=ylims, figsize=figsize)
