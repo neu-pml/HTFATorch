@@ -261,18 +261,23 @@ class DeepTFA:
             block_subjects = self.generative.block_subjects
             block_tasks = self.generative.block_tasks
 
-        if subject is not None:
-            guide.variable(torch.distributions.Normal,
-                           hyperparams['subject']['mu'][:, subject],
-                           softplus(hyperparams['subject']['sigma'][:, subject]),
-                           value=hyperparams['subject']['mu'][:, subject],
-                           name='z^P_%d' % subject)
-        if task is not None:
-            guide.variable(torch.distributions.Normal,
-                           hyperparams['task']['mu'][:, task],
-                           softplus(hyperparams['task']['sigma'][:, task]),
-                           value=hyperparams['task']['mu'][:, task],
-                           name='z^S_%d' % task)
+        for b in blocks:
+            if subject is not None:
+                guide.variable(
+                    torch.distributions.Normal,
+                    hyperparams['subject']['mu'][:, subject],
+                    softplus(hyperparams['subject']['sigma'][:, subject]),
+                    value=hyperparams['subject']['mu'][:, subject],
+                    name='z^P_{%d,%d}' % (subject, b),
+                )
+            if task is not None:
+                guide.variable(
+                    torch.distributions.Normal,
+                    hyperparams['task']['mu'][:, task],
+                    softplus(hyperparams['task']['sigma'][:, task]),
+                    value=hyperparams['task']['mu'][:, task],
+                    name='z^S_{%d,%d}' % (task, b),
+                )
 
         weights, factor_centers, factor_log_widths =\
             self.decoder(probtorch.Trace(), blocks, block_subjects, block_tasks,
@@ -600,6 +605,12 @@ class DeepTFA:
         hyperparams = self.variational.hyperparams.state_vardict()
         z_p_mu = hyperparams['subject']['mu'].data
         z_p_sigma = softplus(hyperparams['subject']['sigma'].data)
+        minus_lims = torch.min(z_p_mu - z_p_sigma * 2, dim=0)[0].tolist()
+        plus_lims = torch.max(z_p_mu + z_p_sigma * 2, dim=0)[0].tolist()
+        if not xlims:
+            xlims = (minus_lims[0], plus_lims[0])
+        if not ylims:
+            ylims = (minus_lims[1], plus_lims[1])
 
         if labeler is None:
             labeler = lambda b: b.default_label()
@@ -610,6 +621,8 @@ class DeepTFA:
                                                  colormap=colormap)))
 
         subjects = list(set([block.subject for block in self._blocks]))
+        block_subjects = [subjects.index(b.subject) for b in self._blocks
+                          if labeler(b) is not None]
         z_ps = torch.stack(
             [torch.normal(z_p_mu[subjects.index(b.subject)],
                           z_p_sigma[subjects.index(b.subject)])
@@ -618,22 +631,11 @@ class DeepTFA:
         block_colors = [palette[labeler(b)] for b in self._blocks
                         if labeler(b) is not None]
 
-        fig = plt.figure(1, figsize=figsize)
-        ax = fig.add_subplot(111, facecolor='white')
-        fig.axes[0].set_xlabel('$z^P_1$')
-        if xlims is not None:
-            fig.axes[0].set_xlim(*xlims)
-        fig.axes[0].set_ylabel('$z^P_2$')
-        if ylims is not None:
-            fig.axes[0].set_ylim(*ylims)
-        fig.axes[0].set_title('Participant Embeddings')
-        ax.scatter(x=z_ps[:, 0], y=z_ps[:, 1], c=block_colors)
-        utils.palette_legend(list(palette.keys()), list(palette.values()))
-
-        if filename is not None:
-            fig.savefig(filename)
-        if show:
-            fig.show()
+        utils.plot_embedding_clusters(z_ps, z_p_mu, z_p_sigma, block_colors,
+                                      'z^P', 'Participant Embeddings', palette,
+                                      block_subjects, filename=filename,
+                                      show=show, xlims=xlims, ylims=ylims,
+                                      figsize=figsize)
 
     def scatter_task_embedding(self, labeler=None, filename='', show=True,
                                xlims=None, ylims=None, figsize=(3.75, 2.75),
@@ -643,6 +645,12 @@ class DeepTFA:
         hyperparams = self.variational.hyperparams.state_vardict()
         z_s_mu = hyperparams['task']['mu'].data
         z_s_sigma = softplus(hyperparams['task']['sigma'].data)
+        minus_lims = torch.min(z_s_mu - z_s_sigma * 2, dim=0)[0].tolist()
+        plus_lims = torch.max(z_s_mu + z_s_sigma * 2, dim=0)[0].tolist()
+        if not xlims:
+            xlims = (minus_lims[0], plus_lims[0])
+        if not ylims:
+            ylims = (minus_lims[1], plus_lims[1])
 
         if labeler is None:
             labeler = lambda b: b.default_label()
@@ -653,6 +661,8 @@ class DeepTFA:
                                                  colormap=colormap)))
 
         tasks = list(set([block.task for block in self._blocks]))
+        block_tasks = [tasks.index(b.task) for b in self._blocks
+                       if labeler(b) is not None]
         z_ss = torch.stack(
             [torch.normal(z_s_mu[tasks.index(b.task)],
                           z_s_sigma[tasks.index(b.task)])
@@ -661,22 +671,11 @@ class DeepTFA:
         block_colors = [palette[labeler(b)] for b in self._blocks
                         if labeler(b) is not None]
 
-        fig = plt.figure(1, figsize=figsize)
-        ax = fig.add_subplot(111, facecolor='white')
-        fig.axes[0].set_xlabel('$z^S_1$')
-        if xlims is not None:
-            fig.axes[0].set_xlim(*xlims)
-        fig.axes[0].set_ylabel('$z^S_2$')
-        if ylims is not None:
-            fig.axes[0].set_ylim(*ylims)
-        fig.axes[0].set_title('Stimulus Embeddings')
-        ax.scatter(x=z_ss[:, 0], y=z_ss[:, 1], c=block_colors)
-        utils.palette_legend(list(palette.keys()), list(palette.values()))
-
-        if filename is not None:
-            fig.savefig(filename)
-        if show:
-            fig.show()
+        utils.plot_embedding_clusters(z_ss, z_s_mu, z_s_sigma, block_colors,
+                                      'z^S', 'Stimulus Embeddings', palette,
+                                      block_tasks, filename=filename,
+                                      show=show, xlims=xlims, ylims=ylims,
+                                      figsize=figsize)
 
     def common_name(self):
         return os.path.commonprefix([os.path.basename(b.filename)
