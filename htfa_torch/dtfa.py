@@ -261,18 +261,23 @@ class DeepTFA:
             block_subjects = self.generative.block_subjects
             block_tasks = self.generative.block_tasks
 
-        if subject is not None:
-            guide.variable(torch.distributions.Normal,
-                           hyperparams['subject']['mu'][:, subject],
-                           softplus(hyperparams['subject']['sigma'][:, subject]),
-                           value=hyperparams['subject']['mu'][:, subject],
-                           name='z^P_%d' % subject)
-        if task is not None:
-            guide.variable(torch.distributions.Normal,
-                           hyperparams['task']['mu'][:, task],
-                           softplus(hyperparams['task']['sigma'][:, task]),
-                           value=hyperparams['task']['mu'][:, task],
-                           name='z^S_%d' % task)
+        for b in blocks:
+            if subject is not None:
+                guide.variable(
+                    torch.distributions.Normal,
+                    hyperparams['subject']['mu'][:, subject],
+                    softplus(hyperparams['subject']['sigma'][:, subject]),
+                    value=hyperparams['subject']['mu'][:, subject],
+                    name='z^P_{%d,%d}' % (subject, b),
+                )
+            if task is not None:
+                guide.variable(
+                    torch.distributions.Normal,
+                    hyperparams['task']['mu'][:, task],
+                    softplus(hyperparams['task']['sigma'][:, task]),
+                    value=hyperparams['task']['mu'][:, task],
+                    name='z^S_{%d,%d}' % (task, b),
+                )
 
         weights, factor_centers, factor_log_widths =\
             self.decoder(probtorch.Trace(), blocks, block_subjects, block_tasks,
