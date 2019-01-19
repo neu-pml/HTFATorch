@@ -608,6 +608,8 @@ class DeepTFA:
 
         if labeler is None:
             labeler = lambda b: b.default_label()
+        block_indices = [b for (b, block) in enumerate(self._blocks)
+                         if labeler(block) is not None]
         labels = [labeler(b) for b in self._blocks]
         all_labels = np.unique([l for l in labels if l is not None])
         palette = dict(zip(all_labels,
@@ -625,8 +627,9 @@ class DeepTFA:
 
         utils.plot_embedding_clusters(z_ps, z_p_mu, z_p_sigma, block_colors,
                                       'z^P', 'Participant Embeddings', palette,
-                                      filename=filename, show=show, xlims=xlims,
-                                      ylims=ylims, figsize=figsize)
+                                      block_indices, filename=filename,
+                                      show=show, xlims=xlims, ylims=ylims,
+                                      figsize=figsize)
 
     def scatter_task_embedding(self, labeler=None, filename='', show=True,
                                xlims=None, ylims=None, figsize=(3.75, 2.75),
@@ -639,6 +642,8 @@ class DeepTFA:
 
         if labeler is None:
             labeler = lambda b: b.default_label()
+        block_indices = [b for (b, block) in enumerate(self._blocks)
+                         if labeler(block) is not None]
         labels = [labeler(b) for b in self._blocks]
         all_labels = np.unique([l for l in labels if l is not None])
         palette = dict(zip(all_labels,
@@ -656,8 +661,9 @@ class DeepTFA:
 
         utils.plot_embedding_clusters(z_ss, z_s_mu, z_s_sigma, block_colors,
                                       'z^S', 'Stimulus Embeddings', palette,
-                                      filename=filename, show=show, xlims=xlims,
-                                      ylims=ylims, figsize=figsize)
+                                      block_indices, filename=filename,
+                                      show=show, xlims=xlims, ylims=ylims,
+                                      figsize=figsize)
 
     def common_name(self):
         return os.path.commonprefix([os.path.basename(b.filename)
