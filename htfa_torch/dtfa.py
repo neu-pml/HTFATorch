@@ -605,11 +605,15 @@ class DeepTFA:
         hyperparams = self.variational.hyperparams.state_vardict()
         z_p_mu = hyperparams['subject']['mu'].data
         z_p_sigma = softplus(hyperparams['subject']['sigma'].data)
+        minus_lims = torch.min(z_p_mu - z_p_sigma * 2, dim=0)[0].tolist()
+        plus_lims = torch.max(z_p_mu + z_p_sigma * 2, dim=0)[0].tolist()
+        if not xlims:
+            xlims = (minus_lims[0], plus_lims[0])
+        if not ylims:
+            ylims = (minus_lims[1], plus_lims[1])
 
         if labeler is None:
             labeler = lambda b: b.default_label()
-        block_indices = [b for (b, block) in enumerate(self._blocks)
-                         if labeler(block) is not None]
         labels = [labeler(b) for b in self._blocks]
         all_labels = np.unique([l for l in labels if l is not None])
         palette = dict(zip(all_labels,
@@ -617,6 +621,8 @@ class DeepTFA:
                                                  colormap=colormap)))
 
         subjects = list(set([block.subject for block in self._blocks]))
+        block_subjects = [subjects.index(b.subject) for b in self._blocks
+                          if labeler(b) is not None]
         z_ps = torch.stack(
             [torch.normal(z_p_mu[subjects.index(b.subject)],
                           z_p_sigma[subjects.index(b.subject)])
@@ -627,7 +633,7 @@ class DeepTFA:
 
         utils.plot_embedding_clusters(z_ps, z_p_mu, z_p_sigma, block_colors,
                                       'z^P', 'Participant Embeddings', palette,
-                                      block_indices, filename=filename,
+                                      block_subjects, filename=filename,
                                       show=show, xlims=xlims, ylims=ylims,
                                       figsize=figsize)
 
@@ -639,11 +645,15 @@ class DeepTFA:
         hyperparams = self.variational.hyperparams.state_vardict()
         z_s_mu = hyperparams['task']['mu'].data
         z_s_sigma = softplus(hyperparams['task']['sigma'].data)
+        minus_lims = torch.min(z_s_mu - z_s_sigma * 2, dim=0)[0].tolist()
+        plus_lims = torch.max(z_s_mu + z_s_sigma * 2, dim=0)[0].tolist()
+        if not xlims:
+            xlims = (minus_lims[0], plus_lims[0])
+        if not ylims:
+            ylims = (minus_lims[1], plus_lims[1])
 
         if labeler is None:
             labeler = lambda b: b.default_label()
-        block_indices = [b for (b, block) in enumerate(self._blocks)
-                         if labeler(block) is not None]
         labels = [labeler(b) for b in self._blocks]
         all_labels = np.unique([l for l in labels if l is not None])
         palette = dict(zip(all_labels,
@@ -651,6 +661,8 @@ class DeepTFA:
                                                  colormap=colormap)))
 
         tasks = list(set([block.task for block in self._blocks]))
+        block_tasks = [tasks.index(b.task) for b in self._blocks
+                       if labeler(b) is not None]
         z_ss = torch.stack(
             [torch.normal(z_s_mu[tasks.index(b.task)],
                           z_s_sigma[tasks.index(b.task)])
@@ -661,7 +673,7 @@ class DeepTFA:
 
         utils.plot_embedding_clusters(z_ss, z_s_mu, z_s_sigma, block_colors,
                                       'z^S', 'Stimulus Embeddings', palette,
-                                      block_indices, filename=filename,
+                                      block_tasks, filename=filename,
                                       show=show, xlims=xlims, ylims=ylims,
                                       figsize=figsize)
 
