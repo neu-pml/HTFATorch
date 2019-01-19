@@ -62,8 +62,9 @@ def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
     return ellip
 
 def plot_embedding_clusters(zs, mus, sigmas, block_colors, embedding_name,
-                            title, palette, filename=None, show=True,
-                            xlims=None, ylims=None, figsize=(3.75, 2.75)):
+                            title, palette, block_indices, filename=None,
+                            show=True, xlims=None, ylims=None,
+                            figsize=(3.75, 2.75)):
     fig = plt.figure(1, figsize=figsize)
     ax = fig.add_subplot(111, facecolor='white')
     fig.axes[0].set_xlabel('$%s_1$' % embedding_name)
@@ -76,7 +77,7 @@ def plot_embedding_clusters(zs, mus, sigmas, block_colors, embedding_name,
     ax.scatter(x=zs[:, 0], y=zs[:, 1], c=block_colors)
     palette_legend(list(palette.keys()), list(palette.values()))
 
-    for k in range(mus.shape[0]):
+    for k in block_indices:
         covk = torch.eye(2) * sigmas[k]
         plot_cov_ellipse(covk, mus[k], nstd=2, ax=ax, alpha=0.5)
 
