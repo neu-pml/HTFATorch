@@ -82,7 +82,8 @@ def plot_embedding_clusters(zs, mus, sigmas, block_colors, embedding_name,
         if k in plotted_clusters:
             continue
         covk = torch.eye(2) * sigmas[k] ** 2
-        plot_cov_ellipse(covk, mus[k], nstd=2, ax=ax, alpha=0.5, color=color)
+        alpha = 1 / float(len(palette))
+        plot_cov_ellipse(covk, mus[k], nstd=2, ax=ax, alpha=alpha, color=color)
         plotted_clusters.add(k)
 
     if filename is not None:
