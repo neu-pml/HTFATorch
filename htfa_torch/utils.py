@@ -74,7 +74,6 @@ def plot_embedding_clusters(zs, mus, sigmas, block_colors, embedding_name,
     if ylims is not None:
         fig.axes[0].set_ylim(*ylims)
     fig.axes[0].set_title(title)
-    ax.scatter(x=zs[:, 0], y=zs[:, 1], c=block_colors)
     palette_legend(list(palette.keys()), list(palette.values()))
 
     plotted_clusters = set()
@@ -85,6 +84,7 @@ def plot_embedding_clusters(zs, mus, sigmas, block_colors, embedding_name,
         alpha = 0.5
         alpha /= len({k: v for (k, v) in palette.items() if all(v == color)})
         plot_cov_ellipse(covk, mus[k], nstd=2, ax=ax, alpha=alpha, color=color)
+        ax.scatter(x=mus[k][0], y=mus[k][1], c=color, marker='x')
         plotted_clusters.add(k)
 
     if filename is not None:
