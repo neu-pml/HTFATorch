@@ -109,6 +109,7 @@ def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
     ellip = mpatches.Ellipse(xy=pos, width=width, height=height, angle=theta,
                              **kwargs)
     ax.add_artist(ellip)
+    ax.scatter(x=pos[0], y=pos[1], c=kwargs.get('color'), marker='x')
     return ellip
 
 def plot_embedding_clusters(mus, sigmas, block_colors, embedding_name,
@@ -134,7 +135,6 @@ def plot_embedding_clusters(mus, sigmas, block_colors, embedding_name,
         alpha = 0.5
         alpha /= len({k: v for (k, v) in palette.items() if all(v == color)})
         plot_cov_ellipse(covk, mus[k], nstd=2, ax=ax, alpha=alpha, color=color)
-        ax.scatter(x=mus[k][0], y=mus[k][1], c=color, marker='x')
         plotted_clusters.add(k)
 
     if filename is not None:
