@@ -61,7 +61,7 @@ def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
     ax.add_artist(ellip)
     return ellip
 
-def plot_embedding_clusters(zs, mus, sigmas, block_colors, embedding_name,
+def plot_embedding_clusters(mus, sigmas, block_colors, embedding_name,
                             title, palette, block_clusters, filename=None,
                             show=True, xlims=None, ylims=None,
                             figsize=(3.75, 2.75)):
