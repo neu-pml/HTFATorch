@@ -623,15 +623,10 @@ class DeepTFA:
         subjects = list(set([block.subject for block in self._blocks]))
         block_subjects = [subjects.index(b.subject) for b in self._blocks
                           if labeler(b) is not None]
-        z_ps = torch.stack(
-            [torch.normal(z_p_mu[subjects.index(b.subject)],
-                          z_p_sigma[subjects.index(b.subject)])
-             for b in self._blocks if labeler(b) is not None]
-        )
         block_colors = [palette[labeler(b)] for b in self._blocks
                         if labeler(b) is not None]
 
-        utils.plot_embedding_clusters(z_ps, z_p_mu, z_p_sigma, block_colors,
+        utils.plot_embedding_clusters(z_p_mu, z_p_sigma, block_colors,
                                       'z^P', 'Participant Embeddings', palette,
                                       block_subjects, filename=filename,
                                       show=show, xlims=xlims, ylims=ylims,
@@ -663,15 +658,10 @@ class DeepTFA:
         tasks = list(set([block.task for block in self._blocks]))
         block_tasks = [tasks.index(b.task) for b in self._blocks
                        if labeler(b) is not None]
-        z_ss = torch.stack(
-            [torch.normal(z_s_mu[tasks.index(b.task)],
-                          z_s_sigma[tasks.index(b.task)])
-             for b in self._blocks if labeler(b) is not None]
-        )
         block_colors = [palette[labeler(b)] for b in self._blocks
                         if labeler(b) is not None]
 
-        utils.plot_embedding_clusters(z_ss, z_s_mu, z_s_sigma, block_colors,
+        utils.plot_embedding_clusters(z_s_mu, z_s_sigma, block_colors,
                                       'z^S', 'Stimulus Embeddings', palette,
                                       block_tasks, filename=filename,
                                       show=show, xlims=xlims, ylims=ylims,

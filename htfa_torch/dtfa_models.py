@@ -107,17 +107,6 @@ class DeepTFADecoder(nn.Module):
         self.factor_log_widths_embedding = nn.Linear(self._num_factors * 2, 2)
         factors_mean = hyper_means['factor_centers']
         factors_std = torch.ones(factors_mean.shape)
-        self.factor_centers_embedding.bias = nn.Parameter(
-            torch.stack((factors_mean, factors_std), dim=-1).view(
-                self._num_factors * 3 * 2
-            )
-        )
-        self.factor_log_widths_embedding.bias = nn.Parameter(
-            torch.Tensor([
-                hyper_means['factor_log_widths'].mean(),
-                hyper_means['factor_log_widths'].std()
-            ])
-        )
         self.weights_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim * 2, self._num_factors),
             nn.Softsign(),
@@ -127,9 +116,6 @@ class DeepTFADecoder(nn.Module):
         )
         weights_prior = torch.stack((torch.zeros(self._num_factors),
                                      torch.ones(self._num_factors)), dim=-1)
-        self.weights_embedding[-1].bias = nn.Parameter(
-            weights_prior.view(self._num_factors * 2)
-        )
 
     def _predict_param(self, params, param, index, predictions, name, trace,
                        predict=True, guide=None):
