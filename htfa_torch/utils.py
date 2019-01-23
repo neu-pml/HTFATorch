@@ -47,7 +47,7 @@ import nilearn.signal
 
 MACHINE_EPSILON = np.finfo(np.double).eps
 
-column_width = 3.3
+column_width = 2*3.3
 page_width = 6.7
 
 # colorblind-friendly colors
