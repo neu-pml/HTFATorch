@@ -116,7 +116,7 @@ def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
 def plot_embedding_clusters(mus, sigmas, block_colors, embedding_name,
                             title, palette, block_clusters, filename=None,
                             show=True, xlims=None, ylims=None,
-                            figsize=(3.75, 2.75)):
+                            figsize=None):
     fig = plt.figure(1, figsize=figsize)
     ax = fig.add_subplot(111, facecolor='white')
     fig.axes[0].set_xlabel('$%s_1$' % embedding_name)
