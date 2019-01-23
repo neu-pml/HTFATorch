@@ -10,19 +10,6 @@ import math
 import os
 import warnings
 
-try:
-    if __name__ == '__main__':
-        import matplotlib
-        matplotlib.use('TkAgg')
-finally:
-    import matplotlib
-    import matplotlib.cm as cm
-    import matplotlib.colors
-    from matplotlib import cycler
-    import matplotlib.gridspec as gridspec
-    import matplotlib.patches as mpatches
-    import matplotlib.pyplot as plt
-    import seaborn as sns
 import numpy as np
 import scipy.io as sio
 import scipy.spatial.distance as sd
@@ -44,6 +31,20 @@ import nibabel as nib
 import nilearn.image
 from nilearn.input_data import NiftiMasker
 import nilearn.signal
+
+try:
+    if __name__ == '__main__':
+        import matplotlib
+        matplotlib.use('TkAgg')
+finally:
+    import matplotlib
+    import matplotlib.cm as cm
+    import matplotlib.colors
+    from matplotlib import cycler
+    import matplotlib.gridspec as gridspec
+    import matplotlib.patches as mpatches
+    import matplotlib.pyplot as plt
+    import seaborn as sns
 
 MACHINE_EPSILON = np.finfo(np.double).eps
 
