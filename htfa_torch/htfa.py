@@ -331,7 +331,7 @@ class HierarchicalTopographicFactorAnalysis:
         return p, q
 
     def plot_original_brain(self, block=None, filename='', show=True,
-                            plot_abs=False, t=0, labeler=None):
+                            plot_abs=False, t=0, labeler=None, **kwargs):
         if block is None:
             block = np.random.choice(self.num_blocks, 1)[0]
         if self.activation_normalizers is None:
@@ -350,6 +350,7 @@ class HierarchicalTopographicFactorAnalysis:
             title=utils.title_brain_plot(block, self._blocks[block], labeler),
             vmin=-self.activation_normalizers[block],
             vmax=self.activation_normalizers[block],
+            **kwargs,
         )
 
         if filename is not None:
@@ -360,7 +361,7 @@ class HierarchicalTopographicFactorAnalysis:
         return plot
 
     def plot_reconstruction(self, block=None, filename='', show=True,
-                            plot_abs=False, t=0, labeler=None):
+                            plot_abs=False, t=0, labeler=None, **kwargs):
         results = self.results()
         if self.activation_normalizers is None:
             self.normalize_activations()
@@ -395,6 +396,7 @@ class HierarchicalTopographicFactorAnalysis:
                                          'HTFA'),
             vmin=-self.activation_normalizers[block],
             vmax=self.activation_normalizers[block],
+            **kwargs,
         )
 
         logging.info(
