@@ -87,10 +87,9 @@ colors = {
 color_cycler = cycler(color=colors['bright'])
 color_cycler = cycler(color=sns.color_palette('colorblind'))
 
-plt.rc('legend', frameon=False)
-plt.rc('figure', figsize=(column_width,
-                         0.66 * column_width),
-                dpi=120, frameon=True)
+plt.rc('legend', frameon=True)
+plt.rc('figure', figsize=(column_width, 0.66 * column_width), dpi=120,
+       frameon=True)
 plt.rc('savefig', dpi=300)
 plt.rc('font', size=9)
 plt.rc('axes', prop_cycle=color_cycler)
@@ -117,7 +116,7 @@ def plot_embedding_clusters(mus, sigmas, block_colors, embedding_name,
                             title, palette, block_clusters, filename=None,
                             show=True, xlims=None, ylims=None,
                             figsize=None):
-    fig = plt.figure(1, figsize=figsize)
+    fig = plt.figure(figsize=figsize, frameon=True)
     ax = fig.add_subplot(111, facecolor='white')
     fig.axes[0].set_xlabel('$%s_1$' % embedding_name)
     if xlims is not None:
@@ -629,7 +628,7 @@ def uncertainty_palette(uncertainties, scalars=None, colormap='Set2'):
 def palette_legend(labels, colors):
     patches = [mpatches.Patch(color=colors[i], label=labels[i]) for i in
                range(len(colors))]
-    plt.legend(handles=patches, loc='best')
+    plt.legend(handles=patches, loc='lower left')
 
 def isnan(tensor):
     # Gross: https://github.com/pytorch/pytorch/issues/4767
