@@ -93,7 +93,7 @@ class DeepTFA:
             'factor_log_widths': widths,
         }
 
-        self.decoder = dtfa_models.DeepTFADecoder(self.num_factors, hyper_means,
+        self.decoder = dtfa_models.DeepTFADecoder(self.num_factors,
                                                   embedding_dim)
         self.generative = dtfa_models.DeepTFAModel(
             self.voxel_locations, block_subjects, block_tasks,
