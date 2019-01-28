@@ -91,7 +91,7 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
 class DeepTFADecoder(nn.Module):
     """Neural network module mapping from embeddings to a topographic factor
        analysis"""
-    def __init__(self, num_factors, hyper_means, embedding_dim=2):
+    def __init__(self, num_factors, embedding_dim=2):
         super(DeepTFADecoder, self).__init__()
         self._embedding_dim = embedding_dim
         self._num_factors = num_factors
@@ -105,8 +105,6 @@ class DeepTFADecoder(nn.Module):
         self.factor_centers_embedding = nn.Linear(self._num_factors * 2,
                                                   self._num_factors * 3 * 2)
         self.factor_log_widths_embedding = nn.Linear(self._num_factors * 2, 2)
-        factors_mean = hyper_means['factor_centers']
-        factors_std = torch.ones(factors_mean.shape)
         self.weights_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim * 2, self._num_factors),
             nn.Softsign(),
@@ -114,8 +112,6 @@ class DeepTFADecoder(nn.Module):
             nn.Softsign(),
             nn.Linear(self._num_factors * 2, self._num_factors * 2),
         )
-        weights_prior = torch.stack((torch.zeros(self._num_factors),
-                                     torch.ones(self._num_factors)), dim=-1)
 
     def _predict_param(self, params, param, index, predictions, name, trace,
                        predict=True, guide=None):
