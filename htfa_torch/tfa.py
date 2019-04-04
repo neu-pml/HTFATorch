@@ -42,7 +42,7 @@ def free_energy(q, p, num_particles=tfa_models.NUM_PARTICLES):
         sample_dim = 0
     else:
         sample_dim = None
-    return -probtorch.objectives.montecarlo.elbo(q, p, sample_dim=sample_dim)
+    return -probtorch.objectives.montecarlo.elbo(q, p, sample_dims=(sample_dim,))
 
 def hierarchical_elbo(q, p, rv_weight=lambda x, prior=True: 1.0,
                       num_particles=tfa_models.NUM_PARTICLES,
@@ -55,9 +55,9 @@ def hierarchical_elbo(q, p, rv_weight=lambda x, prior=True: 1.0,
     weighted_log_likelihood = 0.0
     weighted_prior_kl = 0.0
     for rv in p:
-        local_elbo = p.log_joint(sample_dim=sample_dim, batch_dim=batch_dim,
+        local_elbo = p.log_joint(sample_dims=(sample_dim,), batch_dim=batch_dim,
                                  nodes=[rv]) -\
-                     q.log_joint(sample_dim=sample_dim, batch_dim=batch_dim,
+                     q.log_joint(sample_dims=(sample_dim,), batch_dim=batch_dim,
                                  nodes=[rv])
         if sample_dim is not None:
             local_elbo = local_elbo.mean(dim=sample_dim)
@@ -78,9 +78,9 @@ def componentized_elbo(q, p, rv_weight=lambda x: 1.0,
 
     trace_elbos = {}
     for rv in p:
-        local_elbo = p.log_joint(sample_dim=sample_dim, batch_dim=batch_dim,
+        local_elbo = p.log_joint(sample_dims=(sample_dim,), batch_dim=batch_dim,
                                  nodes=[rv]) -\
-                     q.log_joint(sample_dim=sample_dim, batch_dim=batch_dim,
+                     q.log_joint(sample_dims=(sample_dim,), batch_dim=batch_dim,
                                  nodes=[rv])
         if sample_dim is not None:
             local_elbo = local_elbo.mean(dim=sample_dim)
@@ -99,7 +99,8 @@ def log_likelihood(q, p, num_particles=tfa_models.NUM_PARTICLES):
         sample_dim = 0
     else:
         sample_dim = None
-    return probtorch.objectives.montecarlo.log_like(q, p, sample_dim=sample_dim)
+    return probtorch.objectives.montecarlo.log_like(q, p,
+                                                    sample_dims=(sample_dim,))
 
 class TopographicalFactorAnalysis:
     """Overall container for a run of TFA"""
