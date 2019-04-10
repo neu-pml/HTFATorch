@@ -218,8 +218,10 @@ class DeepTFADecoder(nn.Module):
                     self.predict(trace, params, guide, subject, task, times, b,
                                  generative)
         else:
+            subject = block_subjects[0] if block_subjects else None
+            task = block_tasks[0] if block_tasks else None
             factor_centers, factor_log_widths, weights =\
-                self.predict(trace, params, guide, None, None, times,
+                self.predict(trace, params, guide, subject, task, times,
                              generative=generative)
 
         return weights, factor_centers, factor_log_widths
