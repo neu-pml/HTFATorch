@@ -542,7 +542,7 @@ class DeepTFA:
                            labeler=lambda x: x, **kwargs):
         if filename == '':
             filename = self.common_name() + str(task) + '_task_template.pdf'
-        i = list(set([block.subject for block in self._blocks])).index(task)
+        i = list(set([block.task for block in self._blocks])).index(task)
         results = self.results(block=None, subject=None, task=i)
         template = [i for (i, b) in enumerate(self._blocks)
                     if b.task == task][0]
