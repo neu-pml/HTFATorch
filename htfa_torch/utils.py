@@ -207,15 +207,40 @@ def kmeans_factor_widths(locations, num_factors, kmeans):
         factor_voxels = [labels[v] == factor for v in range(locations.shape[0])]
         yield np.linalg.norm(locations[factor_voxels].var(axis=0))
 
-def initial_hypermeans(activations, locations, num_factors):
+
+def init_width(activations,locations,weight,c):
+    from scipy import optimize
+    start_width = 1000
+    c = np.expand_dims(c,0)
+    objective = lambda w: np.sum((activations - initial_radial_basis(locations,c,w))**2)
+    result = optimize.minimize(objective,x0=start_width)
+
+    return result.x
+    
+def initial_hypermeans(activations, locations, num_factors,hotspot=True):
     """Initialize our center, width, and weight parameters via K-means"""
-    kmeans = KMeans(init='k-means++',
-                    n_clusters=num_factors,
-                    n_init=10,
-                    random_state=100)
-    kmeans.fit(locations)
-    initial_centers = kmeans.cluster_centers_
-    initial_widths = list(kmeans_factor_widths(locations, num_factors, kmeans))
+    if hotspot:
+        activation_image = activations.mean(axis=1)
+        activations_mean = np.abs(activation_image - activation_image.mean())
+        centers = np.zeros(shape=(num_factors, locations.shape[1]))
+        widths = np.zeros(shape=(num_factors,))
+        for k in range(num_factors):
+            activations_mean[activations_mean<0] = 0
+            ind = np.argmax(activations_mean)
+            centers[k, :] = locations[ind, :]
+            widths[k] = init_width(activations_mean, locations, activations_mean[ind], centers[k, :])
+            activations_mean = activations_mean - activations_mean[ind]*initial_radial_basis(locations, np.expand_dims(centers[k, :],axis=0), widths[k])
+            activations_mean = activations_mean.squeeze()
+        initial_centers = centers
+        initial_widths = widths
+    else:
+        kmeans = KMeans(init='k-means++',
+                        n_clusters=num_factors,
+                        n_init=10,
+                        random_state=100)
+        kmeans.fit(locations)
+        initial_centers = kmeans.cluster_centers_
+        initial_widths = list(kmeans_factor_widths(locations, num_factors, kmeans))
     initial_factors = initial_radial_basis(locations, initial_centers,
                                            initial_widths)
 
