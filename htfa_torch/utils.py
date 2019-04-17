@@ -216,8 +216,8 @@ def init_width(activations,locations,weight,c):
     result = optimize.minimize(objective,x0=start_width)
 
     return result.x
-    
-def initial_hypermeans(activations, locations, num_factors,hotspot=True):
+
+def initial_hypermeans(activations, locations, num_factors, hotspot=False):
     """Initialize our center, width, and weight parameters via K-means"""
     if hotspot:
         activation_image = activations.mean(axis=1)
