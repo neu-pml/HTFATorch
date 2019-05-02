@@ -91,31 +91,31 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
 class DeepTFADecoder(nn.Module):
     """Neural network module mapping from embeddings to a topographic factor
        analysis"""
-    def __init__(self, num_factors, hyper_means, embedding_dim=2):
+    def __init__(self, num_factors, embedding_dim=2):
         super(DeepTFADecoder, self).__init__()
         self._embedding_dim = embedding_dim
         self._num_factors = num_factors
 
         self.factors_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim, self._num_factors),
-            nn.Softsign(),
+            nn.PReLU(),
             nn.Linear(self._num_factors, self._num_factors * 2),
-            nn.Softsign(),
+            nn.PReLU(),
+            nn.Linear(self._num_factors * 2, self._num_factors * 4),
+            nn.PReLU(),
         )
-        self.factor_centers_embedding = nn.Linear(self._num_factors * 2,
+        self.factor_centers_embedding = nn.Linear(self._num_factors * 4,
                                                   self._num_factors * 3 * 2)
-        self.factor_log_widths_embedding = nn.Linear(self._num_factors * 2, 2)
-        factors_mean = hyper_means['factor_centers']
-        factors_std = torch.ones(factors_mean.shape)
+        self.factor_log_widths_embedding = nn.Linear(self._num_factors * 4, 2)
         self.weights_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim * 2, self._num_factors),
-            nn.Softsign(),
+            nn.PReLU(),
             nn.Linear(self._num_factors, self._num_factors * 2),
-            nn.Softsign(),
-            nn.Linear(self._num_factors * 2, self._num_factors * 2),
+            nn.PReLU(),
+            nn.Linear(self._num_factors * 2, self._num_factors * 4),
+            nn.PReLU(),
+            nn.Linear(self._num_factors * 4, self._num_factors * 2),
         )
-        weights_prior = torch.stack((torch.zeros(self._num_factors),
-                                     torch.ones(self._num_factors)), dim=-1)
 
     def _predict_param(self, params, param, index, predictions, name, trace,
                        predict=True, guide=None):
