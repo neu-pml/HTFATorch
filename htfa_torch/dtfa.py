@@ -131,12 +131,17 @@ class DeepTFA:
             variational.cuda()
             generative.cuda()
             cuda_locations = self.voxel_locations.cuda()
-        param_groups = [{'params': variational.parameters()}]
+        if not isinstance(learning_rate, dict):
+            learning_rate = {
+                'q': learning_rate,
+                'p': learning_rate / 10,
+            }
+        param_groups = [{'params': variational.parameters(),
+                         'lr': learning_rate['q']}]
         if train_generative:
             param_groups.append({'params': decoder.parameters(),
-                                 'lr': learning_rate/10})
-        optimizer = torch.optim.Adam(param_groups, lr=learning_rate,
-                                     amsgrad=True, eps=1e-4)
+                                 'lr': learning_rate['p']})
+        optimizer = torch.optim.Adam(param_groups, amsgrad=True, eps=1e-4)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, factor=0.5, min_lr=1e-5, patience=patience,
             verbose=True
