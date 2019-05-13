@@ -103,19 +103,25 @@ class DeepTFADecoder(nn.Module):
             nn.PReLU(),
             nn.Linear(self._num_factors * 2, self._num_factors * 4),
             nn.PReLU(),
+            nn.Linear(self._num_factors * 4, self._num_factors * 4 * 2),
         )
-        self.factor_centers_embedding = nn.Linear(self._num_factors * 4,
-                                                  self._num_factors * 3 * 2)
-        self.factor_centers_embedding.bias = nn.Parameter(
-            torch.stack((hyper_means['factor_centers'],
-                         torch.ones(self._num_factors, 3)),
-                        dim=-1).reshape(self._num_factors * 3 * 2)
+        factor_bias_loc = torch.cat(
+            (hyper_means['factor_centers'],
+             hyper_means['factor_log_widths'].unsqueeze(-1)),
+            dim=-1
         )
-        self.factor_log_widths_embedding = nn.Linear(self._num_factors * 4, 2)
-        self.factor_log_widths_embedding.bias = nn.Parameter(
-            torch.stack((hyper_means['factor_log_widths'].mean(),
-                         hyper_means['factor_log_widths'].std()),
-                        dim=-1).reshape(2)
+        factor_bias_scale = torch.cat(
+            (0.5 * hyper_means['factor_centers'].std(dim=0).expand(
+                self._num_factors, 3
+            ), hyper_means['factor_log_widths'].std().expand(
+                self._num_factors, 1
+            )),
+            dim=-1
+        )
+        self.factors_embedding[-1].bias = nn.Parameter(
+            torch.stack((factor_bias_loc, factor_bias_scale), dim=-1).reshape(
+                self._num_factors * 4 * 2
+            )
         )
         self.weights_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim * 2, self._num_factors),
@@ -171,15 +177,11 @@ class DeepTFADecoder(nn.Module):
             )
         else:
             task_embed = origin
-        factor_params = self.factors_embedding(subject_embed)
-
-        centers_predictions = self.factor_centers_embedding(factor_params).view(
-            -1, self._num_factors, 3, 2
+        factor_params = self.factors_embedding(subject_embed).view(
+            -1, self._num_factors, 4, 2
         )
-        log_widths_predictions = self.factor_log_widths_embedding(factor_params)
-        log_widths_predictions = log_widths_predictions.unsqueeze(1).expand(
-            -1, self._num_factors, 2
-        )
+        centers_predictions = factor_params[:, :, :3]
+        log_widths_predictions = factor_params[:, :, 3]
 
         joint_embed = torch.cat((subject_embed, task_embed), dim=-1)
         weight_predictions = self.weights_embedding(joint_embed).view(
