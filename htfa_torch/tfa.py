@@ -19,6 +19,7 @@ import torch.distributions as dists
 from torch.autograd import Variable
 import torch.nn as nn
 from torch.nn import Parameter
+from torch.nn.functional import log_softmax
 import torch.utils.data
 
 import probtorch
@@ -44,6 +45,12 @@ def free_energy(q, p, num_particles=tfa_models.NUM_PARTICLES):
         sample_dim = None
     return -probtorch.objectives.montecarlo.elbo(q, p, sample_dims=(sample_dim,))
 
+def dreg_iwae_elbo_term(log_weight, sample_dim=0):
+    probs = log_softmax(log_weight, dim=sample_dim).detach().exp()
+    # particles = (alpha * probs + (1 - 2 * alpha) * probs**2) * log_weight
+    # We assume alpha=0 to calculate the ELBO
+    return (probs**2 * log_weight).sum(dim=sample_dim)
+
 def hierarchical_elbo(q, p, rv_weight=lambda x, prior=True: 1.0,
                       num_particles=tfa_models.NUM_PARTICLES,
                       sample_dim=None, batch_dim=None):
@@ -60,7 +67,7 @@ def hierarchical_elbo(q, p, rv_weight=lambda x, prior=True: 1.0,
                      q.log_joint(sample_dims=(sample_dim,), batch_dim=batch_dim,
                                  nodes=[rv])
         if sample_dim is not None:
-            local_elbo = local_elbo.mean(dim=sample_dim)
+            local_elbo = dreg_iwae_elbo_term(local_elbo, sample_dim=sample_dim)
         if p[rv].observed and rv not in q:
             weighted_log_likelihood += rv_weight(rv, False) * local_elbo
         else:
