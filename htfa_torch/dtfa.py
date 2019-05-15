@@ -511,7 +511,9 @@ class DeepTFA:
         if serialize_data:
             tensors_filename = os.path.splitext(filename)[0] + '.dat'
             tensors = {
-                'image_slice': torch.tensor(image_slice),
+                'reconstruction': reconstruction,
+                'voxel_locations': self.voxel_locations,
+                'template': self._templates[template],
                 'activation_normalizer': self.activation_normalizers[template],
             }
             torch.save(tensors, tensors_filename)
@@ -549,7 +551,9 @@ class DeepTFA:
         if serialize_data:
             tensors_filename = os.path.splitext(filename)[0] + '.dat'
             tensors = {
-                'image_slice': torch.tensor(image_slice),
+                'reconstruction': reconstruction,
+                'voxel_locations': self.voxel_locations,
+                'template': self._templates[template],
                 'activation_normalizer': self.activation_normalizers[template],
             }
             torch.save(tensors, tensors_filename)
@@ -570,13 +574,23 @@ class DeepTFA:
         return plot
 
     def visualize_factor_embedding(self, filename='', show=True,
-                                   hist_log_widths=True, **kwargs):
+                                   hist_log_widths=True, serialize_data=True,
+                                   **kwargs):
         if filename == '':
             filename = self.common_name() + '_factor_embedding.pdf'
         results = self.results(block=None, subject=None, task=None)
         centers = results['factor_centers']
         log_widths = results['factor_log_widths']
         widths = torch.exp(log_widths)
+
+        if serialize_data:
+            tensors_filename = os.path.splitext(filename)[0] + '.dat'
+            tensors = {
+                'centers': centers,
+                'widths': widths,
+                'num_factors': self.num_factors
+            }
+            torch.save(tensors, tensors_filename)
 
         plot = niplot.plot_connectome(
             np.eye(self.num_factors),
@@ -600,7 +614,7 @@ class DeepTFA:
 
     def scatter_subject_embedding(self, labeler=None, filename='', show=True,
                                   xlims=None, ylims=None, figsize=(3.75, 2.75),
-                                  colormap='Set1'):
+                                  colormap='Set1', serialize_data=True):
         if filename == '':
             filename = self.common_name() + '_subject_embedding.pdf'
         hyperparams = self.variational.hyperparams.state_vardict()
@@ -627,6 +641,16 @@ class DeepTFA:
         block_colors = [palette[labeler(b)] for b in self._blocks
                         if labeler(b) is not None]
 
+        if serialize_data:
+            tensors_filename = os.path.splitext(filename)[0] + '.dat'
+            tensors = {
+                'z_p': {'mu': z_p_mu, 'sigma': z_p_sigma},
+                'block_colors': block_colors,
+                'palette': palette,
+                'block_subjects': block_subjects,
+            }
+            torch.save(tensors, tensors_filename)
+
         utils.plot_embedding_clusters(z_p_mu, z_p_sigma, block_colors,
                                       'z^P', 'Participant Embeddings', palette,
                                       block_subjects, filename=filename,
@@ -635,7 +659,7 @@ class DeepTFA:
 
     def scatter_task_embedding(self, labeler=None, filename='', show=True,
                                xlims=None, ylims=None, figsize=(3.75, 2.75),
-                               colormap='Set1'):
+                               colormap='Set1', serialize_data=True):
         if filename == '':
             filename = self.common_name() + '_task_embedding.pdf'
         hyperparams = self.variational.hyperparams.state_vardict()
@@ -661,6 +685,16 @@ class DeepTFA:
                        if labeler(b) is not None]
         block_colors = [palette[labeler(b)] for b in self._blocks
                         if labeler(b) is not None]
+
+        if serialize_data:
+            tensors_filename = os.path.splitext(filename)[0] + '.dat'
+            tensors = {
+                'z_s': {'mu': z_s_mu, 'sigma': z_s_sigma},
+                'block_colors': block_colors,
+                'palette': palette,
+                'block_tasks': block_tasks,
+            }
+            torch.save(tensors, tensors_filename)
 
         utils.plot_embedding_clusters(z_s_mu, z_s_sigma, block_colors,
                                       'z^S', 'Stimulus Embeddings', palette,
