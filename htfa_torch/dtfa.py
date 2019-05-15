@@ -11,6 +11,7 @@ import collections
 import datetime
 import logging
 import os
+import os.path
 import pickle
 import time
 
@@ -370,7 +371,7 @@ class DeepTFA:
         return self.activation_normalizers
 
     def plot_factor_centers(self, block, filename='', show=True, t=None,
-                            labeler=None):
+                            labeler=None, serialize_data=True):
         if filename == '':
             filename = self.common_name() + str(block) + '_factor_centers.pdf'
         if labeler is None:
@@ -381,6 +382,14 @@ class DeepTFA:
         sizes = torch.exp(results['factor_log_widths']).numpy()
 
         centers = results['factor_centers'].numpy()
+
+        if serialize_data:
+            tensors_filename = os.path.splitext(filename)[0] + '.dat'
+            tensors = {
+                'centers': torch.tensor(centers),
+                'sizes': torch.tensor(sizes),
+            }
+            torch.save(tensors, tensors_filename)
 
         plot = niplot.plot_connectome(
             np.eye(self.num_factors * 2),
@@ -485,7 +494,7 @@ class DeepTFA:
         return plot
 
     def plot_subject_template(self, subject, filename='', show=True,
-                              plot_abs=False, **kwargs):
+                              plot_abs=False, serialize_data=True, **kwargs):
         if filename == '':
             filename = self.common_name() + str(subject) + '_subject_template.pdf'
         i = list(set([block.subject for block in self._blocks])).index(subject)
@@ -498,6 +507,15 @@ class DeepTFA:
                               self.voxel_locations.numpy(),
                               self._templates[template])
         image_slice = nilearn.image.index_img(image, 0)
+
+        if serialize_data:
+            tensors_filename = os.path.splitext(filename)[0] + '.dat'
+            tensors = {
+                'image_slice': torch.tensor(image_slice),
+                'activation_normalizer': self.activation_normalizers[template],
+            }
+            torch.save(tensors, tensors_filename)
+
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
             title="Template for Participant %d" % subject,
@@ -514,7 +532,7 @@ class DeepTFA:
         return plot
 
     def plot_task_template(self, task, filename='', show=True, plot_abs=False,
-                           labeler=lambda x: x, **kwargs):
+                           labeler=lambda x: x, serialize_data=True, **kwargs):
         if filename == '':
             filename = self.common_name() + str(task) + '_task_template.pdf'
         i = list(set([block.task for block in self._blocks])).index(task)
@@ -527,6 +545,15 @@ class DeepTFA:
                               self.voxel_locations.numpy(),
                               self._templates[template])
         image_slice = nilearn.image.index_img(image, 0)
+
+        if serialize_data:
+            tensors_filename = os.path.splitext(filename)[0] + '.dat'
+            tensors = {
+                'image_slice': torch.tensor(image_slice),
+                'activation_normalizer': self.activation_normalizers[template],
+            }
+            torch.save(tensors, tensors_filename)
+
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
             title="Template for Stimulus '%s'" % labeler(task),
