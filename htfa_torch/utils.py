@@ -94,6 +94,48 @@ plt.rc('savefig', dpi=300)
 plt.rc('font', size=9)
 plt.rc('axes', prop_cycle=color_cycler)
 
+def average_weighted_reconstruction_error(num_blocks, num_times, num_voxels,
+                                          activations, reconstruct):
+    image_norm = np.zeros(num_blocks)
+    reconstruction_error = np.zeros(num_blocks)
+    normed_error = np.zeros(num_blocks)
+
+    for block in range(num_blocks):
+        results = reconstruct(block)
+        reconstruction = results['weights'] @ results['factors']
+
+        for t in range(results['weights'].shape[0]):
+            diff = np.linalg.norm(
+                reconstruction[t] - activations[block][t]
+            ) ** 2
+            normalizer = np.linalg.norm(
+                activations[block][t]
+            ) ** 2
+
+            reconstruction_error[block] += diff
+            image_norm[block] += normalizer
+            normed_error[block] += (diff / normalizer)
+
+        reconstruction_error[block] /= num_times[block]
+        image_norm[block] /= num_times[block]
+        normed_error[block] /= num_times[block]
+
+    image_norm = sum(image_norm) / (num_blocks * num_voxels)
+    image_norm = np.sqrt(image_norm)
+    reconstruction_error = sum(reconstruction_error)
+    reconstruction_error /= num_blocks * num_voxels
+    reconstruction_error = np.sqrt(reconstruction_error)
+    normed_error = sum(normed_error) / (num_blocks * num_voxels)
+    normed_error = np.sqrt(normed_error)
+
+    logging.info('Average reconstruction error (MSE): %.8e',
+                 reconstruction_error)
+    logging.info('Average data norm (Euclidean): %.8e', image_norm)
+    logging.info('Percent average reconstruction error: %f',
+                 normed_error * 100.0)
+
+    return reconstruction_error, image_norm, normed_error
+
 def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
     def eigsorted(cov):
         vals, vecs = np.linalg.eigh(cov)
