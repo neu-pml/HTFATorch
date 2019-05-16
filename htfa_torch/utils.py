@@ -95,6 +95,33 @@ plt.rc('savefig', dpi=300)
 plt.rc('font', size=9)
 plt.rc('axes', prop_cycle=color_cycler)
 
+def average_reconstruction_error(num_blocks, activations, reconstruct):
+    image_norm = np.zeros(num_blocks)
+    reconstruction_error = np.zeros(num_blocks)
+    normed_error = np.zeros(num_blocks)
+
+    for block in range(num_blocks):
+        results = reconstruct(block)
+        reconstruction = results['weights'] @ results['factors']
+
+        reconstruction_error[block] = np.linalg.norm(reconstruction -\
+                                                     activations[block])
+        image_norm[block] = np.linalg.norm(activations[block])
+
+    normed_error = reconstruction_error / image_norm
+
+    reconstruction_error = sum(reconstruction_error)
+    image_norm = sum(image_norm)
+    normed_error = sum(normed_error)
+
+    logging.info('Average reconstruction error (MSE): %.8e',
+                 reconstruction_error)
+    logging.info('Average data norm (Euclidean): %.8e', image_norm)
+    logging.info('Percent average reconstruction error: %f',
+                 normed_error * 100.0)
+
+    return reconstruction_error, image_norm, normed_error
+
 def average_weighted_reconstruction_error(num_blocks, num_times, num_voxels,
                                           activations, reconstruct):
     image_norm = np.zeros(num_blocks)
