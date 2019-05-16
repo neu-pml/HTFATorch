@@ -427,14 +427,19 @@ class DeepTFA:
 
         return plot
 
-    def average_reconstruction_error(self):
+    def average_reconstruction_error(self, weighted=True):
         if self.activation_normalizers is None:
             self.normalize_activations()
 
-        return utils.average_weighted_reconstruction_error(
-            self.num_blocks, self.num_times, self.num_voxels,
-            self.voxel_activations, self.results
-        )
+        if weighted:
+            return utils.average_weighted_reconstruction_error(
+                self.num_blocks, self.num_times, self.num_voxels,
+                self.voxel_activations, self.results
+            )
+        else:
+            return utils.average_reconstruction_error(
+                self.num_blocks, self.voxel_activations, self.results
+            )
 
     def plot_reconstruction(self, block=None, filename='', show=True,
                             plot_abs=False, t=0, labeler=None, **kwargs):
