@@ -521,14 +521,19 @@ class HierarchicalTopographicFactorAnalysis:
         if show:
             plt.show()
 
-    def average_reconstruction_error(self):
+    def average_reconstruction_error(self, weighted=True):
         if self.activation_normalizers is None:
             self.normalize_activations()
 
-        return utils.average_weighted_reconstruction_error(
-            self.num_blocks, self.num_times, self.num_voxels,
-            self.voxel_activations, self.results
-        )
+        if weighted:
+            return utils.average_weighted_reconstruction_error(
+                self.num_blocks, self.num_times, self.num_voxels,
+                self.voxel_activations, self.results
+            )
+        else:
+            return utils.average_reconstruction_error(
+                self.num_blocks, self.voxel_activations, self.results
+            )
 
     def decoding_accuracy(self, restvtask=False, window_size=5):
         """
