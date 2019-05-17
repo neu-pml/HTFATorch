@@ -110,9 +110,9 @@ def average_reconstruction_error(num_blocks, activations, reconstruct):
 
     normed_error = reconstruction_error / image_norm
 
-    reconstruction_error = sum(reconstruction_error)
-    image_norm = sum(image_norm)
-    normed_error = sum(normed_error)
+    reconstruction_error = sum(reconstruction_error) / num_blocks
+    image_norm = sum(image_norm) / num_blocks
+    normed_error = sum(normed_error) / num_blocks
 
     logging.info('Average reconstruction error (MSE): %.8e',
                  reconstruction_error)
