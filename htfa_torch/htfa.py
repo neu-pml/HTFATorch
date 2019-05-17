@@ -521,49 +521,19 @@ class HierarchicalTopographicFactorAnalysis:
         if show:
             plt.show()
 
-    def average_reconstruction_error(self):
+    def average_reconstruction_error(self, weighted=True):
         if self.activation_normalizers is None:
             self.normalize_activations()
 
-        image_norm = np.zeros(self.num_blocks)
-        reconstruction_error = np.zeros(self.num_blocks)
-        normed_error = np.zeros(self.num_blocks)
-
-        for block in range(self.num_blocks):
-            results = self.results(block)
-            reconstruction = results['weights'] @ results['factors']
-
-            for t in range(results['weights'].shape[0]):
-                diff = np.linalg.norm(
-                    reconstruction[t] - self.voxel_activations[block][t]
-                ) ** 2
-                normalizer = np.linalg.norm(
-                    self.voxel_activations[block][t]
-                ) ** 2
-
-                reconstruction_error[block] += diff
-                image_norm[block] += normalizer
-                normed_error[block] += (diff / normalizer)
-
-            reconstruction_error[block] /= self.num_times[block]
-            image_norm[block] /= self.num_times[block]
-            normed_error[block] /= self.num_times[block]
-
-        image_norm = sum(image_norm) / sum(self.num_voxels)
-        image_norm = np.sqrt(image_norm)
-        reconstruction_error = sum(reconstruction_error)
-        reconstruction_error /= sum(self.num_voxels)
-        reconstruction_error = np.sqrt(reconstruction_error)
-        normed_error = sum(normed_error) / sum(self.num_voxels)
-        normed_error = np.sqrt(normed_error)
-
-        logging.info('Average reconstruction error (MSE): %.8e',
-                     reconstruction_error)
-        logging.info('Average data norm (Euclidean): %.8e', image_norm)
-        logging.info('Percent average reconstruction error: %f',
-                     normed_error * 100.0)
-
-        return reconstruction_error, image_norm, normed_error
+        if weighted:
+            return utils.average_weighted_reconstruction_error(
+                self.num_blocks, self.num_times, self.num_voxels,
+                self.voxel_activations, self.results
+            )
+        else:
+            return utils.average_reconstruction_error(
+                self.num_blocks, self.voxel_activations, self.results
+            )
 
     def decoding_accuracy(self, restvtask=False, window_size=5):
         """
