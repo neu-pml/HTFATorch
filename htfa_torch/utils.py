@@ -107,18 +107,14 @@ def average_reconstruction_error(num_blocks, activations, reconstruct):
         reconstruction_error[block] = np.linalg.norm(reconstruction -\
                                                      activations[block])
         image_norm[block] = np.linalg.norm(activations[block])
-
     normed_error = reconstruction_error / image_norm
 
-    reconstruction_error = sum(reconstruction_error) / num_blocks
-    image_norm = sum(image_norm) / num_blocks
-    normed_error = sum(normed_error) / num_blocks
-
-    logging.info('Average reconstruction error (MSE): %.8e',
-                 reconstruction_error)
-    logging.info('Average data norm (Euclidean): %.8e', image_norm)
-    logging.info('Percent average reconstruction error: %f',
-                 normed_error * 100.0)
+    logging.info('Average reconstruction error (MSE): %.8e +/- %.8e',
+                 np.mean(reconstruction_error), np.std(reconstruction_error))
+    logging.info('Average data norm (Euclidean): %.8e +/- %.8e',
+                 np.mean(image_norm), np.std(image_norm))
+    logging.info('Percent average reconstruction error: %f +/- %.8e',
+                 np.mean(normed_error) * 100, np.std(normed_error) * 100)
 
     return reconstruction_error, image_norm, normed_error
 
