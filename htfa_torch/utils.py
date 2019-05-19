@@ -123,31 +123,33 @@ def plot_embedding_clusters(mus, sigmas, block_colors, embedding_name,
                             title, palette, block_clusters, filename=None,
                             show=True, xlims=None, ylims=None,
                             figsize=FIGSIZE):
-    plt.style.use('seaborn-white')
-    fig, ax = plt.subplots(facecolor='white', figsize=figsize, frameon=True)
-    ax.set_xlabel('$%s_1$' % embedding_name)
-    if xlims is not None:
-        ax.set_xlim(*xlims)
-    ax.set_ylabel('$%s_2$' % embedding_name)
-    if ylims is not None:
-        ax.set_ylim(*ylims)
-    ax.set_title(title)
-    palette_legend(list(palette.keys()), list(palette.values()))
+    with plt.style.context('seaborn-white'):
+        fig, ax = plt.subplots(facecolor='white', figsize=figsize, frameon=True)
+        ax.set_xlabel('$%s_1$' % embedding_name)
+        if xlims is not None:
+            ax.set_xlim(*xlims)
+        ax.set_ylabel('$%s_2$' % embedding_name)
+        if ylims is not None:
+            ax.set_ylim(*ylims)
+        ax.set_title(title)
+        palette_legend(list(palette.keys()), list(palette.values()))
 
-    plotted_clusters = set()
-    for k, color in zip(block_clusters, block_colors):
-        if k in plotted_clusters:
-            continue
-        covk = torch.eye(2) * sigmas[k] ** 2
-        alpha = 0.5
-        alpha /= len({k: v for (k, v) in palette.items() if all(v == color)})
-        plot_cov_ellipse(covk, mus[k], nstd=1, ax=ax, alpha=alpha, color=color)
-        plotted_clusters.add(k)
+        plotted_clusters = set()
+        for k, color in zip(block_clusters, block_colors):
+            if k in plotted_clusters:
+                continue
+            covk = torch.eye(2) * sigmas[k] ** 2
+            alpha = 0.5
+            alpha /= len({k: v for (k, v) in palette.items()
+                          if all(v == color)})
+            plot_cov_ellipse(covk, mus[k], nstd=1, ax=ax, alpha=alpha,
+                             color=color)
+            plotted_clusters.add(k)
 
-    if filename is not None:
-        fig.savefig(filename)
-    if show:
-        fig.show()
+        if filename is not None:
+            fig.savefig(filename)
+        if show:
+            fig.show()
 
 def plot_clusters(Xs, mus, covs, K, figsize=(4, 4), xlim=(-10, 10),
                   ylim=(-10, 10)):
