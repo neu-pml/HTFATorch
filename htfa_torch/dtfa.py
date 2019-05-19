@@ -613,7 +613,7 @@ class DeepTFA:
         return plot, centers, log_widths
 
     def scatter_subject_embedding(self, labeler=None, filename='', show=True,
-                                  xlims=None, ylims=None, figsize=utils.figsize,
+                                  xlims=None, ylims=None, figsize=utils.FIGSIZE,
                                   colormap='tab20', serialize_data=True):
         if filename == '':
             filename = self.common_name() + '_subject_embedding.pdf'
@@ -658,7 +658,7 @@ class DeepTFA:
                                       figsize=figsize)
 
     def scatter_task_embedding(self, labeler=None, filename='', show=True,
-                               xlims=None, ylims=None, figsize=utils.figsize,
+                               xlims=None, ylims=None, figsize=utils.FIGSIZE,
                                colormap='tab20', serialize_data=True):
         if filename == '':
             filename = self.common_name() + '_task_embedding.pdf'
