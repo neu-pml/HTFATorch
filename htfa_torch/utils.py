@@ -181,14 +181,14 @@ def plot_embedding_clusters(mus, sigmas, block_colors, embedding_name,
                             show=True, xlims=None, ylims=None,
                             figsize=None):
     fig = plt.figure(figsize=figsize, frameon=True)
-    ax = fig.add_subplot(111, facecolor='white')
-    fig.axes[0].set_xlabel('$%s_1$' % embedding_name)
+    ax = fig.add_subplot(111, facecolor='white', frame_on=True)
+    ax.set_xlabel('$%s_1$' % embedding_name)
     if xlims is not None:
-        fig.axes[0].set_xlim(*xlims)
-    fig.axes[0].set_ylabel('$%s_2$' % embedding_name)
+        ax.set_xlim(*xlims)
+    ax.set_ylabel('$%s_2$' % embedding_name)
     if ylims is not None:
-        fig.axes[0].set_ylim(*ylims)
-    fig.axes[0].set_title(title)
+        ax.set_ylim(*ylims)
+    ax.set_title(title)
     palette_legend(list(palette.keys()), list(palette.values()))
 
     plotted_clusters = set()
