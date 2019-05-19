@@ -165,8 +165,6 @@ def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
         vals, vecs = np.linalg.eigh(cov)
         order = vals.argsort()[::-1]
         return vals[order], vecs[:, order]
-    if ax is None:
-        ax = plt.gca()
     vals, vecs = eigsorted(cov)
     theta = np.degrees(np.arctan2(*vecs[:, 0][::-1]))
 
