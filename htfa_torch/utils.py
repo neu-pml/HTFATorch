@@ -86,12 +86,11 @@ colors = {
               'AA4499']
 }
 
-color_cycler = cycler(color=colors['bright'])
 color_cycler = cycler(color=sns.color_palette('colorblind'))
 
 plt.rc('legend', frameon=True)
 plt.rc('figure', figsize=(column_width, 0.66 * column_width), dpi=120,
-       frameon=True)
+       frameon=True, edgecolor='black')
 plt.rc('savefig', dpi=300)
 plt.rc('font', size=9)
 plt.rc('axes', prop_cycle=color_cycler)
