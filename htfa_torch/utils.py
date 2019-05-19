@@ -49,8 +49,9 @@ finally:
 
 MACHINE_EPSILON = np.finfo(np.double).eps
 
-column_width = 2*3.3
-page_width = 6.7
+column_width = 5.5
+page_width = 8.5
+figsize = (column_width, 0.66 * column_width)
 
 # colorblind-friendly colors
 # source: https://personal.sron.nl/~pault/
