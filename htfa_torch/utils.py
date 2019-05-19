@@ -699,17 +699,17 @@ def intensity_alphas(intensities, scalars=None, normalizer=None):
         result = np.clip(result, 0.0, 1.0)
     return result
 
-def scalar_map_palette(scalars, alphas=None, colormap='Set2', normalizer=None):
+def scalar_map_palette(scalars, alphas=None, colormap='tab20', normalizer=None):
     scalar_map = cm.ScalarMappable(normalizer, colormap)
     colors = scalar_map.to_rgba(scalars, norm=True)
     if alphas is not None:
         colors[:, 3] = alphas
     return colors
 
-def compose_palette(length, alphas=None, colormap='Set2'):
+def compose_palette(length, alphas=None, colormap='tab20'):
     return scalar_map_palette(np.linspace(0, 1, length), alphas, colormap)
 
-def uncertainty_palette(uncertainties, scalars=None, colormap='Set2'):
+def uncertainty_palette(uncertainties, scalars=None, colormap='tab20'):
     alphas = uncertainty_alphas(uncertainties, scalars=scalars)
     return compose_palette(uncertainties.shape[0], alphas=alphas,
                            colormap=colormap)
