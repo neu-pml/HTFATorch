@@ -122,8 +122,9 @@ def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
 def plot_embedding_clusters(mus, sigmas, block_colors, embedding_name,
                             title, palette, block_clusters, filename=None,
                             show=True, xlims=None, ylims=None,
-                            figsize=None):
-    fig, ax = plt.subplots(facecolor='white', figsize=FIGSIZE, frameon=True)
+                            figsize=FIGSIZE):
+    plt.style.use('seaborn-white')
+    fig, ax = plt.subplots(facecolor='white', figsize=figsize, frameon=True)
     ax.set_xlabel('$%s_1$' % embedding_name)
     if xlims is not None:
         ax.set_xlim(*xlims)
