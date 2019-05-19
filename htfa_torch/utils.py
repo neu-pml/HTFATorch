@@ -7,7 +7,6 @@ __email__ = 'e.sennesh@northeastern.edu'
 import flatdict
 import glob
 import logging
-import math
 import os
 import warnings
 
@@ -42,58 +41,21 @@ finally:
     import matplotlib.cm as cm
     import matplotlib.colors
     from matplotlib import cycler
-    import matplotlib.gridspec as gridspec
     import matplotlib.patches as mpatches
     import matplotlib.pyplot as plt
-    import seaborn as sns
 
 MACHINE_EPSILON = np.finfo(np.double).eps
 
-column_width = 5.5
-page_width = 8.5
-figsize = (column_width, 0.66 * column_width)
-
-# colorblind-friendly colors
-# source: https://personal.sron.nl/~pault/
-colors = {
-    'bright': ['4477AA',
-               '66CCEE',
-               '228833',
-               'CCBB44',
-               'EE6677',
-               'AA3377',
-               'BBBBBB'],
-    'high_contrast': ['FFFFFF',
-                      'DDAA33',
-                      'BB5566',
-                      '004488',
-                      '00000'],
-    'vibrant': ['0077BB',
-                '33BBEE',
-                '0099BB',
-                'EE7733',
-                'CC3311',
-                'EE3377',
-                'BBBBBB'],
-    'muted': ['332288',
-              '88CCEE',
-              '44AA99',
-              '117733',
-              '999933',
-              'DDCC77',
-              'CC6677',
-              '882255',
-              'AA4499']
-}
-
-color_cycler = cycler(color=sns.color_palette('colorblind'))
+COLUMN_WIDTH = 5.5
+PAGE_WIDTH = 8.5
+FIGSIZE = (COLUMN_WIDTH, 0.66 * COLUMN_WIDTH)
 
 plt.rc('legend', frameon=True)
-plt.rc('figure', figsize=(column_width, 0.66 * column_width), dpi=120,
-       frameon=True, edgecolor='black')
-plt.rc('savefig', dpi=300)
+plt.rc('figure', figsize=(COLUMN_WIDTH, 0.66 * COLUMN_WIDTH), dpi=120,
+       frameon=True, facecolor='white', edgecolor='black')
+plt.rc('savefig', dpi=300, facecolor='white', edgecolor='black')
 plt.rc('font', size=9)
-plt.rc('axes', prop_cycle=color_cycler)
+plt.rc('axes', facecolor='white', edgecolor='black')
 
 def average_reconstruction_error(num_blocks, activations, reconstruct):
     image_norm = np.zeros(num_blocks)
