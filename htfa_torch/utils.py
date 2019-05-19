@@ -135,15 +135,15 @@ def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
     ellip = mpatches.Ellipse(xy=pos, width=width, height=height, angle=theta,
                              **kwargs)
     ax.add_artist(ellip)
-    ax.scatter(x=pos[0], y=pos[1], c=kwargs.get('color'), marker='x')
+    color = np.expand_dims(kwargs['color'], axis=0)
+    ax.scatter(x=pos[0], y=pos[1], c=color, marker='x')
     return ellip
 
 def plot_embedding_clusters(mus, sigmas, block_colors, embedding_name,
                             title, palette, block_clusters, filename=None,
                             show=True, xlims=None, ylims=None,
                             figsize=None):
-    fig = plt.figure(figsize=figsize, frameon=True)
-    ax = fig.add_subplot(111, facecolor='white', frame_on=True)
+    fig, ax = plt.subplots(facecolor='white', figsize=FIGSIZE, frameon=True)
     ax.set_xlabel('$%s_1$' % embedding_name)
     if xlims is not None:
         ax.set_xlim(*xlims)
@@ -170,7 +170,7 @@ def plot_embedding_clusters(mus, sigmas, block_colors, embedding_name,
 
 def plot_clusters(Xs, mus, covs, K, figsize=(4, 4), xlim=(-10, 10),
                   ylim=(-10, 10)):
-    _, ax = plt.subplots(figsize=figsize)
+    _, ax = plt.subplots(figsize=FIGSIZE)
     ax.set_xlim(*xlim)
     ax.set_ylim(*ylim)
     ax.axis('equal')
