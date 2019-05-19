@@ -26,16 +26,10 @@ import torch.utils.data
 import nibabel as nib
 from nilearn.input_data import NiftiMasker
 
-try:
-    if __name__ == '__main__':
-        import matplotlib
-        matplotlib.use('TkAgg')
-finally:
-    import matplotlib
-    import matplotlib.cm as cm
-    import matplotlib.colors
-    import matplotlib.patches as mpatches
-    import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import matplotlib.colors
+import matplotlib.patches as mpatches
+import matplotlib.pyplot as plt
 
 MACHINE_EPSILON = np.finfo(np.double).eps
 
