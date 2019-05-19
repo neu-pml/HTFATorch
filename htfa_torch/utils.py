@@ -160,7 +160,7 @@ def average_weighted_reconstruction_error(num_blocks, num_times, num_voxels,
 
     return reconstruction_error, image_norm, normed_error
 
-def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
+def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
     def eigsorted(cov):
         vals, vecs = np.linalg.eigh(cov)
         order = vals.argsort()[::-1]
@@ -200,7 +200,7 @@ def plot_embedding_clusters(mus, sigmas, block_colors, embedding_name,
         covk = torch.eye(2) * sigmas[k] ** 2
         alpha = 0.5
         alpha /= len({k: v for (k, v) in palette.items() if all(v == color)})
-        plot_cov_ellipse(covk, mus[k], nstd=2, ax=ax, alpha=alpha, color=color)
+        plot_cov_ellipse(covk, mus[k], nstd=1, ax=ax, alpha=alpha, color=color)
         plotted_clusters.add(k)
 
     if filename is not None:
