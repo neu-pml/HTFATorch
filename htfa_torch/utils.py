@@ -13,24 +13,18 @@ import warnings
 import numpy as np
 import scipy.io as sio
 import scipy.spatial.distance as sd
-import scipy.special as spspecial
+from scipy.spatial.distance import squareform
 import scipy.stats as stats
 from sklearn.cluster import KMeans
 import sklearn
-from scipy.spatial.distance import squareform
+
 from scipy.stats import entropy
 import torch
-from torch import distributions
-import probtorch
-from torch.autograd import Variable
-import torch.nn as nn
 from torch.nn import Parameter
 import torch.utils.data
 
 import nibabel as nib
-import nilearn.image
 from nilearn.input_data import NiftiMasker
-import nilearn.signal
 
 try:
     if __name__ == '__main__':
@@ -40,7 +34,6 @@ finally:
     import matplotlib
     import matplotlib.cm as cm
     import matplotlib.colors
-    from matplotlib import cycler
     import matplotlib.patches as mpatches
     import matplotlib.pyplot as plt
 
@@ -49,13 +42,6 @@ MACHINE_EPSILON = np.finfo(np.double).eps
 COLUMN_WIDTH = 5.5
 PAGE_WIDTH = 8.5
 FIGSIZE = (COLUMN_WIDTH, 0.66 * COLUMN_WIDTH)
-
-plt.rc('legend', frameon=True)
-plt.rc('figure', figsize=(COLUMN_WIDTH, 0.66 * COLUMN_WIDTH), dpi=120,
-       frameon=True, facecolor='white', edgecolor='black')
-plt.rc('savefig', dpi=300, facecolor='white', edgecolor='black')
-plt.rc('font', size=9)
-plt.rc('axes', facecolor='white', edgecolor='black')
 
 def average_reconstruction_error(num_blocks, activations, reconstruct):
     image_norm = np.zeros(num_blocks)
