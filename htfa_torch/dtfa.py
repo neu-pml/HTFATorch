@@ -635,7 +635,7 @@ class DeepTFA:
                            utils.compose_palette(len(all_labels),
                                                  colormap=colormap)))
 
-        subjects = list(set([block.subject for block in self._blocks]))
+        subjects = list({block.subject for block in self._blocks})
         block_subjects = [subjects.index(b.subject) for b in self._blocks
                           if labeler(b) is not None]
         block_colors = [palette[labeler(b)] for b in self._blocks
@@ -680,7 +680,7 @@ class DeepTFA:
                            utils.compose_palette(len(all_labels),
                                                  colormap=colormap)))
 
-        tasks = list(set([block.task for block in self._blocks]))
+        tasks = list({block.task for block in self._blocks})
         block_tasks = [tasks.index(b.task) for b in self._blocks
                        if labeler(b) is not None]
         block_colors = [palette[labeler(b)] for b in self._blocks
