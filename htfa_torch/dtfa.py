@@ -275,6 +275,22 @@ class DeepTFA:
                     value=hyperparams['subject']['mu'][:, subject],
                     name='z^P_{%d,%d}' % (subject, b),
                 )
+                factor_centers_params = hyperparams['factor_centers']
+                guide.variable(
+                    torch.distributions.Normal,
+                    factor_centers_params['mu'][:, subject],
+                    softplus(factor_centers_params['sigma'][:, subject]),
+                    value=factor_centers_params['mu'][:, subject],
+                    name='FactorCenters%d' % b,
+                )
+                factor_log_widths_params = hyperparams['factor_log_widths']
+                guide.variable(
+                    torch.distributions.Normal,
+                    factor_log_widths_params['mu'][:, subject],
+                    softplus(factor_log_widths_params['sigma'][:, subject]),
+                    value=factor_log_widths_params['mu'][:, subject],
+                    name='FactorLogWidths%d' % b,
+                )
             if task is not None:
                 guide.variable(
                     torch.distributions.Normal,
@@ -283,6 +299,16 @@ class DeepTFA:
                     value=hyperparams['task']['mu'][:, task],
                     name='z^S_{%d,%d}' % (task, b),
                 )
+            for k, v in hyperparams['weights'].items():
+                hyperparams['weights'][k] = v[:, :, times[0]:times[1]]
+            weights_params = hyperparams['weights']
+            guide.variable(
+                torch.distributions.Normal,
+                weights_params['mu'][:, b],
+                softplus(weights_params['sigma'][:, b]),
+                value=weights_params['mu'][:, b],
+                name='Weights%d_%d-%d' % (b, times[0], times[1])
+            )
 
         weights, factor_centers, factor_log_widths =\
             self.decoder(probtorch.Trace(), blocks, block_subjects, block_tasks,
@@ -301,7 +327,7 @@ class DeepTFA:
             plt.show()
 
         result = {
-            'weights': weights[:times[1]].data,
+            'weights': weights[times[0]:times[1]].data,
             'factors': tfa_models.radial_basis(self.voxel_locations,
                                                factor_centers.data,
                                                factor_log_widths.data),
