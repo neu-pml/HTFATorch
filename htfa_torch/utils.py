@@ -134,12 +134,14 @@ def plot_embedding_clusters(mus, sigmas, embedding_colors, embedding_name,
         if ylims is not None:
             ax.set_ylim(*ylims)
         ax.set_title(title)
-        palette_legend(list(palette.keys()), list(palette.values()))
+        if isinstance(palette, cm.ScalarMappable):
+            plt.colorbar(palette)
+        else:
+            palette_legend(list(palette.keys()), list(palette.values()))
 
         for k, color in enumerate(embedding_colors):
             covk = torch.eye(2) * sigmas[k] ** 2
-            alpha = 1.0
-            alpha /= len([c for c in embedding_colors if all(c == color)])
+            alpha = 0.66
             plot_cov_ellipse(covk, mus[k], nstd=1, ax=ax, alpha=alpha,
                              color=color, plot_ellipse=plot_ellipse)
 
