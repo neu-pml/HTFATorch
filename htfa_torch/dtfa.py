@@ -613,8 +613,8 @@ class DeepTFA:
         return plot, centers, log_widths
 
     def scatter_subject_embedding(self, labeler=None, filename='', show=True,
-                                  xlims=None, ylims=None, figsize=utils.FIGSIZE,
-                                  colormap='tab20', serialize_data=True):
+                                  xlims=None, ylims=None, figsize=(3.75, 2.75),
+                                  colormap='Set1', serialize_data=True,plot_ellipse=True):
         if filename == '':
             filename = self.common_name() + '_subject_embedding.pdf'
         hyperparams = self.variational.hyperparams.state_vardict()
@@ -655,11 +655,11 @@ class DeepTFA:
                                       'z^P', 'Participant Embeddings', palette,
                                       block_subjects, filename=filename,
                                       show=show, xlims=xlims, ylims=ylims,
-                                      figsize=figsize)
+                                      figsize=figsize,plot_ellipse=plot_ellipse)
 
     def scatter_task_embedding(self, labeler=None, filename='', show=True,
-                               xlims=None, ylims=None, figsize=utils.FIGSIZE,
-                               colormap='tab20', serialize_data=True):
+                               xlims=None, ylims=None, figsize=(3.75, 2.75),
+                               colormap='Set1', serialize_data=True,plot_ellipse=True):
         if filename == '':
             filename = self.common_name() + '_task_embedding.pdf'
         hyperparams = self.variational.hyperparams.state_vardict()
@@ -700,7 +700,7 @@ class DeepTFA:
                                       'z^S', 'Stimulus Embeddings', palette,
                                       block_tasks, filename=filename,
                                       show=show, xlims=xlims, ylims=ylims,
-                                      figsize=figsize)
+                                      figsize=figsize,plot_ellipse=plot_ellipse)
 
     def common_name(self):
         return os.path.commonprefix([os.path.basename(b.filename)
