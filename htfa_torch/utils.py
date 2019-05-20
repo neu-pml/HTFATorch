@@ -65,7 +65,8 @@ def average_weighted_reconstruction_error(num_blocks, num_times, num_voxels,
     image_norm = np.zeros(num_blocks)
     reconstruction_error = np.zeros(num_blocks)
     normed_error = np.zeros(num_blocks)
-
+    if isinstance(num_voxels,list):
+        num_voxels = num_voxels[0]
     for block in range(num_blocks):
         results = reconstruct(block)
         reconstruction = results['weights'] @ results['factors']
