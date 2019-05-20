@@ -20,6 +20,7 @@ try:
         import matplotlib
         matplotlib.use('TkAgg')
 finally:
+    import matplotlib.cm as cm
     import matplotlib.pyplot as plt
 import nilearn.image
 import nilearn.plotting as niplot
@@ -640,7 +641,7 @@ class DeepTFA:
 
     def scatter_subject_embedding(self, labeler=None, filename='', show=True,
                                   xlims=None, ylims=None, figsize=utils.FIGSIZE,
-                                  colormap='tab20', serialize_data=True,
+                                  colormap='Accent', serialize_data=True,
                                   plot_ellipse=True):
         if filename == '':
             filename = self.common_name() + '_subject_embedding.pdf'
@@ -659,10 +660,15 @@ class DeepTFA:
         if labeler is None:
             labeler = lambda s: s
         labels = sorted(list({labeler(s) for s in subjects}))
-        palette = dict(zip(labels, utils.compose_palette(len(labels),
-                                                         colormap=colormap)))
-
-        subject_colors = [palette[labeler(subject)] for subject in subjects]
+        if all([isinstance(label, float) for label in labels]):
+            palette = cm.ScalarMappable(None, colormap)
+            subject_colors = palette.to_rgba(np.array(labels), norm=True)
+            palette.set_array(np.array(labels))
+        else:
+            palette = dict(zip(
+                labels, utils.compose_palette(len(labels), colormap=colormap)
+            ))
+            subject_colors = [palette[labeler(subject)] for subject in subjects]
 
         if serialize_data:
             tensors_filename = os.path.splitext(filename)[0] + '.dat'
@@ -701,9 +707,15 @@ class DeepTFA:
         if labeler is None:
             labeler = lambda t: t
         labels = sorted(list({labeler(t) for t in tasks}))
-        palette = dict(zip(labels, utils.compose_palette(len(labels),
-                                                         colormap=colormap)))
-        task_colors = [palette[labeler(task)] for task in tasks]
+        if all([isinstance(label, float) for label in labels]):
+            palette = cm.ScalarMappable(None, colormap)
+            task_colors = palette.to_rgba(np.array(labels), norm=True)
+            palette.set_array(np.array(labels))
+        else:
+            palette = dict(zip(
+                labels, utils.compose_palette(len(labels), colormap=colormap)
+            ))
+            task_colors = [palette[labeler(task)] for task in tasks]
 
         if serialize_data:
             tensors_filename = os.path.splitext(filename)[0] + '.dat'
