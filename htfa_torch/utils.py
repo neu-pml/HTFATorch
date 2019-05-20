@@ -102,11 +102,15 @@ def average_weighted_reconstruction_error(num_blocks, num_times, num_voxels,
 
     return reconstruction_error, image_norm, normed_error
 
-def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
+def plot_cov_ellipse(cov, pos, nstd=2, ax=None, plot_ellipse=True,id=0,**kwargs):
+    if len(pos) < 2:
+        pos = torch.cat((pos,torch.Tensor([0])),dim=0)
     def eigsorted(cov):
         vals, vecs = np.linalg.eigh(cov)
         order = vals.argsort()[::-1]
         return vals[order], vecs[:, order]
+    if ax is None:
+        ax = plt.gca()
     vals, vecs = eigsorted(cov)
     theta = np.degrees(np.arctan2(*vecs[:, 0][::-1]))
 
@@ -114,43 +118,41 @@ def plot_cov_ellipse(cov, pos, nstd=1, ax=None, **kwargs):
     width, height = 2 * nstd * np.sqrt(vals)
     ellip = mpatches.Ellipse(xy=pos, width=width, height=height, angle=theta,
                              **kwargs)
-    ax.add_artist(ellip)
-    color = np.expand_dims(kwargs['color'], axis=0)
-    ax.scatter(x=pos[0], y=pos[1], c=color, marker='x')
+    if plot_ellipse:
+        ax.add_artist(ellip)
+    ax.scatter(x=pos[0], y=pos[1], c=kwargs.get('color'), marker='x')
     return ellip
 
 def plot_embedding_clusters(mus, sigmas, block_colors, embedding_name,
                             title, palette, block_clusters, filename=None,
                             show=True, xlims=None, ylims=None,
-                            figsize=FIGSIZE):
-    with plt.style.context('seaborn-white'):
-        fig, ax = plt.subplots(facecolor='white', figsize=figsize, frameon=True)
-        ax.set_xlabel('$%s_1$' % embedding_name)
-        if xlims is not None:
-            ax.set_xlim(*xlims)
-        ax.set_ylabel('$%s_2$' % embedding_name)
-        if ylims is not None:
-            ax.set_ylim(*ylims)
-        ax.set_title(title)
-        palette_legend(list(palette.keys()), list(palette.values()))
+                            figsize=None,plot_ellipse=True):
+    fig = plt.figure(figsize=figsize, frameon=True)
+    ax = fig.add_subplot(111, facecolor='white')
+    fig.axes[0].set_xlabel('$%s_1$' % embedding_name)
+    if xlims is not None:
+        fig.axes[0].set_xlim(*xlims)
+    fig.axes[0].set_ylabel('$%s_2$' % embedding_name)
+    if ylims is not None:
+        fig.axes[0].set_ylim(*ylims)
+    fig.axes[0].set_title(title)
+    palette_legend(list(palette.keys()), list(palette.values()))
 
-        plotted_clusters = set()
-        for k, color in zip(block_clusters, block_colors):
-            if k in plotted_clusters:
-                continue
-            covk = torch.eye(2) * sigmas[k] ** 2
-            alpha = 0.5
-            alpha /= len({k: v for (k, v) in palette.items()
-                          if all(v == color)})
-            plot_cov_ellipse(covk, mus[k], nstd=1, ax=ax, alpha=alpha,
-                             color=color)
-            plotted_clusters.add(k)
+    plotted_clusters = set()
+    for k, color in zip(block_clusters, block_colors):
+        if k in plotted_clusters:
+            continue
+        covk = torch.eye(2) * sigmas[k] ** 2
+        alpha = 0.5
+        alpha /= len({k: v for (k, v) in palette.items() if all(v == color)})
+        plot_cov_ellipse(covk, mus[k], nstd=1, ax=ax,plot_ellipse=plot_ellipse, id=k, alpha=alpha, color=color)
+        plotted_clusters.add(k)
 
-        if filename is not None:
-            fig.savefig(filename)
-        if show:
-            fig.show()
-
+    if filename is not None:
+        fig.savefig(filename)
+    if show:
+        fig.show()
+        
 def plot_clusters(Xs, mus, covs, K, figsize=(4, 4), xlim=(-10, 10),
                   ylim=(-10, 10)):
     _, ax = plt.subplots(figsize=FIGSIZE)
