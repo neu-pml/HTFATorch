@@ -647,6 +647,8 @@ class DeepTFA:
         hyperparams = self.variational.hyperparams.state_vardict()
         z_p_mu = hyperparams['subject']['mu'].data
         z_p_sigma = softplus(hyperparams['subject']['sigma'].data)
+        subjects = list(set([block.subject for block in self._blocks]))
+
         minus_lims = torch.min(z_p_mu - z_p_sigma * 2, dim=0)[0].tolist()
         plus_lims = torch.max(z_p_mu + z_p_sigma * 2, dim=0)[0].tolist()
         if not xlims:
@@ -655,45 +657,40 @@ class DeepTFA:
             ylims = (minus_lims[1], plus_lims[1])
 
         if labeler is None:
-            labeler = lambda b: b.default_label()
-        labels = [labeler(b) for b in self._blocks]
-        all_labels = np.unique([l for l in labels if l is not None])
-        palette = dict(zip(all_labels,
-                           utils.compose_palette(len(all_labels),
-                                                 colormap=colormap)))
+            labeler = lambda s: s
+        labels = sorted(list({labeler(s) for s in subjects}))
+        palette = dict(zip(labels, utils.compose_palette(len(labels),
+                                                         colormap=colormap)))
 
-        subjects = list(set([block.subject for block in self._blocks]))
-        block_subjects = [subjects.index(b.subject) for b in self._blocks
-                          if labeler(b) is not None]
-        block_colors = [palette[labeler(b)] for b in self._blocks
-                        if labeler(b) is not None]
+        subject_colors = [palette[labeler(subject)] for subject in subjects]
 
         if serialize_data:
             tensors_filename = os.path.splitext(filename)[0] + '.dat'
             tensors = {
                 'z_p': {'mu': z_p_mu, 'sigma': z_p_sigma},
-                'block_colors': block_colors,
                 'palette': palette,
-                'block_subjects': block_subjects,
+                'subject_colors': subject_colors,
+                'labels': labels,
             }
             torch.save(tensors, tensors_filename)
 
-        utils.plot_embedding_clusters(z_p_mu, z_p_sigma, block_colors,
+        utils.plot_embedding_clusters(z_p_mu, z_p_sigma, subject_colors,
                                       'z^P', 'Participant Embeddings', palette,
-                                      block_subjects, filename=filename,
-                                      show=show, xlims=xlims, ylims=ylims,
-                                      figsize=figsize,
+                                      filename=filename, show=show, xlims=xlims,
+                                      ylims=ylims, figsize=figsize,
                                       plot_ellipse=plot_ellipse)
 
     def scatter_task_embedding(self, labeler=None, filename='', show=True,
                                xlims=None, ylims=None, figsize=utils.FIGSIZE,
-                               colormap='tab20', serialize_data=True,
+                               colormap='Accent', serialize_data=True,
                                plot_ellipse=True):
         if filename == '':
             filename = self.common_name() + '_task_embedding.pdf'
         hyperparams = self.variational.hyperparams.state_vardict()
         z_s_mu = hyperparams['task']['mu'].data
         z_s_sigma = softplus(hyperparams['task']['sigma'].data)
+        tasks = list(set([block.task for block in self._blocks]))
+
         minus_lims = torch.min(z_s_mu - z_s_sigma * 2, dim=0)[0].tolist()
         plus_lims = torch.max(z_s_mu + z_s_sigma * 2, dim=0)[0].tolist()
         if not xlims:
@@ -702,34 +699,26 @@ class DeepTFA:
             ylims = (minus_lims[1], plus_lims[1])
 
         if labeler is None:
-            labeler = lambda b: b.default_label()
-        labels = [labeler(b) for b in self._blocks]
-        all_labels = np.unique([l for l in labels if l is not None])
-        palette = dict(zip(all_labels,
-                           utils.compose_palette(len(all_labels),
-                                                 colormap=colormap)))
-
-        tasks = list(set([block.task for block in self._blocks]))
-        block_tasks = [tasks.index(b.task) for b in self._blocks
-                       if labeler(b) is not None]
-        block_colors = [palette[labeler(b)] for b in self._blocks
-                        if labeler(b) is not None]
+            labeler = lambda t: t
+        labels = sorted(list({labeler(t) for t in tasks}))
+        palette = dict(zip(labels, utils.compose_palette(len(labels),
+                                                         colormap=colormap)))
+        task_colors = [palette[labeler(task)] for task in tasks]
 
         if serialize_data:
             tensors_filename = os.path.splitext(filename)[0] + '.dat'
             tensors = {
                 'z_s': {'mu': z_s_mu, 'sigma': z_s_sigma},
-                'block_colors': block_colors,
                 'palette': palette,
-                'block_tasks': block_tasks,
+                'task_colors': task_colors,
+                'labels': labels,
             }
             torch.save(tensors, tensors_filename)
 
-        utils.plot_embedding_clusters(z_s_mu, z_s_sigma, block_colors,
+        utils.plot_embedding_clusters(z_s_mu, z_s_sigma, task_colors,
                                       'z^S', 'Stimulus Embeddings', palette,
-                                      block_tasks, filename=filename,
-                                      show=show, xlims=xlims, ylims=ylims,
-                                      figsize=figsize,
+                                      filename=filename, show=show, xlims=xlims,
+                                      ylims=ylims, figsize=figsize,
                                       plot_ellipse=plot_ellipse)
 
     def common_name(self):
