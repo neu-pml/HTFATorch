@@ -121,10 +121,10 @@ def plot_cov_ellipse(cov, pos, nstd=1, ax=None, plot_ellipse=True, **kwargs):
     ax.scatter(x=pos[0], y=pos[1], c=color, marker='x')
     return ellip
 
-def plot_embedding_clusters(mus, sigmas, block_colors, embedding_name,
-                            title, palette, block_clusters, filename=None,
-                            show=True, xlims=None, ylims=None,
-                            figsize=FIGSIZE, plot_ellipse=True):
+def plot_embedding_clusters(mus, sigmas, embedding_colors, embedding_name,
+                            title, palette, filename=None, show=True,
+                            xlims=None, ylims=None, figsize=FIGSIZE,
+                            plot_ellipse=True):
     with plt.style.context('seaborn-white'):
         fig, ax = plt.subplots(facecolor='white', figsize=figsize, frameon=True)
         ax.set_xlabel('$%s_1$' % embedding_name)
@@ -134,19 +134,16 @@ def plot_embedding_clusters(mus, sigmas, block_colors, embedding_name,
         if ylims is not None:
             ax.set_ylim(*ylims)
         ax.set_title(title)
-        palette_legend(list(palette.keys()), list(palette.values()))
+        if isinstance(palette, cm.ScalarMappable):
+            plt.colorbar(palette)
+        else:
+            palette_legend(list(palette.keys()), list(palette.values()))
 
-        plotted_clusters = set()
-        for k, color in zip(block_clusters, block_colors):
-            if k in plotted_clusters:
-                continue
+        for k, color in enumerate(embedding_colors):
             covk = torch.eye(2) * sigmas[k] ** 2
-            alpha = 0.5
-            alpha /= len({k: v for (k, v) in palette.items()
-                          if all(v == color)})
+            alpha = 0.66
             plot_cov_ellipse(covk, mus[k], nstd=1, ax=ax, alpha=alpha,
                              color=color, plot_ellipse=plot_ellipse)
-            plotted_clusters.add(k)
 
         if filename is not None:
             fig.savefig(filename)
