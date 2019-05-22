@@ -331,7 +331,7 @@ class HierarchicalTopographicFactorAnalysis:
         return p, q
 
     def plot_original_brain(self, block=None, filename='', show=True,
-                            plot_abs=False, t=0, labeler=None, **kwargs):
+                            plot_abs=False, t=0, labeler=None, plot_mean=False, **kwargs):
         if block is None:
             block = np.random.choice(self.num_blocks, 1)[0]
         if self.activation_normalizers is None:
@@ -344,7 +344,10 @@ class HierarchicalTopographicFactorAnalysis:
         image = utils.cmu2nii(self.voxel_activations[block].numpy(),
                               self.voxel_locations.numpy(),
                               self._templates[block])
-        image_slice = nilearn.image.index_img(image, t)
+        if plot_mean:
+            image_slice = nilearn.image.mean_img(image)
+        else:
+            image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
             title=utils.title_brain_plot(block, self._blocks[block], labeler),
@@ -361,7 +364,7 @@ class HierarchicalTopographicFactorAnalysis:
         return plot
 
     def plot_reconstruction(self, block=None, filename='', show=True,
-                            plot_abs=False, t=0, labeler=None, **kwargs):
+                            plot_abs=False, t=0, labeler=None, plot_mean=False,**kwargs):
         results = self.results()
         if self.activation_normalizers is None:
             self.normalize_activations()
@@ -389,7 +392,10 @@ class HierarchicalTopographicFactorAnalysis:
         image = utils.cmu2nii(reconstruction.numpy(),
                               self.voxel_locations.numpy(),
                               self._templates[block])
-        image_slice = nilearn.image.index_img(image, t)
+        if plot_mean:
+            image_slice = nilearn.image.mean_img(image)
+        else:
+            image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
             title=utils.title_brain_plot(block, self._blocks[block], labeler,
