@@ -313,6 +313,11 @@ class DeepTFA:
                             self.voxel_locations
                     torch.cuda.empty_cache()
 
+        if tfa.CUDA and use_cuda:
+            decoder.cpu()
+            variational.cpu()
+            generative.cpu()
+
         log_likelihood = log_likelihoods.sum(dim=0).item()
         prior_kl = prior_kls.sum(dim=0).item()
         return -(log_likelihood - prior_kl), log_likelihood, prior_kl
