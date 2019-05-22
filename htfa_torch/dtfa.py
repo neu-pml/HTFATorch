@@ -107,6 +107,11 @@ class DeepTFA:
                                                     self.num_times,
                                                     embedding_dim, hyper_means)
 
+    def num_parameters(self):
+        parameters = list(self.variational.parameters()) +\
+                     list(self.decoder.parameters())
+        return sum([param.numel() for param in parameters])
+
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
               log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES,
               batch_size=64, use_cuda=True, checkpoint_steps=None,
