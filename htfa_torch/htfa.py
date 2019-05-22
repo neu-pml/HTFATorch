@@ -69,6 +69,9 @@ class HierarchicalTopographicFactorAnalysis:
                                          self.num_times, self.num_factors,
                                          volume=True)
 
+    def num_parameters(self):
+        return sum([param.numel() for param in self.enc.parameters()])
+
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
               log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES,
               batch_size=64, use_cuda=True, blocks_batch_size=4,
