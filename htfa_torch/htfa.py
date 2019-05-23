@@ -22,6 +22,7 @@ import nibabel as nib
 import nilearn.image
 import nilearn.plotting as niplot
 import numpy as np
+from ordered_set import OrderedSet
 import scipy.io as sio
 from scipy.stats import pearsonr
 from sklearn.manifold import TSNE
@@ -323,8 +324,8 @@ class HierarchicalTopographicFactorAnalysis:
         return plot, centers, log_widths
 
     def normalize_activations(self):
-        subject_runs = list(set([(block.subject, block.run)
-                                 for block in self._blocks]))
+        subject_runs = OrderedSet([(block.subject, block.run)
+                                   for block in self._blocks])
         subject_run_normalizers = {sr: 0 for sr in subject_runs}
 
         for block in range(len(self._blocks)):
