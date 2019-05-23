@@ -25,6 +25,7 @@ finally:
 import nilearn.image
 import nilearn.plotting as niplot
 import numpy as np
+from ordered_set import OrderedSet
 import scipy.io as sio
 import torch
 import torch.distributions as dists
@@ -72,8 +73,8 @@ class DeepTFA:
         self.num_times = [acts.shape[0] for acts in self.voxel_activations]
         self.num_voxels = self.voxel_locations.shape[0]
 
-        subjects = list(set([b.subject for b in self._blocks]))
-        tasks = list(set([b.task for b in self._blocks]))
+        subjects = self.subjects()
+        tasks = self.tasks()
         block_subjects = [subjects.index(b.subject) for b in self._blocks]
         block_tasks = [tasks.index(b.task) for b in self._blocks]
 
@@ -106,6 +107,12 @@ class DeepTFA:
                                                     self.num_blocks,
                                                     self.num_times,
                                                     embedding_dim, hyper_means)
+
+    def subjects(self):
+        return OrderedSet([b.subject for b in self._blocks])
+
+    def tasks(self):
+        return OrderedSet([b.task for b in self._blocks])
 
     def num_parameters(self):
         parameters = list(self.variational.parameters()) +\
@@ -455,8 +462,8 @@ class DeepTFA:
         return plot
 
     def normalize_activations(self):
-        subject_runs = list(set([(block.subject, block.run)
-                                 for block in self._blocks]))
+        subject_runs = OrderedSet([(block.subject, block.run)
+                                   for block in self._blocks])
         subject_run_normalizers = {sr: 0 for sr in subject_runs}
 
         for block in range(len(self._blocks)):
@@ -604,7 +611,7 @@ class DeepTFA:
                               plot_abs=False, serialize_data=True, **kwargs):
         if filename == '':
             filename = self.common_name() + str(subject) + '_subject_template.pdf'
-        i = list(set([block.subject for block in self._blocks])).index(subject)
+        i = self.subjects().index(subject)
         results = self.results(block=None, task=None, subject=i)
         template = [i for (i, b) in enumerate(self._blocks)
                     if b.subject == subject][0]
@@ -644,7 +651,7 @@ class DeepTFA:
                            labeler=lambda x: x, serialize_data=True, **kwargs):
         if filename == '':
             filename = self.common_name() + str(task) + '_task_template.pdf'
-        i = list(set([block.task for block in self._blocks])).index(task)
+        i = self.tasks().index(task)
         results = self.results(block=None, subject=None, task=i)
         template = [i for (i, b) in enumerate(self._blocks)
                     if b.task == task][0]
@@ -728,7 +735,7 @@ class DeepTFA:
         hyperparams = self.variational.hyperparams.state_vardict()
         z_p_mu = hyperparams['subject']['mu'].data
         z_p_sigma = softplus(hyperparams['subject']['sigma'].data)
-        subjects = list(set([block.subject for block in self._blocks]))
+        subjects = self.subjects()
 
         minus_lims = torch.min(z_p_mu - z_p_sigma * 2, dim=0)[0].tolist()
         plus_lims = torch.max(z_p_mu + z_p_sigma * 2, dim=0)[0].tolist()
@@ -775,7 +782,7 @@ class DeepTFA:
         hyperparams = self.variational.hyperparams.state_vardict()
         z_s_mu = hyperparams['task']['mu'].data
         z_s_sigma = softplus(hyperparams['task']['sigma'].data)
-        tasks = list(set([block.task for block in self._blocks]))
+        tasks = self.tasks()
 
         minus_lims = torch.min(z_s_mu - z_s_sigma * 2, dim=0)[0].tolist()
         plus_lims = torch.max(z_s_mu + z_s_sigma * 2, dim=0)[0].tolist()
