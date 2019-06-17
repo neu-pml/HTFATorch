@@ -661,7 +661,7 @@ def uncertainty_palette(uncertainties, scalars=None, colormap='tab20'):
 def palette_legend(labels, colors):
     patches = [mpatches.Patch(color=colors[i], label=labels[i]) for i in
                range(len(colors))]
-    plt.legend(handles=patches, loc='lower left')
+    plt.legend(handles=patches, loc='best')
 
 def isnan(tensor):
     # Gross: https://github.com/pytorch/pytorch/issues/4767
