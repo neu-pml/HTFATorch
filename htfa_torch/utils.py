@@ -124,7 +124,7 @@ def plot_cov_ellipse(cov, pos, nstd=1, ax=None, plot_ellipse=True, **kwargs):
 def plot_embedding_clusters(mus, sigmas, embedding_colors, embedding_name,
                             title, palette, filename=None, show=True,
                             xlims=None, ylims=None, figsize=FIGSIZE,
-                            plot_ellipse=True):
+                            plot_ellipse=True, legend_ordering=None):
     with plt.style.context('seaborn-white'):
         fig, ax = plt.subplots(facecolor='white', figsize=figsize, frameon=True)
         ax.set_xlabel('$%s_1$' % embedding_name)
@@ -137,7 +137,8 @@ def plot_embedding_clusters(mus, sigmas, embedding_colors, embedding_name,
         if isinstance(palette, cm.ScalarMappable):
             plt.colorbar(palette)
         else:
-            palette_legend(list(palette.keys()), list(palette.values()))
+            palette_legend(list(palette.keys()), list(palette.values()),
+                           ordering=legend_ordering)
 
         for k, color in enumerate(embedding_colors):
             covk = torch.eye(2) * sigmas[k] ** 2
@@ -658,9 +659,12 @@ def uncertainty_palette(uncertainties, scalars=None, colormap='tab20'):
     return compose_palette(uncertainties.shape[0], alphas=alphas,
                            colormap=colormap)
 
-def palette_legend(labels, colors):
+def palette_legend(labels, colors, ordering=None):
     patches = [mpatches.Patch(color=colors[i], label=labels[i]) for i in
                range(len(colors))]
+    if ordering:
+        assert len(patches) == len(ordering)
+        patches = [patches[i] for i in ordering]
     plt.legend(handles=patches, loc='best')
 
 def isnan(tensor):
