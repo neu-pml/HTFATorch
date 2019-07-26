@@ -452,15 +452,14 @@ class DeepTFA:
         if filename == '':
             filename = self.common_name() + str(block) + '_reconstruction_diff.pdf'
         diff = self.reconstruction_diff(block)
-        image = utils.cmu2nii(diff.numpy(), self.voxel_locations.numpy(),
+        image = utils.cmu2nii(diff.numpy() ** 2, self.voxel_locations.numpy(),
                               self._templates[block])
         image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(
-            image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
+            image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=False,
             title=utils.title_brain_plot(block, self._blocks[block], labeler,
-                                         'Reconstruction Error'),
-            vmin=-self.activation_normalizers[block],
-            vmax=self.activation_normalizers[block],
+                                         'Squared Residual'),
+            vmin=0, vmax=(diff ** 2).max().item(),
             **kwargs,
         )
 
