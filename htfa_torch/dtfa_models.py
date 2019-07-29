@@ -241,12 +241,14 @@ class DeepTFADecoder(nn.Module):
 class DeepTFAGuide(nn.Module):
     """Variational guide for deep topographic factor analysis"""
     def __init__(self, num_factors, block_subjects, block_tasks, num_blocks=1,
-                 num_times=[1], embedding_dim=2, hyper_means=None):
+                 num_times=[1], embedding_dim=2, hyper_means=None,
+                 time_series=True):
         super(self.__class__, self).__init__()
         self._num_blocks = num_blocks
         self._num_times = num_times
         self._num_factors = num_factors
         self._embedding_dim = embedding_dim
+        self._time_series = time_series
 
         self.block_subjects = block_subjects
         self.block_tasks = block_tasks
@@ -258,7 +260,7 @@ class DeepTFAGuide(nn.Module):
                                                    self._num_factors,
                                                    num_subjects, num_tasks,
                                                    hyper_means,
-                                                   embedding_dim)
+                                                   embedding_dim, time_series)
 
     def forward(self, decoder, trace, times=None, blocks=None,
                 num_particles=tfa_models.NUM_PARTICLES):
@@ -273,7 +275,7 @@ class DeepTFAGuide(nn.Module):
                           if b in blocks]
         block_tasks = [self.block_tasks[b] for b in range(self._num_blocks)
                        if b in blocks]
-        if times:
+        if times and self._time_series:
             for k, v in params['weights'].items():
                 params['weights'][k] = v[:, :, times[0]:times[1], :]
 
