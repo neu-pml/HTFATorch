@@ -48,7 +48,7 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
 
 class DeepTFAGuideHyperparams(tfa_models.HyperParams):
     def __init__(self, num_blocks, num_times, num_factors, num_subjects,
-                 num_tasks, hyper_means, embedding_dim=2):
+                 num_tasks, hyper_means, embedding_dim=2, time_series=True):
         self.num_blocks = num_blocks
         self.num_subjects = num_subjects
         self.num_tasks = num_tasks
@@ -78,13 +78,14 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
                 'sigma': torch.ones(self.num_subjects, self._num_factors) *\
                          hyper_means['factor_log_widths'].std(),
             },
-            'weights': {
+        })
+        if time_series:
+            params['weights'] = {
                 'mu': torch.zeros(self.num_blocks, self.num_times,
                                   self._num_factors),
                 'sigma': torch.ones(self.num_blocks, self.num_times,
                                     self._num_factors),
-            },
-        })
+            }
 
         super(self.__class__, self).__init__(params, guide=True)
 
