@@ -165,13 +165,15 @@ def plot_clusters(Xs, mus, covs, K, figsize=(4, 4), xlim=(-10, 10),
 def sorted_glob(pattern):
     return sorted(glob.glob(pattern))
 
-BRAIN_PLOT_TITLE_TEMPLATE = "(Participant %s, Run %d, Stimulus: %s, %s)"
+BRAIN_PLOT_TITLE_TEMPLATE = "(Participant %s, Run %d, Stimulus: %s, TR: %s, %s)"
 
-def title_brain_plot(n, block, labeler, kind='Original'):
+def title_brain_plot(n, block, labeler, t=None, kind='Original'):
     label = labeler(block)
-    if label:
+    if label and t is not None:
+        return '%s (%s, Block %d, TR %d)' % (label, kind, n, t)
+    elif label:
         return '%s (%s, Block %d)' % (label, kind, n)
-    params = (block.subject, block.run, block.task, kind)
+    params = (block.subject, block.run, block.task, t, kind)
     return BRAIN_PLOT_TITLE_TEMPLATE % params
 
 def clamped(rv, guide=None, observations=None):
