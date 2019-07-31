@@ -449,15 +449,22 @@ class DeepTFA:
     def plot_reconstruction_diff(self, block, filename='', show=True, t=0,
                                  plot_abs=False, labeler=lambda b: None,
                                  **kwargs):
-        if filename == '':
-            filename = self.common_name() + str(block) + '_reconstruction_diff.pdf'
+        if filename == '' and t is None:
+            filename = '%s%s_ntfa_reconstruction_diff.pdf'
+            filename = filename % (self.common_name(), str(block))
+        elif filename == '':
+            filename = '%s%s_ntfa_reconstruction_tr%d.pdf'
+            filename = filename % (self.common_name(), str(block), t)
         diff = self.reconstruction_diff(block)
         image = utils.cmu2nii(diff.numpy() ** 2, self.voxel_locations.numpy(),
                               self._templates[block])
-        image_slice = nilearn.image.index_img(image, t)
+        if t is None:
+            image_slice = nilearn.image.mean_img(image)
+        else:
+            image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=False,
-            title=utils.title_brain_plot(block, self._blocks[block], labeler,
+            title=utils.title_brain_plot(block, self._blocks[block], labeler, t,
                                          'Squared Residual'),
             vmin=0, vmax=(diff ** 2).max().item(),
             **kwargs,
@@ -530,9 +537,13 @@ class DeepTFA:
         return plot
 
     def plot_original_brain(self, block=None, filename='', show=True,
-                            plot_abs=False, t=0, labeler=None,plot_mean=False, **kwargs):
-        if filename == '':
-            filename = self.common_name() + str(block) + '_original_brain.pdf'
+                            plot_abs=False, t=0, labeler=None, **kwargs):
+        if filename == '' and t is None:
+            filename = '%s%s_original_brain.pdf' % (self.common_name(),
+                                                    str(block))
+        elif filename == '':
+            filename = '%s%s_original_brain_tr%d.pdf'
+            filename = filename % (self.common_name(), str(block), t)
         if labeler is None:
             labeler = lambda b: None
         if block is None:
@@ -543,13 +554,13 @@ class DeepTFA:
         image = utils.cmu2nii(self.voxel_activations[block].numpy(),
                               self.voxel_locations.numpy(),
                               self._templates[block])
-        if plot_mean:
+        if t is None:
             image_slice = nilearn.image.mean_img(image)
         else:
             image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
-            title=utils.title_brain_plot(block, self._blocks[block], labeler),
+            title=utils.title_brain_plot(block, self._blocks[block], labeler, t),
             vmin=-self.activation_normalizers[block],
             vmax=self.activation_normalizers[block],
             **kwargs,
@@ -577,9 +588,13 @@ class DeepTFA:
             )
 
     def plot_reconstruction(self, block=None, filename='', show=True,
-                            plot_abs=False, t=0, labeler=None,plot_mean=False, **kwargs):
-        if filename == '':
-            filename = self.common_name() + str(block) + '_ntfa_reconstruction.pdf'
+                            plot_abs=False, t=0, labeler=None, **kwargs):
+        if filename == '' and t is None:
+            filename = '%s%s_ntfa_reconstruction.pdf' % (self.common_name(),
+                                                         str(block))
+        elif filename == '':
+            filename = '%s%s_ntfa_reconstruction_tr%d.pdf'
+            filename = filename % (self.common_name(), str(block), t)
         if labeler is None:
             labeler = lambda b: None
         if block is None:
@@ -594,13 +609,13 @@ class DeepTFA:
         image = utils.cmu2nii(reconstruction.numpy(),
                               self.voxel_locations.numpy(),
                               self._templates[block])
-        if plot_mean:
+        if t is None:
             image_slice = nilearn.image.mean_img(image)
         else:
             image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
-            title=utils.title_brain_plot(block, self._blocks[block], labeler,
+            title=utils.title_brain_plot(block, self._blocks[block], labeler, t,
                                          'NeuralTFA'),
             vmin=-self.activation_normalizers[block],
             vmax=self.activation_normalizers[block],
