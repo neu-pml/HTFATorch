@@ -264,15 +264,22 @@ class DeepTFA:
         return np.vstack([free_energies])
 
     def free_energy(self, batch_size=64, use_cuda=True, blocks_batch_size=4,
-                    blocks_filter=lambda block: True, num_particles=1):
+                    blocks_filter=lambda block: True, num_particles=1,
+                    sample_size=10):
         training_blocks = [(b, block) for (b, block) in enumerate(self._blocks)
                            if blocks_filter(block)]
         activations_loader = torch.utils.data.DataLoader(
-            utils.TFADataset([block.activations
+            utils.TFADataset([block.activations.detach()
                               for (_, block) in training_blocks]),
             batch_size=batch_size,
             pin_memory=True,
         )
+        log_likelihoods = torch.zeros(sample_size, len(activations_loader))
+        prior_kls = torch.zeros(sample_size, len(activations_loader))
+
+        self.decoder.eval()
+        self.variational.eval()
+        self.generative.eval()
         decoder = self.decoder
         variational = self.variational
         generative = self.generative
@@ -280,57 +287,66 @@ class DeepTFA:
             decoder.cuda()
             variational.cuda()
             generative.cuda()
-            cuda_locations = self.voxel_locations.cuda()
-        log_likelihoods = torch.zeros(len(activations_loader))
-        prior_kls = torch.zeros(len(activations_loader))
+            cuda_locations = self.voxel_locations.cuda().detach()
+            log_likelihoods = log_likelihoods.to(cuda_locations)
+            prior_kls = prior_kls.to(cuda_locations)
 
-        for (batch, data) in enumerate(activations_loader):
-            log_likelihoods[batch] = 0.0
-            prior_kls[batch] = 0.0
+        for k in range(sample_size // num_particles):
+            for (batch, data) in enumerate(activations_loader):
+                block_batches = utils.chunks(list(range(len(training_blocks))),
+                                             n=blocks_batch_size)
+                for block_batch in block_batches:
+                    activations = [{'Y': data[:, b, :]} for b in block_batch]
+                    block_batch = [training_blocks[b][0] for b in block_batch]
+                    if tfa.CUDA and use_cuda:
+                        for b in block_batch:
+                            generative.likelihoods[b].voxel_locations =\
+                                cuda_locations
+                        for acts in activations:
+                            acts['Y'] = acts['Y'].cuda()
+                    trs = (batch * batch_size, None)
+                    trs = (trs[0], trs[0] + activations[0]['Y'].shape[0])
 
-            block_batches = utils.chunks(list(range(len(training_blocks))),
-                                         n=blocks_batch_size)
-            for block_batch in block_batches:
-                activations = [{'Y': data[:, b, :]} for b in block_batch]
-                block_batch = [training_blocks[b][0] for b in block_batch]
-                if tfa.CUDA and use_cuda:
-                    for b in block_batch:
-                        generative.likelihoods[b].voxel_locations =\
-                            cuda_locations
-                    for acts in activations:
-                        acts['Y'] = acts['Y'].cuda()
-                trs = (batch * batch_size, None)
-                trs = (trs[0], trs[0] + activations[0]['Y'].shape[0])
+                    q = probtorch.Trace()
+                    variational(decoder, q, times=trs, blocks=block_batch,
+                                num_particles=num_particles)
+                    p = probtorch.Trace()
+                    generative(decoder, p, times=trs, guide=q,
+                               observations=activations, blocks=block_batch)
 
-                q = probtorch.Trace()
-                variational(decoder, q, times=trs, blocks=block_batch,
-                            num_particles=num_particles)
-                p = probtorch.Trace()
-                generative(decoder, p, times=trs, guide=q,
-                           observations=activations, blocks=block_batch)
+                    _, ll, prior_kl = tfa.hierarchical_free_energy(
+                        q, p, num_particles=num_particles
+                    )
 
-                _, ll, prior_kl = tfa.hierarchical_free_energy(
-                    q, p, num_particles=num_particles
-                )
+                    start = k * num_particles
+                    end = (k + 1) * num_particles
+                    log_likelihoods[start:end, batch] += ll.detach()
+                    prior_kls[start:end, batch] += prior_kl.detach()
 
-                log_likelihoods[batch] += ll.detach()
-                prior_kls[batch] += prior_kl.detach()
-
-                if tfa.CUDA and use_cuda:
-                    del activations
-                    for b in block_batch:
-                        generative.likelihoods[b].voxel_locations =\
-                            self.voxel_locations
-                    torch.cuda.empty_cache()
+                    if tfa.CUDA and use_cuda:
+                        del activations
+                        for b in block_batch:
+                            generative.likelihoods[b].voxel_locations =\
+                                self.voxel_locations
+                        torch.cuda.empty_cache()
 
         if tfa.CUDA and use_cuda:
             decoder.cpu()
             variational.cpu()
             generative.cpu()
+            log_likelihoods = log_likelihoods.cpu()
+            prior_kls = prior_kls.cpu()
 
-        log_likelihood = log_likelihoods.sum(dim=0).item()
-        prior_kl = prior_kls.sum(dim=0).item()
-        return -(log_likelihood - prior_kl), log_likelihood, prior_kl
+        log_likelihood = log_likelihoods.sum(dim=-1)
+        prior_kl = prior_kls.sum(dim=-1)
+        elbo = log_likelihood - prior_kl
+        iwae_log_likelihood = probtorch.util.log_mean_exp(log_likelihood,
+                                                          dim=0).item()
+        iwae_prior_kl = probtorch.util.log_mean_exp(prior_kl, dim=0).item()
+        iwae_free_energy = probtorch.util.log_mean_exp(-elbo, dim=0).item()
+        return [[-elbo.mean(dim=0).item(), log_likelihood.mean(dim=0).item(),
+                 prior_kl.mean(dim=0).item()],
+                [iwae_free_energy, iwae_log_likelihood, iwae_prior_kl]]
 
     def results(self, block=None, subject=None, task=None, hist_weights=False):
         hyperparams = self.variational.hyperparams.state_vardict()
@@ -437,18 +453,24 @@ class DeepTFA:
     def plot_reconstruction_diff(self, block, filename='', show=True, t=0,
                                  plot_abs=False, labeler=lambda b: None,
                                  **kwargs):
-        if filename == '':
-            filename = self.common_name() + str(block) + '_reconstruction_diff.pdf'
+        if filename == '' and t is None:
+            filename = '%s%s_ntfa_reconstruction_diff.pdf'
+            filename = filename % (self.common_name(), str(block))
+        elif filename == '':
+            filename = '%s%s_ntfa_reconstruction_tr%d.pdf'
+            filename = filename % (self.common_name(), str(block), t)
         diff = self.reconstruction_diff(block)
-        image = utils.cmu2nii(diff.numpy(), self.voxel_locations.numpy(),
+        image = utils.cmu2nii(diff.numpy() ** 2, self.voxel_locations.numpy(),
                               self._templates[block])
-        image_slice = nilearn.image.index_img(image, t)
+        if t is None:
+            image_slice = nilearn.image.mean_img(image)
+        else:
+            image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(
-            image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
-            title=utils.title_brain_plot(block, self._blocks[block], labeler,
-                                         'Reconstruction Error'),
-            vmin=-self.activation_normalizers[block],
-            vmax=self.activation_normalizers[block],
+            image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=False,
+            title=utils.title_brain_plot(block, self._blocks[block], labeler, t,
+                                         'Squared Residual'),
+            vmin=0, vmax=(diff ** 2).max().item(),
             **kwargs,
         )
 
@@ -519,9 +541,13 @@ class DeepTFA:
         return plot
 
     def plot_original_brain(self, block=None, filename='', show=True,
-                            plot_abs=False, t=0, labeler=None,plot_mean=False, **kwargs):
-        if filename == '':
-            filename = self.common_name() + str(block) + '_original_brain.pdf'
+                            plot_abs=False, t=0, labeler=None, **kwargs):
+        if filename == '' and t is None:
+            filename = '%s%s_original_brain.pdf' % (self.common_name(),
+                                                    str(block))
+        elif filename == '':
+            filename = '%s%s_original_brain_tr%d.pdf'
+            filename = filename % (self.common_name(), str(block), t)
         if labeler is None:
             labeler = lambda b: None
         if block is None:
@@ -532,13 +558,13 @@ class DeepTFA:
         image = utils.cmu2nii(self.voxel_activations[block].numpy(),
                               self.voxel_locations.numpy(),
                               self._templates[block])
-        if plot_mean:
+        if t is None:
             image_slice = nilearn.image.mean_img(image)
         else:
             image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
-            title=utils.title_brain_plot(block, self._blocks[block], labeler),
+            title=utils.title_brain_plot(block, self._blocks[block], labeler, t),
             vmin=-self.activation_normalizers[block],
             vmax=self.activation_normalizers[block],
             **kwargs,
@@ -566,9 +592,13 @@ class DeepTFA:
             )
 
     def plot_reconstruction(self, block=None, filename='', show=True,
-                            plot_abs=False, t=0, labeler=None,plot_mean=False, **kwargs):
-        if filename == '':
-            filename = self.common_name() + str(block) + '_ntfa_reconstruction.pdf'
+                            plot_abs=False, t=0, labeler=None, **kwargs):
+        if filename == '' and t is None:
+            filename = '%s%s_ntfa_reconstruction.pdf' % (self.common_name(),
+                                                         str(block))
+        elif filename == '':
+            filename = '%s%s_ntfa_reconstruction_tr%d.pdf'
+            filename = filename % (self.common_name(), str(block), t)
         if labeler is None:
             labeler = lambda b: None
         if block is None:
@@ -583,13 +613,13 @@ class DeepTFA:
         image = utils.cmu2nii(reconstruction.numpy(),
                               self.voxel_locations.numpy(),
                               self._templates[block])
-        if plot_mean:
+        if t is None:
             image_slice = nilearn.image.mean_img(image)
         else:
             image_slice = nilearn.image.index_img(image, t)
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
-            title=utils.title_brain_plot(block, self._blocks[block], labeler,
+            title=utils.title_brain_plot(block, self._blocks[block], labeler, t,
                                          'NeuralTFA'),
             vmin=-self.activation_normalizers[block],
             vmax=self.activation_normalizers[block],
