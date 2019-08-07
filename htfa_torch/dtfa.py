@@ -539,7 +539,7 @@ class DeepTFA:
             np.vstack([centers, centers]),
             node_size=np.vstack([sizes, centers_sizes]),
             title=utils.title_brain_plot(block, self._blocks[block], labeler,
-                                         'Factor Centers'),
+                                         None, 'Factor Centers'),
         )
 
         if filename is not None:
