@@ -400,11 +400,14 @@ class HierarchicalTopographicFactorAnalysis:
         return p, q
 
     def plot_original_brain(self, block=None, filename='', show=True,
-                            plot_abs=False, t=0, labeler=None, **kwargs):
+                            plot_abs=False, t=0, labeler=None, zscore_bound=3,
+                            **kwargs):
         if block is None:
             block = np.random.choice(self.num_blocks, 1)[0]
         if self.activation_normalizers is None:
             self.normalize_activations()
+        if zscore_bound is None:
+            zscore_bound = self.activation_normalizers[block]
         if labeler is None:
             labeler = lambda b: None
         if filename == '' and t is None:
@@ -424,9 +427,7 @@ class HierarchicalTopographicFactorAnalysis:
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
             title=utils.title_brain_plot(block, self._blocks[block], labeler, t),
-            vmin=-self.activation_normalizers[block],
-            vmax=self.activation_normalizers[block],
-            **kwargs,
+            vmin=-zscore_bound, vmax=zscore_bound, **kwargs,
         )
 
         if filename is not None:
@@ -437,10 +438,13 @@ class HierarchicalTopographicFactorAnalysis:
         return plot
 
     def plot_reconstruction(self, block=None, filename='', show=True,
-                            plot_abs=False, t=0, labeler=None, **kwargs):
+                            plot_abs=False, t=0, labeler=None, zscore_bound=3,
+                            **kwargs):
         results = self.results()
         if self.activation_normalizers is None:
             self.normalize_activations()
+        if zscore_bound is None:
+            zscore_bound = self.activation_normalizers[block]
         if labeler is None:
             labeler = lambda b: None
         if filename == '' and t is None:
@@ -477,9 +481,7 @@ class HierarchicalTopographicFactorAnalysis:
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
             title=utils.title_brain_plot(block, self._blocks[block], labeler, t,
                                          'HTFA'),
-            vmin=-self.activation_normalizers[block],
-            vmax=self.activation_normalizers[block],
-            **kwargs,
+            vmin=-zscore_bound, vmax=zscore_bound, **kwargs,
         )
 
         logging.info(
