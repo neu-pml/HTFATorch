@@ -65,8 +65,8 @@ class DeepTFA:
         self._templates = [block.filename for block in self._blocks]
         self._tasks = [block.task for block in self._blocks]
 
-        self.weight_normalizers = None
         self.activation_normalizers = None
+        self.activation_sufficient_stats = None
         self.normalize_activations()
 
         # Pull out relevant dimensions: the number of time instants and the
@@ -490,18 +490,27 @@ class DeepTFA:
     def normalize_activations(self):
         subject_runs = OrderedSet([(block.subject, block.run)
                                    for block in self._blocks])
-        subject_run_normalizers = {sr: 0 for sr in subject_runs}
+        run_activations = {sr: None for sr in subject_runs}
 
         for block in range(len(self._blocks)):
             sr = (self._blocks[block].subject, self._blocks[block].run)
-            subject_run_normalizers[sr] = max(
-                subject_run_normalizers[sr],
-                torch.abs(self.voxel_activations[block]).max()
-            )
+            if run_activations[sr] is None:
+                run_activations[sr] = self.voxel_activations[block]
+            else:
+                run_activations[sr] = torch.cat((run_activations[sr],
+                                                 self.voxel_activations[block]),
+                                                dim=0)
+
+        for sr in run_activations:
+            run_activations[sr] = run_activations[sr].flatten()
 
         self.activation_normalizers =\
-            [subject_run_normalizers[(block.subject, block.run)]
+            [torch.abs(run_activations[(block.subject, block.run)]).max()
              for block in self._blocks]
+        self.activation_sufficient_stats = [
+            (torch.mean(run_activations[(block.subject, block.run)], dim=0),
+             torch.std(run_activations[(block.subject, block.run)], dim=0))
+            for block in self._blocks]
         return self.activation_normalizers
 
     def plot_factor_centers(self, block, filename='', show=True, t=None,
@@ -530,7 +539,7 @@ class DeepTFA:
             np.vstack([centers, centers]),
             node_size=np.vstack([sizes, centers_sizes]),
             title=utils.title_brain_plot(block, self._blocks[block], labeler,
-                                         'Factor Centers'),
+                                         None, 'Factor Centers'),
         )
 
         if filename is not None:
@@ -541,7 +550,10 @@ class DeepTFA:
         return plot
 
     def plot_original_brain(self, block=None, filename='', show=True,
-                            plot_abs=False, t=0, labeler=None, **kwargs):
+                            plot_abs=False, t=0, labeler=None, zscore_bound=3,
+                            **kwargs):
+        if zscore_bound is None:
+            zscore_bound = self.activation_normalizers[block]
         if filename == '' and t is None:
             filename = '%s%s_original_brain.pdf' % (self.common_name(),
                                                     str(block))
@@ -565,9 +577,7 @@ class DeepTFA:
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
             title=utils.title_brain_plot(block, self._blocks[block], labeler, t),
-            vmin=-self.activation_normalizers[block],
-            vmax=self.activation_normalizers[block],
-            **kwargs,
+            vmin=-zscore_bound, vmax=zscore_bound, **kwargs,
         )
 
         if filename is not None:
@@ -592,7 +602,10 @@ class DeepTFA:
             )
 
     def plot_reconstruction(self, block=None, filename='', show=True,
-                            plot_abs=False, t=0, labeler=None, **kwargs):
+                            plot_abs=False, t=0, labeler=None, zscore_bound=3,
+                            **kwargs):
+        if zscore_bound is None:
+            zscore_bound = self.activation_normalizers[block]
         if filename == '' and t is None:
             filename = '%s%s_ntfa_reconstruction.pdf' % (self.common_name(),
                                                          str(block))
@@ -621,9 +634,7 @@ class DeepTFA:
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
             title=utils.title_brain_plot(block, self._blocks[block], labeler, t,
                                          'NeuralTFA'),
-            vmin=-self.activation_normalizers[block],
-            vmax=self.activation_normalizers[block],
-            **kwargs,
+            vmin=-zscore_bound, vmax=zscore_bound, **kwargs,
         )
 
         logging.info(
@@ -642,7 +653,8 @@ class DeepTFA:
         return plot
 
     def plot_subject_template(self, subject, filename='', show=True,
-                              plot_abs=False, serialize_data=True, **kwargs):
+                              plot_abs=False, serialize_data=True,
+                              zscore_bound=3, **kwargs):
         if filename == '':
             filename = self.common_name() + str(subject) + '_subject_template.pdf'
         i = self.subjects().index(subject)
@@ -650,6 +662,8 @@ class DeepTFA:
         template = [i for (i, b) in enumerate(self._blocks)
                     if b.subject == subject][0]
         reconstruction = results['weights'] @ results['factors']
+        if zscore_bound is None:
+            zscore_bound = self.activation_normalizers[template]
 
         image = utils.cmu2nii(reconstruction.numpy(),
                               self.voxel_locations.numpy(),
@@ -669,9 +683,7 @@ class DeepTFA:
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
             title="Template for Participant %d" % subject,
-            vmin=-self.activation_normalizers[template],
-            vmax=self.activation_normalizers[template],
-            **kwargs,
+            vmin=-zscore_bound, vmax=zscore_bound, **kwargs,
         )
 
         if filename is not None:
@@ -682,7 +694,8 @@ class DeepTFA:
         return plot
 
     def plot_task_template(self, task, filename='', show=True, plot_abs=False,
-                           labeler=lambda x: x, serialize_data=True, **kwargs):
+                           labeler=lambda x: x, serialize_data=True,
+                           zscore_bound=3, **kwargs):
         if filename == '':
             filename = self.common_name() + str(task) + '_task_template.pdf'
         i = self.tasks().index(task)
@@ -690,6 +703,8 @@ class DeepTFA:
         template = [i for (i, b) in enumerate(self._blocks)
                     if b.task == task][0]
         reconstruction = results['weights'] @ results['factors']
+        if zscore_bound is None:
+            zscore_bound = self.activation_normalizers[template]
 
         image = utils.cmu2nii(reconstruction.numpy(),
                               self.voxel_locations.numpy(),
@@ -709,9 +724,7 @@ class DeepTFA:
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
             title="Template for Stimulus '%s'" % labeler(task),
-            vmin=-self.activation_normalizers[template],
-            vmax=self.activation_normalizers[template],
-            **kwargs,
+            vmin=-zscore_bound, vmax=zscore_bound, **kwargs,
         )
 
         if filename is not None:
