@@ -457,7 +457,7 @@ class DeepTFA:
             filename = '%s%s_ntfa_reconstruction_diff.pdf'
             filename = filename % (self.common_name(), str(block))
         elif filename == '':
-            filename = '%s%s_ntfa_reconstruction_tr%d.pdf'
+            filename = '%s%s_ntfa_reconstruction_diff_tr%d.pdf'
             filename = filename % (self.common_name(), str(block), t)
         diff = self.reconstruction_diff(block)
         image = utils.cmu2nii(diff.numpy() ** 2, self.voxel_locations.numpy(),
