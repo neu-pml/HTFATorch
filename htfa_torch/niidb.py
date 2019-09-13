@@ -9,6 +9,7 @@ __email__ = ('j.vandemeent@northeastern.edu',
 from functools import lru_cache
 import json
 import logging
+from ordered_set import OrderedSet
 import types
 
 import dataset
@@ -70,6 +71,18 @@ class FMriActivationsDb:
         self._table = self._db['fmri_activations']
         self.mask = mask
         self.smooth = smooth
+
+    def inference_filter(self, training=True):
+        subjects = OrderedSet([b.subject for b in self.all()])
+        tasks = OrderedSet([b.task for b in self.all()])
+        diagonals = list(utils.striping_diagonal_indices(len(subjects),
+                                                         len(tasks)))
+        def result(b):
+            subject_index = subjects.index(b.subject)
+            task_index = tasks.index(b.task)
+            return ((subject_index, task_index) in diagonals) == (not training)
+
+        return result
 
     def insert(self, block):
         if self.mask is not None:
