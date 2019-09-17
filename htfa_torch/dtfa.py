@@ -452,7 +452,7 @@ class DeepTFA:
 
     def plot_reconstruction_diff(self, block, filename='', show=True, t=0,
                                  plot_abs=False, labeler=lambda b: None,
-                                 **kwargs):
+                                 zscore_bound=3, **kwargs):
         if filename == '' and t is None:
             filename = '%s%s_ntfa_reconstruction_diff.pdf'
             filename = filename % (self.common_name(), str(block))
@@ -460,6 +460,8 @@ class DeepTFA:
             filename = '%s%s_ntfa_reconstruction_diff_tr%d.pdf'
             filename = filename % (self.common_name(), str(block), t)
         diff = self.reconstruction_diff(block)
+        if zscore_bound is None:
+            zscore_bound = diff.max().item()
         image = utils.cmu2nii(diff.numpy() ** 2, self.voxel_locations.numpy(),
                               self._templates[block])
         if t is None:
@@ -470,8 +472,7 @@ class DeepTFA:
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=False,
             title=utils.title_brain_plot(block, self._blocks[block], labeler, t,
                                          'Squared Residual'),
-            vmin=0, vmax=(diff ** 2).max().item(),
-            **kwargs,
+            vmin=0, vmax=zscore_bound ** 2, **kwargs,
         )
 
         logging.info(
