@@ -76,7 +76,8 @@ class HierarchicalTopographicFactorAnalysis:
     def train(self, num_steps=10, learning_rate=tfa.LEARNING_RATE,
               log_level=logging.WARNING, num_particles=tfa_models.NUM_PARTICLES,
               batch_size=64, use_cuda=True, blocks_batch_size=4,
-              checkpoint_steps=None, blocks_filter=lambda block: True):
+              checkpoint_steps=None, train_globals=True,
+              blocks_filter=lambda block: True):
         """Optimize the variational guide to reflect the data for `num_steps`"""
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
@@ -94,8 +95,19 @@ class HierarchicalTopographicFactorAnalysis:
         if tfa.CUDA and use_cuda:
             enc.cuda()
             dec.cuda()
-        optimizer = torch.optim.Adam(list(self.enc.parameters()),
-                                     lr=learning_rate, amsgrad=True)
+        param_groups = [{
+            'params': [phi for phi in self.enc.parameters()
+                       if phi.shape[0] == len(self._blocks)],
+            'lr': learning_rate,
+        }]
+        if train_globals:
+            param_groups.append({
+                'params': [phi for phi in self.enc.parameters()
+                           if phi.shape[0] != len(self._blocks)],
+                'lr': learning_rate,
+            })
+        optimizer = torch.optim.Adam(param_groups, lr=learning_rate,
+                                     amsgrad=True)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, factor=1e-1, min_lr=5e-5
         )
