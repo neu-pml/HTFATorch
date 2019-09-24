@@ -202,7 +202,8 @@ class HierarchicalTopographicFactorAnalysis:
         return np.vstack([free_energies])
 
     def free_energy(self, batch_size=64, use_cuda=True, blocks_batch_size=4,
-                    blocks_filter=lambda block: True, num_particles=1):
+                    blocks_filter=lambda block: True, num_particles=1,
+                    sample_size=10):
         training_blocks = [(b, block) for (b, block) in enumerate(self._blocks)
                            if blocks_filter(block)]
         activations_loader = torch.utils.data.DataLoader(
@@ -213,58 +214,77 @@ class HierarchicalTopographicFactorAnalysis:
         )
         enc = self.enc
         dec = self.dec
+        log_likelihoods = torch.zeros(sample_size,
+                                      len(activations_loader))
+        prior_kls = torch.zeros(sample_size, len(activations_loader))
         if tfa.CUDA and use_cuda:
             enc.cuda()
             dec.cuda()
             cuda_locations = self.voxel_locations.cuda()
-        log_likelihoods = torch.zeros(len(activations_loader))
-        prior_kls = torch.zeros(len(activations_loader))
+            log_likelihoods = log_likelihoods.to(cuda_locations)
+            prior_kls = prior_kls.to(cuda_locations)
 
-        for (batch, data) in enumerate(activations_loader):
-            log_likelihoods[batch] = 0.0
-            prior_kls[batch] = 0.0
+        for k in range(sample_size // num_particles):
+            for (batch, data) in enumerate(activations_loader):
+                log_likelihoods[batch] = 0.0
+                prior_kls[batch] = 0.0
 
-            block_batches = utils.chunks(list(range(len(training_blocks))),
-                                         n=blocks_batch_size)
-            for block_batch in block_batches:
-                activations = [{'Y': data[:, b, :]} for b in block_batch]
-                block_batch = [training_blocks[b][0] for b in block_batch]
-                if tfa.CUDA and use_cuda:
-                    for b in block_batch:
-                        dec.likelihoods[b].voxel_locations = cuda_locations
-                    for acts in activations:
-                        acts['Y'] = acts['Y'].cuda()
-                trs = (batch * batch_size, None)
-                trs = (trs[0], trs[0] + activations[0]['Y'].shape[0])
-
-                q = probtorch.Trace()
-                enc(q, times=trs, num_particles=num_particles,
-                    blocks=block_batch)
-                p = probtorch.Trace()
-                dec(p, times=trs, guide=q, observations=activations,
-                    blocks=block_batch)
-
-                _, ll, prior_kl = tfa.hierarchical_free_energy(
-                    q, p, num_particles=num_particles
+                block_batches = utils.chunks(
+                    list(range(len(training_blocks))), n=blocks_batch_size
                 )
+                for block_batch in block_batches:
+                    activations = [{'Y': data[:, b, :]}
+                                   for b in block_batch]
+                    block_batch = [training_blocks[b][0]
+                                   for b in block_batch]
+                    if tfa.CUDA and use_cuda:
+                        for b in block_batch:
+                            dec.likelihoods[b].voxel_locations = cuda_locations
+                        for acts in activations:
+                            acts['Y'] = acts['Y'].cuda()
+                    trs = (batch * batch_size, None)
+                    trs = (trs[0], trs[0] + activations[0]['Y'].shape[0])
 
-                log_likelihoods[batch] += ll.detach()
-                prior_kls[batch] += prior_kl.detach()
+                    q = probtorch.Trace()
+                    enc(q, times=trs, num_particles=num_particles,
+                        blocks=block_batch)
+                    p = probtorch.Trace()
+                    dec(p, times=trs, guide=q, observations=activations,
+                        blocks=block_batch)
 
-                if tfa.CUDA and use_cuda:
-                    del activations
-                    for b in block_batch:
-                        dec.likelihoods[b].voxel_locations =\
-                            self.voxel_locations
-                    torch.cuda.empty_cache()
+                    _, ll, prior_kl = tfa.hierarchical_free_energy(
+                        q, p, num_particles=num_particles
+                    )
+
+                    start = k * num_particles
+                    end = (k + 1) * num_particles
+                    log_likelihoods[start:end, batch] += ll.detach()
+                    prior_kls[start:end, batch] += prior_kl.detach()
+
+                    if tfa.CUDA and use_cuda:
+                        del activations
+                        for b in block_batch:
+                            dec.likelihoods[b].voxel_locations =\
+                                self.voxel_locations
+                        torch.cuda.empty_cache()
 
         if tfa.CUDA and use_cuda:
             dec.cpu()
             enc.cpu()
+            log_likelihoods = log_likelihoods.cpu()
+            prior_kls = prior_kls.cpu()
 
-        log_likelihood = log_likelihoods.sum(dim=0).item()
-        prior_kl = prior_kls.sum(dim=0).item()
-        return -(log_likelihood - prior_kl), log_likelihood, prior_kl
+        log_likelihood = log_likelihoods.sum(dim=-1)
+        prior_kl = prior_kls.sum(dim=-1)
+        elbo = log_likelihood - prior_kl
+        iwae_log_likelihood = probtorch.util.log_mean_exp(log_likelihood,
+                                                          dim=0).item()
+        iwae_prior_kl = probtorch.util.log_mean_exp(prior_kl, dim=0).item()
+        iwae_free_energy = probtorch.util.log_mean_exp(-elbo, dim=0).item()
+        return [[-elbo.mean(dim=0).item(),
+                 log_likelihood.mean(dim=0).item(),
+                 prior_kl.mean(dim=0).item()],
+                [iwae_free_energy, iwae_log_likelihood, iwae_prior_kl]]
 
     def save(self, out_dir='.'):
         '''Save a HierarchicalTopographicFactorAnalysis'''
