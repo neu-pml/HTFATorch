@@ -43,18 +43,19 @@ def striping_diagonal_indices(rows, cols):
             if row % cols == col:
                 yield (row, col)
 
-def average_reconstruction_error(num_blocks, activations, reconstruct):
+def average_reconstruction_error(blocks, activations, reconstruct):
+    num_blocks = len(blocks)
     image_norm = np.zeros(num_blocks)
     reconstruction_error = np.zeros(num_blocks)
     normed_error = np.zeros(num_blocks)
 
-    for block in range(num_blocks):
+    for b, block in enumerate(blocks):
         results = reconstruct(block)
         reconstruction = results['weights'] @ results['factors']
 
-        reconstruction_error[block] = np.linalg.norm(reconstruction -\
-                                                     activations[block])
-        image_norm[block] = np.linalg.norm(activations[block])
+        reconstruction_error[b] = np.linalg.norm(reconstruction -\
+                                                 activations[block])
+        image_norm[b] = np.linalg.norm(activations[block])
     normed_error = reconstruction_error / image_norm
 
     logging.info('Average reconstruction error (MSE): %.8e +/- %.8e',
@@ -66,14 +67,15 @@ def average_reconstruction_error(num_blocks, activations, reconstruct):
 
     return reconstruction_error, image_norm, normed_error
 
-def average_weighted_reconstruction_error(num_blocks, num_times, num_voxels,
+def average_weighted_reconstruction_error(blocks, num_times, num_voxels,
                                           activations, reconstruct):
+    num_blocks = len(blocks)
     image_norm = np.zeros(num_blocks)
     reconstruction_error = np.zeros(num_blocks)
     normed_error = np.zeros(num_blocks)
-    if isinstance(num_voxels,list):
+    if isinstance(num_voxels, list):
         num_voxels = num_voxels[0]
-    for block in range(num_blocks):
+    for b, block in enumerate(blocks):
         results = reconstruct(block)
         reconstruction = results['weights'] @ results['factors']
 
@@ -85,13 +87,13 @@ def average_weighted_reconstruction_error(num_blocks, num_times, num_voxels,
                 activations[block][t]
             ) ** 2
 
-            reconstruction_error[block] += diff
-            image_norm[block] += normalizer
-            normed_error[block] += (diff / normalizer)
+            reconstruction_error[b] += diff
+            image_norm[b] += normalizer
+            normed_error[b] += (diff / normalizer)
 
-        reconstruction_error[block] /= num_times[block]
-        image_norm[block] /= num_times[block]
-        normed_error[block] /= num_times[block]
+        reconstruction_error[b] /= num_times[block]
+        image_norm[b] /= num_times[block]
+        normed_error[b] /= num_times[block]
 
     image_norm = sum(image_norm) / (num_blocks * num_voxels)
     image_norm = np.sqrt(image_norm)
