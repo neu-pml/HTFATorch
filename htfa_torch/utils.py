@@ -37,6 +37,12 @@ COLUMN_WIDTH = 5.5
 PAGE_WIDTH = 8.5
 FIGSIZE = (COLUMN_WIDTH, 0.66 * COLUMN_WIDTH)
 
+def striping_diagonal_indices(rows, cols):
+    for row in range(rows):
+        for col in range(cols):
+            if row % cols == col:
+                yield (row, col)
+
 def average_reconstruction_error(num_blocks, activations, reconstruct):
     image_norm = np.zeros(num_blocks)
     reconstruction_error = np.zeros(num_blocks)
