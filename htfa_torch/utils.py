@@ -181,8 +181,7 @@ def title_brain_plot(n, block, labeler, t=None, kind='Original'):
         return '%s (%s, Block %d, TR %d)' % (label, kind, n, t)
     elif label:
         return '%s (%s, Block %d)' % (label, kind, n)
-    params = (block.subject, block.run, block.task, t, kind)
-    return BRAIN_PLOT_TITLE_TEMPLATE % params
+    return None
 
 def clamped(rv, guide=None, observations=None):
     if not guide:
