@@ -72,9 +72,11 @@ class FMriActivationsDb:
         self.mask = mask
         self.smooth = smooth
 
-    def inference_filter(self, training=True):
+    def inference_filter(self, training=True, held_out_subjects=set(),
+                         held_out_tasks=set()):
         subjects = OrderedSet([b.subject for b in self.all()])
-        tasks = OrderedSet([b.task for b in self.all()])
+        subjects = subjects - held_out_subjects
+        tasks = OrderedSet([b.task for b in self.all()]) - held_out_tasks
         diagonals = list(utils.striping_diagonal_indices(len(subjects),
                                                          len(tasks)))
         def result(b):
