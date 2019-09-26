@@ -397,7 +397,7 @@ class HierarchicalTopographicFactorAnalysis:
                 hyperparams['template']['factor_log_widths']['mu']
 
         if block is not None:
-            title = "Block %d (Participant %d, Run %d, Stimulus: %s)" %\
+            title = "Block %d (Participant %s, Run %d, Stimulus: %s)" %\
                   (block, self._blocks[block].subject, self._blocks[block].run,
                    labeler(self._blocks[block]))
         else:
