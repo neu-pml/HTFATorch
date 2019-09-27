@@ -134,14 +134,19 @@ def plot_embedding_clusters(mus, sigmas, embedding_colors, embedding_name,
                             title, palette, filename=None, show=True,
                             xlims=None, ylims=None, figsize=FIGSIZE,
                             plot_ellipse=True, legend_ordering=None):
+
     with plt.style.context('seaborn-white'):
         fig, ax = plt.subplots(facecolor='white', figsize=figsize, frameon=True)
         ax.set_xlabel('$%s_1$' % embedding_name)
         if xlims is not None:
             ax.set_xlim(*xlims)
+        else:
+            ax.set_xlim(mus[:, 0].min(dim=0) - 0.1, mus[:, 0].max(dim=0) + 0.1)
         ax.set_ylabel('$%s_2$' % embedding_name)
         if ylims is not None:
             ax.set_ylim(*ylims)
+        else:
+            ax.set_ylim(mus[:, 1].min(dim=0) - 0.1, mus[:, 1].max(dim=0) + 0.1)
         ax.set_title(title)
         if isinstance(palette, cm.ScalarMappable):
             plt.colorbar(palette)
