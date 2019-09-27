@@ -33,9 +33,10 @@ import matplotlib.pyplot as plt
 
 MACHINE_EPSILON = np.finfo(np.double).eps
 
-COLUMN_WIDTH = 5.5
+COLUMN_WIDTH = 3.3
 PAGE_WIDTH = 8.5
-FIGSIZE = (COLUMN_WIDTH, 0.66 * COLUMN_WIDTH)
+PAGE_HEIGHT = 11
+FIGSIZE = (COLUMN_WIDTH, 0.25 * PAGE_HEIGHT)
 
 def striping_diagonal_indices(rows, cols):
     for row in range(rows):
