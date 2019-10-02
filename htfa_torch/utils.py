@@ -149,6 +149,7 @@ def plot_embedding_clusters(mus, sigmas, embedding_colors, embedding_name,
             ax.set_ylim(mus[:, 1].min(dim=0) - 0.1, mus[:, 1].max(dim=0) + 0.1)
         ax.set_title(title)
         if isinstance(palette, cm.ScalarMappable):
+            palette.set_clim(0, 1)
             plt.colorbar(palette)
         else:
             palette_legend(list(palette.keys()), list(palette.values()),
