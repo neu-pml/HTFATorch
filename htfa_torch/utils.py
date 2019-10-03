@@ -168,7 +168,7 @@ def plot_embedding_clusters(mus, sigmas, embedding_colors, embedding_name,
 
 def plot_clusters(Xs, mus, covs, K, figsize=(4, 4), xlim=(-10, 10),
                   ylim=(-10, 10)):
-    _, ax = plt.subplots(figsize=FIGSIZE)
+    _, ax = plt.subplots(figsize=figsize)
     ax.set_xlim(*xlim)
     ax.set_ylim(*ylim)
     ax.axis('equal')
