@@ -834,12 +834,12 @@ class DeepTFA:
             }
             torch.save(tensors, tensors_filename)
 
-        utils.plot_embedding_clusters(z_p_mu, z_p_sigma, subject_colors,
-                                      'z^P', 'Participant Embeddings', palette,
-                                      filename=filename, show=show, xlims=xlims,
-                                      ylims=ylims, figsize=figsize,
-                                      plot_ellipse=plot_ellipse,
-                                      legend_ordering=legend_ordering)
+        utils.embedding_clusters_fig(z_p_mu, z_p_sigma, subject_colors, 'z^P',
+                                     'Participant Embeddings', palette,
+                                     filename=filename, show=show, xlims=xlims,
+                                     ylims=ylims, figsize=figsize,
+                                     plot_ellipse=plot_ellipse,
+                                     legend_ordering=legend_ordering)
 
     def scatter_task_embedding(self, labeler=None, filename='', show=True,
                                xlims=None, ylims=None, figsize=utils.FIGSIZE,
@@ -882,12 +882,12 @@ class DeepTFA:
             }
             torch.save(tensors, tensors_filename)
 
-        utils.plot_embedding_clusters(z_s_mu, z_s_sigma, task_colors,
-                                      'z^S', 'Stimulus Embeddings', palette,
-                                      filename=filename, show=show, xlims=xlims,
-                                      ylims=ylims, figsize=figsize,
-                                      plot_ellipse=plot_ellipse,
-                                      legend_ordering=legend_ordering)
+        utils.embedding_clusters_fig(z_s_mu, z_s_sigma, task_colors, 'z^S',
+                                     'Stimulus Embeddings', palette,
+                                     filename=filename, show=show, xlims=xlims,
+                                     ylims=ylims, figsize=figsize,
+                                     plot_ellipse=plot_ellipse,
+                                     legend_ordering=legend_ordering)
 
     def common_name(self):
         return os.path.commonprefix([os.path.basename(b.filename)
