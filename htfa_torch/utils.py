@@ -153,9 +153,8 @@ def plot_embedding_clusters(mus, sigmas, embedding_colors, embedding_name,
     if embedding_name:
         ax.set_xlabel('$%s_1$' % embedding_name)
         ax.set_ylabel('$%s_2$' % embedding_name)
-    else:
-        ax.set_xticks([])
-        ax.set_yticks([])
+    ax.set_xticks([])
+    ax.set_yticks([])
 
     if xlims is not None:
         ax.set_xlim(*xlims)
