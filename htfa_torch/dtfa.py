@@ -793,6 +793,69 @@ class DeepTFA:
 
         return plot, centers, log_widths
 
+    def heatmap_subject_embedding(self, heatmaps=[], filename='', show=True,
+                                  xlims=None, ylims=None, figsize=utils.FIGSIZE,
+                                  colormap='Accent', serialize_data=True,
+                                  plot_ellipse=True, legend_ordering=None,
+                                  titles=[]):
+        if filename == '':
+            filename = self.common_name() + '_subject_heatmap.pdf'
+        hyperparams = self.variational.hyperparams.state_vardict()
+        z_p_mu = hyperparams['subject']['mu'].data
+        z_p_sigma = softplus(hyperparams['subject']['sigma'].data)
+        subjects = self.subjects()
+
+        minus_lims = torch.min(z_p_mu - z_p_sigma * 2, dim=0)[0].tolist()
+        plus_lims = torch.max(z_p_mu + z_p_sigma * 2, dim=0)[0].tolist()
+        if not xlims:
+            xlims = (minus_lims[0], plus_lims[0])
+        if not ylims:
+            ylims = (minus_lims[1], plus_lims[1])
+
+        if not heatmaps:
+            heatmaps = [lambda s: 1.0]
+        heats = [sorted([heatmap(s) for s in subjects]) for heatmap in heatmaps]
+
+        if serialize_data:
+            tensors_filename = os.path.splitext(filename)[0] + '.dat'
+            tensors = {
+                'z_p': {'mu': z_p_mu, 'sigma': z_p_sigma},
+                'colormap': colormap,
+                'z_heats': heats,
+            }
+            torch.save(tensors, tensors_filename)
+
+        with plt.style.context('seaborn-white'):
+            ncols = len(heatmaps)
+            if figsize is not None:
+                (w, h) = figsize
+                figsize = (w * ncols, h)
+
+            fig, axs = plt.subplots(nrows=1, ncols=ncols, facecolor='white',
+                                    sharey=True, figsize=figsize, frameon=True)
+            for c in range(ncols):
+                palette = cm.ScalarMappable(None, colormap)
+                subject_colors = palette.to_rgba(np.array(heats[c]), norm=True)
+                palette.set_array(np.array(heats[c]))
+
+                utils.plot_embedding_clusters(z_p_mu, z_p_sigma, subject_colors,
+                                              '', titles[c], palette, axs[c],
+                                              xlims=xlims, ylims=ylims,
+                                              plot_ellipse=plot_ellipse,
+                                              legend_ordering=legend_ordering,
+                                              color_legend=False)
+
+            fig.text(0.435, 0.05, '$z^P_1$', ha='center', va='center')
+            fig.text(0.1, 0.5, '$z^P_2$', ha='center', va='center',
+                     rotation='vertical')
+            palette.set_clim(0., 1.)
+            plt.colorbar(palette, ax=axs)
+
+            if filename is not None:
+                fig.savefig(filename)
+            if show:
+                fig.show()
+
     def scatter_subject_embedding(self, labeler=None, filename='', show=True,
                                   xlims=None, ylims=None, figsize=utils.FIGSIZE,
                                   colormap='Accent', serialize_data=True,
@@ -834,12 +897,12 @@ class DeepTFA:
             }
             torch.save(tensors, tensors_filename)
 
-        utils.plot_embedding_clusters(z_p_mu, z_p_sigma, subject_colors,
-                                      'z^P', 'Participant Embeddings', palette,
-                                      filename=filename, show=show, xlims=xlims,
-                                      ylims=ylims, figsize=figsize,
-                                      plot_ellipse=plot_ellipse,
-                                      legend_ordering=legend_ordering)
+        utils.embedding_clusters_fig(z_p_mu, z_p_sigma, subject_colors, 'z^P',
+                                     'Participant Embeddings', palette,
+                                     filename=filename, show=show, xlims=xlims,
+                                     ylims=ylims, figsize=figsize,
+                                     plot_ellipse=plot_ellipse,
+                                     legend_ordering=legend_ordering)
 
     def scatter_task_embedding(self, labeler=None, filename='', show=True,
                                xlims=None, ylims=None, figsize=utils.FIGSIZE,
@@ -882,12 +945,12 @@ class DeepTFA:
             }
             torch.save(tensors, tensors_filename)
 
-        utils.plot_embedding_clusters(z_s_mu, z_s_sigma, task_colors,
-                                      'z^S', 'Stimulus Embeddings', palette,
-                                      filename=filename, show=show, xlims=xlims,
-                                      ylims=ylims, figsize=figsize,
-                                      plot_ellipse=plot_ellipse,
-                                      legend_ordering=legend_ordering)
+        utils.embedding_clusters_fig(z_s_mu, z_s_sigma, task_colors, 'z^S',
+                                     'Stimulus Embeddings', palette,
+                                     filename=filename, show=show, xlims=xlims,
+                                     ylims=ylims, figsize=figsize,
+                                     plot_ellipse=plot_ellipse,
+                                     legend_ordering=legend_ordering)
 
     def common_name(self):
         return os.path.commonprefix([os.path.basename(b.filename)
