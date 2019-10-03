@@ -796,7 +796,8 @@ class DeepTFA:
     def heatmap_subject_embedding(self, heatmaps=[], filename='', show=True,
                                   xlims=None, ylims=None, figsize=utils.FIGSIZE,
                                   colormap='Accent', serialize_data=True,
-                                  plot_ellipse=True, legend_ordering=None):
+                                  plot_ellipse=True, legend_ordering=None,
+                                  titles=[]):
         if filename == '':
             filename = self.common_name() + '_subject_heatmap.pdf'
         hyperparams = self.variational.hyperparams.state_vardict()
@@ -825,21 +826,30 @@ class DeepTFA:
             torch.save(tensors, tensors_filename)
 
         with plt.style.context('seaborn-white'):
-            (w, h) = figsize
             ncols = len(heatmaps)
+            if figsize is not None:
+                (w, h) = figsize
+                figsize = (w * ncols, h)
+
             fig, axs = plt.subplots(nrows=1, ncols=ncols, facecolor='white',
-                                    figsize=(w * ncols, h), frameon=True)
+                                    sharey=True, figsize=figsize, frameon=True)
             for c in range(ncols):
                 palette = cm.ScalarMappable(None, colormap)
                 subject_colors = palette.to_rgba(np.array(heats[c]), norm=True)
                 palette.set_array(np.array(heats[c]))
 
                 utils.plot_embedding_clusters(z_p_mu, z_p_sigma, subject_colors,
-                                              'z^P', 'Participant Embeddings',
-                                              palette, axs[c], xlims=xlims,
-                                              ylims=ylims,
+                                              '', titles[c], palette, axs[c],
+                                              xlims=xlims, ylims=ylims,
                                               plot_ellipse=plot_ellipse,
-                                              legend_ordering=legend_ordering)
+                                              legend_ordering=legend_ordering,
+                                              color_legend=False)
+
+            fig.text(0.435, 0.05, '$z^P_1$', ha='center', va='center')
+            fig.text(0.1, 0.5, '$z^P_2$', ha='center', va='center',
+                     rotation='vertical')
+            palette.set_clim(0., 1.)
+            plt.colorbar(palette, ax=axs)
 
             if filename is not None:
                 fig.savefig(filename)
