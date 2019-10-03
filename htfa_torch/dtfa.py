@@ -793,6 +793,59 @@ class DeepTFA:
 
         return plot, centers, log_widths
 
+    def heatmap_subject_embedding(self, heatmaps=[], filename='', show=True,
+                                  xlims=None, ylims=None, figsize=utils.FIGSIZE,
+                                  colormap='Accent', serialize_data=True,
+                                  plot_ellipse=True, legend_ordering=None):
+        if filename == '':
+            filename = self.common_name() + '_subject_heatmap.pdf'
+        hyperparams = self.variational.hyperparams.state_vardict()
+        z_p_mu = hyperparams['subject']['mu'].data
+        z_p_sigma = softplus(hyperparams['subject']['sigma'].data)
+        subjects = self.subjects()
+
+        minus_lims = torch.min(z_p_mu - z_p_sigma * 2, dim=0)[0].tolist()
+        plus_lims = torch.max(z_p_mu + z_p_sigma * 2, dim=0)[0].tolist()
+        if not xlims:
+            xlims = (minus_lims[0], plus_lims[0])
+        if not ylims:
+            ylims = (minus_lims[1], plus_lims[1])
+
+        if not heatmaps:
+            heatmaps = [lambda s: 1.0]
+        heats = [sorted([heatmap(s) for s in subjects]) for heatmap in heatmaps]
+
+        if serialize_data:
+            tensors_filename = os.path.splitext(filename)[0] + '.dat'
+            tensors = {
+                'z_p': {'mu': z_p_mu, 'sigma': z_p_sigma},
+                'colormap': colormap,
+                'z_heats': heats,
+            }
+            torch.save(tensors, tensors_filename)
+
+        with plt.style.context('seaborn-white'):
+            (w, h) = figsize
+            ncols = len(heatmaps)
+            fig, axs = plt.subplots(nrows=1, ncols=ncols, facecolor='white',
+                                    figsize=(w * ncols, h), frameon=True)
+            for c in range(ncols):
+                palette = cm.ScalarMappable(None, colormap)
+                subject_colors = palette.to_rgba(np.array(heats[c]), norm=True)
+                palette.set_array(np.array(heats[c]))
+
+                utils.plot_embedding_clusters(z_p_mu, z_p_sigma, subject_colors,
+                                              'z^P', 'Participant Embeddings',
+                                              palette, axs[c], xlims=xlims,
+                                              ylims=ylims,
+                                              plot_ellipse=plot_ellipse,
+                                              legend_ordering=legend_ordering)
+
+            if filename is not None:
+                fig.savefig(filename)
+            if show:
+                fig.show()
+
     def scatter_subject_embedding(self, labeler=None, filename='', show=True,
                                   xlims=None, ylims=None, figsize=utils.FIGSIZE,
                                   colormap='Accent', serialize_data=True,
