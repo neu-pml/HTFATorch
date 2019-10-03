@@ -148,22 +148,30 @@ def embedding_clusters_fig(mus, sigmas, embedding_colors, embedding_name, title,
 
 def plot_embedding_clusters(mus, sigmas, embedding_colors, embedding_name,
                             title, palette, ax, xlims=None, ylims=None,
-                            plot_ellipse=True, legend_ordering=None):
-    ax.set_xlabel('$%s_1$' % embedding_name)
+                            plot_ellipse=True, legend_ordering=None,
+                            color_legend=True):
+    if embedding_name:
+        ax.set_xlabel('$%s_1$' % embedding_name)
+        ax.set_ylabel('$%s_2$' % embedding_name)
+    else:
+        ax.set_xticks([])
+        ax.set_yticks([])
+
     if xlims is not None:
         ax.set_xlim(*xlims)
     else:
         ax.set_xlim(mus[:, 0].min(dim=0) - 0.1, mus[:, 0].max(dim=0) + 0.1)
-    ax.set_ylabel('$%s_2$' % embedding_name)
     if ylims is not None:
         ax.set_ylim(*ylims)
     else:
         ax.set_ylim(mus[:, 1].min(dim=0) - 0.1, mus[:, 1].max(dim=0) + 0.1)
+
     ax.set_title(title)
-    if isinstance(palette, cm.ScalarMappable):
+
+    if isinstance(palette, cm.ScalarMappable) and color_legend:
         palette.set_clim(0, 1)
         plt.colorbar(palette)
-    else:
+    elif color_legend:
         palette_legend(list(palette.keys()), list(palette.values()),
                        ordering=legend_ordering)
 
