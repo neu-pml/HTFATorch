@@ -130,41 +130,48 @@ def plot_cov_ellipse(cov, pos, nstd=1, ax=None, plot_ellipse=True, **kwargs):
     ax.scatter(x=pos[0], y=pos[1], c=color, marker='x')
     return ellip
 
-def plot_embedding_clusters(mus, sigmas, embedding_colors, embedding_name,
-                            title, palette, filename=None, show=True,
-                            xlims=None, ylims=None, figsize=FIGSIZE,
-                            plot_ellipse=True, legend_ordering=None):
-
+def embedding_clusters_fig(mus, sigmas, embedding_colors, embedding_name, title,
+                           palette, filename=None, show=True, xlims=None,
+                           ylims=None, figsize=FIGSIZE, plot_ellipse=True,
+                           legend_ordering=None):
     with plt.style.context('seaborn-white'):
-        fig, ax = plt.subplots(facecolor='white', figsize=figsize, frameon=True)
-        ax.set_xlabel('$%s_1$' % embedding_name)
-        if xlims is not None:
-            ax.set_xlim(*xlims)
-        else:
-            ax.set_xlim(mus[:, 0].min(dim=0) - 0.1, mus[:, 0].max(dim=0) + 0.1)
-        ax.set_ylabel('$%s_2$' % embedding_name)
-        if ylims is not None:
-            ax.set_ylim(*ylims)
-        else:
-            ax.set_ylim(mus[:, 1].min(dim=0) - 0.1, mus[:, 1].max(dim=0) + 0.1)
-        ax.set_title(title)
-        if isinstance(palette, cm.ScalarMappable):
-            palette.set_clim(0, 1)
-            plt.colorbar(palette)
-        else:
-            palette_legend(list(palette.keys()), list(palette.values()),
-                           ordering=legend_ordering)
-
-        for k, color in enumerate(embedding_colors):
-            covk = torch.eye(2) * sigmas[k] ** 2
-            alpha = 0.66
-            plot_cov_ellipse(covk, mus[k], nstd=1, ax=ax, alpha=alpha,
-                             color=color, plot_ellipse=plot_ellipse)
+        fig, ax = plt.subplots(facecolor='white', figsize=figsize,
+                               frameon=True)
+        plot_embedding_clusters(mus, sigmas, embedding_colors,
+                                embedding_name, title, palette, ax, xlims,
+                                ylims, plot_ellipse, legend_ordering)
 
         if filename is not None:
             fig.savefig(filename)
         if show:
             fig.show()
+
+def plot_embedding_clusters(mus, sigmas, embedding_colors, embedding_name,
+                            title, palette, ax, xlims=None, ylims=None,
+                            plot_ellipse=True, legend_ordering=None):
+    ax.set_xlabel('$%s_1$' % embedding_name)
+    if xlims is not None:
+        ax.set_xlim(*xlims)
+    else:
+        ax.set_xlim(mus[:, 0].min(dim=0) - 0.1, mus[:, 0].max(dim=0) + 0.1)
+    ax.set_ylabel('$%s_2$' % embedding_name)
+    if ylims is not None:
+        ax.set_ylim(*ylims)
+    else:
+        ax.set_ylim(mus[:, 1].min(dim=0) - 0.1, mus[:, 1].max(dim=0) + 0.1)
+    ax.set_title(title)
+    if isinstance(palette, cm.ScalarMappable):
+        palette.set_clim(0, 1)
+        plt.colorbar(palette)
+    else:
+        palette_legend(list(palette.keys()), list(palette.values()),
+                       ordering=legend_ordering)
+
+    for k, color in enumerate(embedding_colors):
+        covk = torch.eye(2) * sigmas[k] ** 2
+        alpha = 0.66
+        plot_cov_ellipse(covk, mus[k], nstd=1, ax=ax, alpha=alpha,
+                         color=color, plot_ellipse=plot_ellipse)
 
 def plot_clusters(Xs, mus, covs, K, figsize=(4, 4), xlim=(-10, 10),
                   ylim=(-10, 10)):
