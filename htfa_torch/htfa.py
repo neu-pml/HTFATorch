@@ -214,8 +214,7 @@ class HierarchicalTopographicFactorAnalysis:
         )
         enc = self.enc
         dec = self.dec
-        log_likelihoods = torch.zeros(sample_size,
-                                      len(activations_loader))
+        log_likelihoods = torch.zeros(sample_size, len(activations_loader))
         prior_kls = torch.zeros(sample_size, len(activations_loader))
         if tfa.CUDA and use_cuda:
             enc.cuda()
@@ -226,17 +225,11 @@ class HierarchicalTopographicFactorAnalysis:
 
         for k in range(sample_size // num_particles):
             for (batch, data) in enumerate(activations_loader):
-                log_likelihoods[batch] = 0.0
-                prior_kls[batch] = 0.0
-
-                block_batches = utils.chunks(
-                    list(range(len(training_blocks))), n=blocks_batch_size
-                )
+                block_batches = utils.chunks(list(range(len(training_blocks))),
+                                             n=blocks_batch_size)
                 for block_batch in block_batches:
-                    activations = [{'Y': data[:, b, :]}
-                                   for b in block_batch]
-                    block_batch = [training_blocks[b][0]
-                                   for b in block_batch]
+                    activations = [{'Y': data[:, b, :]} for b in block_batch]
+                    block_batch = [training_blocks[b][0] for b in block_batch]
                     if tfa.CUDA and use_cuda:
                         for b in block_batch:
                             dec.likelihoods[b].voxel_locations = cuda_locations
@@ -281,8 +274,7 @@ class HierarchicalTopographicFactorAnalysis:
                                                           dim=0).item()
         iwae_prior_kl = probtorch.util.log_mean_exp(prior_kl, dim=0).item()
         iwae_free_energy = probtorch.util.log_mean_exp(-elbo, dim=0).item()
-        return [[-elbo.mean(dim=0).item(),
-                 log_likelihood.mean(dim=0).item(),
+        return [[-elbo.mean(dim=0).item(), log_likelihood.mean(dim=0).item(),
                  prior_kl.mean(dim=0).item()],
                 [iwae_free_energy, iwae_log_likelihood, iwae_prior_kl]]
 
