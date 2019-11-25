@@ -523,6 +523,62 @@ class HierarchicalTopographicFactorAnalysis:
 
         return plot
 
+    def plot_reconstruction_diff(self, block, filename='', show=True,
+                                 plot_abs=False, t=0, labeler=lambda b: None,
+                                 zscore_bound=3, **kwargs):
+        if filename == '' and t is None:
+            filename = '%s%s_htfa_reconstruction_diff.pdf'
+            filename = filename % (self.common_name(), str(block))
+        elif filename == '':
+            filename = '%s%s_htfa_reconstruction_diff_tr%d.pdf'
+            filename = filename % (self.common_name(), str(block), t)
+
+        results = self.results(block)
+        factor_centers = results['factor_centers']
+        factor_log_widths = results['factor_log_widths']
+        if block is not None:
+            weights = results['weights']
+        else:
+            block = np.random.choice(self.num_blocks, 1)[0]
+            weights = self.enc.hyperparams.state_vardict()['block']['weights']['mu'][block]
+
+        factors = tfa_models.radial_basis(
+            self.voxel_locations, factor_centers,
+            factor_log_widths
+        )
+        times = (0, self.voxel_activations[block].shape[0])
+        reconstruction = weights[times[0]:times[1], :] @ factors
+
+        diff = self.voxel_activations[block] - reconstruction
+        if zscore_bound is None:
+            zscore_bound = diff.max().item()
+        image = utils.cmu2nii(diff.numpy() ** 2, self.voxel_locations.numpy(),
+                              self._templates[block])
+
+        if t is None:
+            image_slice = nilearn.image.mean_img(image)
+        else:
+            image_slice = nilearn.image.index_img(image, t)
+        plot = niplot.plot_glass_brain(
+            image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=False,
+            title=utils.title_brain_plot(block, self._blocks[block], labeler, t,
+                                         'Squared Residual'),
+            vmin=0, vmax=zscore_bound ** 2, **kwargs,
+        )
+
+        logging.info(
+            'Reconstruction Error (Frobenius Norm): %.8e out of %.8e',
+            np.linalg.norm(diff.numpy()),
+            np.linalg.norm(self.voxel_activations[block].numpy())
+        )
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
+
     def common_name(self):
         return os.path.commonprefix([os.path.basename(b.filename)
                                      for b in self._blocks])
