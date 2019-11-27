@@ -24,8 +24,9 @@ def lru_load_dataset(fname, mask, zscore, smooth):
     return utils.load_dataset(fname, mask, zscore, smooth)
 
 class FMriActivationBlock(object):
-    def __init__(self, zscore=True, smooth=None):
+    def __init__(self, zscore=True, zscore_by_rest=False, smooth=None):
         self._zscore = zscore
+        self._zscore_by_rest = zscore_by_rest
         self.smooth = smooth
         self.filename = ''
         self.mask = None
@@ -35,14 +36,16 @@ class FMriActivationBlock(object):
         self.block = 0
         self.start_time = None
         self.end_time = None
+        self.rest_start_times = None
+        self.rest_end_times = None
         self.activations = None
         self.locations = None
         self.individual_differences = {}
 
     def load(self):
         self.activations, self.locations, _, _ =\
-            lru_load_dataset(self.filename, self.mask, self._zscore,
-                             self.smooth)
+            lru_load_dataset(self.filename, self.mask, self._zscore, self._zscore_by_rest,
+                             self.smooth,self.rest_start_times,self.rest_end_times)
         if self.start_time is None:
             self.start_time = 0
         if self.end_time is None:
@@ -110,8 +113,12 @@ class FMriActivationsDb:
         del block_dict['locations']
         block_dict['individual_differences'] =\
             json.dumps(block_dict['individual_differences'])
+        block_dict['rest_start_times'] =\
+            json.dumps(block_dict['rest_start_times'])
+        block_dict['rest_end_times'] =\
+            json.dumps(block_dict['rest_end_times'])
         self._table.upsert(block_dict, ['subject', 'run', 'task', 'block',
-                                        'start_time', 'end_time',
+                                        'start_time', 'end_time','rest_start_times','rest_end_times',
                                         'individual_differences'])
 
     def __getattr__(self, name):
