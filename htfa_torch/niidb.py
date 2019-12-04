@@ -21,7 +21,7 @@ from . import utils
 def lru_load_dataset(fname, mask, zscore, smooth):
     logging.info('Loading Nifti image %s with mask %s (zscore=%s, smooth=%s)',
                  fname, mask, zscore, smooth)
-    return utils.load_dataset(fname, mask, zscore, smooth)
+    return utils.load_dataset(fname, mask, smooth=smooth, zscore=zscore)
 
 class FMriActivationBlock(object):
     def __init__(self, zscore=True, zscore_by_rest=False, smooth=None):
@@ -44,8 +44,8 @@ class FMriActivationBlock(object):
 
     def load(self):
         self.activations, self.locations, _, _ =\
-            lru_load_dataset(self.filename, self.mask, self._zscore, self._zscore_by_rest,
-                             self.smooth,self.rest_start_times,self.rest_end_times)
+            lru_load_dataset(self.filename, self.mask, self._zscore,
+                             self.smooth)
         if self.start_time is None:
             self.start_time = 0
         if self.end_time is None:
