@@ -390,7 +390,7 @@ class DeepTFA:
                     hyperparams['subject']['mu'][:, subject],
                     softplus(hyperparams['subject']['sigma'][:, subject]),
                     value=hyperparams['subject']['mu'][:, subject],
-                    name='z^P_{%d,%d}' % (subject, b),
+                    name='z^P_{%d}' % subject,
                 )
                 factor_centers_params = hyperparams['factor_centers']
                 guide.variable(
@@ -414,7 +414,7 @@ class DeepTFA:
                     hyperparams['task']['mu'][:, task],
                     softplus(hyperparams['task']['sigma'][:, task]),
                     value=hyperparams['task']['mu'][:, task],
-                    name='z^S_{%d,%d}' % (task, b),
+                    name='z^S_{%d}' % task,
                 )
             if self._time_series:
                 for k, v in hyperparams['weights'].items():
