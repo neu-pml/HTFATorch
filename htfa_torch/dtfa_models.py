@@ -164,15 +164,15 @@ class DeepTFADecoder(nn.Module):
         origin = origin.to(params['subject']['mu'])
         if subject is not None:
             subject_embed = self._predict_param(
-                params, 'subject', subject, None, 'z^P_{%d}' % subject, trace,
-                False, guide
+                params, 'subject', subject, None,
+                'z^P_{%d,%d}' % (subject, block), trace, False, guide
             )
         else:
             subject_embed = origin
         if task is not None:
             task_embed = self._predict_param(
-                params, 'task', task, None, 'z^S_{%d}' % task, trace, False,
-                guide
+                params, 'task', task, None, 'z^S_{%d,%d}' % (task, block),
+                trace, False, guide
             )
         else:
             task_embed = origin
