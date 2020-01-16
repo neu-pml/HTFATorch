@@ -32,14 +32,11 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
         params = utils.vardict({
             'subject': {
                 'mu': torch.zeros(self.num_subjects, self.embedding_dim),
-                'sigma': torch.ones(self.num_subjects, self.embedding_dim) *\
-                         np.sqrt(tfa_models.SOURCE_WEIGHT_STD_DEV**2 +\
-                                 tfa_models.SOURCE_LOG_WIDTH_STD_DEV**2),
+                'sigma': torch.ones(self.num_subjects, self.embedding_dim),
             },
             'task': {
                 'mu': torch.zeros(self.num_tasks, self.embedding_dim),
-                'sigma': torch.ones(self.num_tasks, self.embedding_dim) *\
-                         tfa_models.SOURCE_WEIGHT_STD_DEV,
+                'sigma': torch.ones(self.num_tasks, self.embedding_dim),
             },
             'voxel_noise': torch.ones(1) * tfa_models.VOXEL_NOISE,
         })
