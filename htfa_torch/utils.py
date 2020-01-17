@@ -39,6 +39,13 @@ PAGE_WIDTH = 8.5
 PAGE_HEIGHT = 11
 FIGSIZE = (COLUMN_WIDTH, 0.25 * PAGE_HEIGHT)
 
+def clamp_locations(locations, min, max):
+    locations = torch.where(locations <= min, min.expand(*locations.shape),
+                            locations)
+    locations = torch.where(locations >= max, max.expand(*locations.shape),
+                            locations)
+    return locations
+
 def striping_diagonal_indices(rows, cols):
     for row in range(rows):
         for col in range(cols):
