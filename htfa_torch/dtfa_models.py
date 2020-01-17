@@ -128,6 +128,11 @@ class DeepTFADecoder(nn.Module):
                 self._num_factors * 4 * 2
             )
         )
+        if locations is not None:
+            self.register_buffer('locations_min',
+                                 torch.min(locations, dim=0)[0])
+            self.register_buffer('locations_max',
+                                 torch.max(locations, dim=0)[0])
         self.weights_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim * 2, self._embedding_dim * 4),
             nn.PReLU(),
@@ -199,6 +204,10 @@ class DeepTFADecoder(nn.Module):
             'FactorCenters%d' % block, trace, predict=generative,
             guide=guide,
         )
+        if 'locations_min' in self._buffers:
+            centers_predictions = utils.clamp_locations(centers_predictions,
+                                                        self.locations_min,
+                                                        self.locations_max)
         log_widths_predictions = self._predict_param(
             params, 'factor_log_widths', subject, log_widths_predictions,
             'FactorLogWidths%d' % block, trace, predict=generative,
