@@ -254,9 +254,9 @@ def adjust_learning_rate(optimizer, adjustment):
         param_group['lr'] *= adjustment
 
 def brain_centroid(locations):
-    brain_center = torch.mean(locations, 0).unsqueeze(0)
-    brain_center_std_dev = torch.diagflat(torch.sqrt(torch.var(locations, 0)))
-    return brain_center, brain_center_std_dev.unsqueeze(0)
+    brain_center = locations.mean(dim=0).unsqueeze(0)
+    brain_center_std_dev = locations.std(dim=0).unsqueeze(0)
+    return brain_center, brain_center_std_dev
 
 def initial_radial_basis(location, center, widths):
     """The radial basis function used as the shape for the factors"""
