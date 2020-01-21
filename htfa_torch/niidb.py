@@ -18,10 +18,14 @@ import torch.utils.data
 from . import utils
 
 @lru_cache(maxsize=16)
-def lru_load_dataset(fname, mask, zscore, smooth):
-    logging.info('Loading Nifti image %s with mask %s (zscore=%s, smooth=%s)',
-                 fname, mask, zscore, smooth)
-    return utils.load_dataset(fname, mask, smooth=smooth, zscore=zscore)
+def lru_load_dataset(fname, mask, zscore, smooth,
+                     zscore_by_rest=False,rest_starts=None,
+                     rest_ends=None):
+    logging.info('Loading Nifti image %s with mask %s (zscore=%s, smooth=%s, zscore_by_rest=%s)',
+                 fname, mask, zscore, smooth,zscore_by_rest)
+    return utils.load_dataset(fname, mask, smooth=smooth, zscore=zscore,
+                              zscore_by_rest=zscore_by_rest, rest_starts=rest_starts,
+                              rest_ends=rest_ends)
 
 class FMriActivationBlock(object):
     def __init__(self, zscore=True, zscore_by_rest=False, smooth=None):
@@ -45,7 +49,8 @@ class FMriActivationBlock(object):
     def load(self):
         self.activations, self.locations, _, _ =\
             lru_load_dataset(self.filename, self.mask, self._zscore,
-                             self.smooth)
+                             self.smooth, self._zscore_by_rest,
+                             self.rest_start_times,self.rest_end_times)
         if self.start_time is None:
             self.start_time = 0
         if self.end_time is None:
