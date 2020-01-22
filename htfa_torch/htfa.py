@@ -416,15 +416,6 @@ class HierarchicalTopographicFactorAnalysis:
 
         return plot
 
-    def sample(self, times=None, posterior_predictive=False):
-        q = probtorch.Trace()
-        if posterior_predictive:
-            self.enc(q, times=times, num_particles=1)
-        p = probtorch.Trace()
-        self.dec(p, times=times, guide=q,
-                 observations=[q for b in range(self.num_blocks)])
-        return p, q
-
     def plot_original_brain(self, block=None, filename='', show=True,
                             plot_abs=False, t=0, labeler=None, zscore_bound=3,
                             **kwargs):
