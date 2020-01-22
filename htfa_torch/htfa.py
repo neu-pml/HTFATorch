@@ -454,6 +454,31 @@ class HierarchicalTopographicFactorAnalysis:
 
         return plot
 
+    def posterior_reconstruction(self, block=None, t=0):
+        results = self.results(block)
+
+        factors = tfa_models.radial_basis(
+            self.voxel_locations, results['factor_centers'],
+            results['factor_log_widths']
+        )
+        times = (0, self.voxel_activations[block].shape[0])
+        reconstruction = results['weights'][times[0]:times[1], :] @ factors
+
+        image = utils.cmu2nii(reconstruction.numpy(),
+                              self.voxel_locations.numpy(),
+                              self._templates[block])
+        if t is None:
+            image_slice = nilearn.image.mean_img(image)
+            reconstruction = reconstruction.mean(dim=0)
+        else:
+            image_slice = nilearn.image.index_img(image, t)
+            reconstruction = reconstruction[t]
+
+        return image_slice, reconstruction
+
+    def posterior_predictive_reconstruction(self):
+        return self.posterior_reconstruction(None, None)
+
     def plot_reconstruction(self, block=None, filename='', show=True,
                             plot_abs=False, t=0, labeler=None, zscore_bound=3,
                             **kwargs):
