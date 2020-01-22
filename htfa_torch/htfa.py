@@ -310,12 +310,14 @@ class HierarchicalTopographicFactorAnalysis:
         else:
             centers = hyperparams['template']['factor_centers']['mu'].data
             log_widths = hyperparams['template']['factor_log_widths']['mu'].data
+            weights = hyperparams['block']['weights']['mu'].mean(dim=0)
 
             result = {
                 'factors': tfa_models.radial_basis(self.voxel_locations,
                                                    centers, log_widths),
                 'factor_centers': centers,
                 'factor_log_widths': log_widths,
+                'weights': weights[:max(self.num_times)],
             }
 
         return result
