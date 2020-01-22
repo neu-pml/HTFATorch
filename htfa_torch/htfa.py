@@ -481,8 +481,7 @@ class HierarchicalTopographicFactorAnalysis:
 
     def plot_reconstruction(self, block=None, filename='', show=True,
                             plot_abs=False, t=0, labeler=None, zscore_bound=3,
-                            **kwargs):
-        results = self.results()
+                            blocks_filter=lambda block: True, **kwargs):
         if self.activation_normalizers is None:
             self.normalize_activations()
         if zscore_bound is None:
@@ -496,29 +495,13 @@ class HierarchicalTopographicFactorAnalysis:
             filename = '%s%s_htfa_reconstruction_tr%d.pdf'
             filename = filename % (self.common_name(), str(block), t)
 
-        results = self.results(block)
-        factor_centers = results['factor_centers']
-        factor_log_widths = results['factor_log_widths']
-        if block is not None:
-            weights = results['weights']
+        if blocks_filter(block):
+            image_slice, reconstruction = self.posterior_reconstruction(
+                block=block, t=t
+            )
         else:
-            block = np.random.choice(self.num_blocks, 1)[0]
-            weights = self.enc.hyperparams.state_vardict()['block']['weights']['mu'][block]
-
-        factors = tfa_models.radial_basis(
-            self.voxel_locations, factor_centers,
-            factor_log_widths
-        )
-        times = (0, self.voxel_activations[block].shape[0])
-        reconstruction = weights[times[0]:times[1], :] @ factors
-
-        image = utils.cmu2nii(reconstruction.numpy(),
-                              self.voxel_locations.numpy(),
-                              self._templates[block])
-        if t is None:
-            image_slice = nilearn.image.mean_img(image)
-        else:
-            image_slice = nilearn.image.index_img(image, t)
+            image_slice, reconstruction =\
+                self.posterior_predictive_reconstruction()
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
             title=utils.title_brain_plot(block, self._blocks[block], labeler, t,
