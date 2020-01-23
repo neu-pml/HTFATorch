@@ -501,15 +501,9 @@ class DeepTFA:
         elif filename == '':
             filename = '%s%s_ntfa_reconstruction_diff_tr%d.pdf'
             filename = filename % (self.common_name(), str(block), t)
-        diff = self.reconstruction_diff(block)
-        if zscore_bound is None:
-            zscore_bound = diff.max().item()
-        image = utils.cmu2nii(diff.numpy() ** 2, self.voxel_locations.numpy(),
-                              self._templates[block])
-        if t is None:
-            image_slice = nilearn.image.mean_img(image)
-        else:
-            image_slice = nilearn.image.index_img(image, t)
+
+        image_slice, diff = self.reconstruction_diff(block, t=t,
+                                                     zscore_bound=zscore_bound)
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=False,
             title=utils.title_brain_plot(block, self._blocks[block], labeler, t,
@@ -665,17 +659,7 @@ class DeepTFA:
         if self.activation_normalizers is None:
             self.normalize_activations()
 
-        results = self.results(block)
-
-        reconstruction = results['weights'] @ results['factors']
-
-        image = utils.cmu2nii(reconstruction.numpy(),
-                              self.voxel_locations.numpy(),
-                              self._templates[block])
-        if t is None:
-            image_slice = nilearn.image.mean_img(image)
-        else:
-            image_slice = nilearn.image.index_img(image, t)
+        image_slice, reconstruction = self.reconstruction(block=block, t=t)
         plot = niplot.plot_glass_brain(
             image_slice, plot_abs=plot_abs, colorbar=True, symmetric_cbar=True,
             title=utils.title_brain_plot(block, self._blocks[block], labeler, t,
@@ -683,11 +667,15 @@ class DeepTFA:
             vmin=-zscore_bound, vmax=zscore_bound, **kwargs,
         )
 
+        activations = self.voxel_activations[block]
+        if t:
+            activations = activations[t]
+        else:
+            activations = activations.mean(dim=0)
+
         logging.info(
             'Reconstruction Error (Frobenius Norm): %.8e out of %.8e',
-            np.linalg.norm(
-                (self.voxel_activations[block] - reconstruction).numpy()
-            ),
+            np.linalg.norm((activations - reconstruction).numpy()),
             np.linalg.norm(self.voxel_activations[block].numpy())
         )
 
