@@ -458,13 +458,39 @@ class DeepTFA:
             result['z^S_%d' % task] = hyperparams['task']['mu'][:, task]
         return result
 
-    def reconstruction(self, block=None, subject=None, task=None):
+    def reconstruction(self, block=None, subject=None, task=None, t=0):
         results = self.results(block, subject, task)
-        return results['weights'] @ results['factors']
+        reconstruction = results['weights'] @ results['factors']
 
-    def reconstruction_diff(self, block):
-        reconstruction = self.reconstruction(block)
-        return self.voxel_activations[block] - reconstruction
+        image = utils.cmu2nii(reconstruction.numpy(),
+                              self.voxel_locations.numpy(),
+                              self._templates[block])
+        if t is None:
+            image_slice = nilearn.image.mean_img(image)
+            reconstruction = reconstruction.mean(dim=0)
+        else:
+            image_slice = nilearn.image.index_img(image, t)
+            reconstruction = reconstruction[t]
+        return image_slice, reconstruction
+
+    def reconstruction_diff(self, block, t=0, zscore_bound=3):
+        _, reconstruction = self.reconstruction(block)
+        squared_diff = (self.voxel_activations[block] - reconstruction) ** 2
+
+        if zscore_bound is None:
+            zscore_bound = squared_diff.max().item()
+
+        image = utils.cmu2nii(squared_diff.numpy(),
+                              self.voxel_locations.numpy(),
+                              self._templates[block])
+        if t is None:
+            image_slice = nilearn.image.mean_img(image)
+            squared_diff = squared_diff.mean(dim=0)
+        else:
+            image_slice = nilearn.image.index_img(image, t)
+            squared_diff = squared_diff[t]
+
+        return image_slice, squared_diff
 
     def plot_reconstruction_diff(self, block, filename='', show=True, t=0,
                                  plot_abs=False, labeler=lambda b: None,
