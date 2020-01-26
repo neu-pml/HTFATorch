@@ -123,7 +123,8 @@ class FMriActivationsDb:
         block_dict['rest_end_times'] =\
             json.dumps(block_dict['rest_end_times'])
         self._table.upsert(block_dict, ['subject', 'run', 'task', 'block',
-                                        'start_time', 'end_time','rest_start_times','rest_end_times',
+                                        'start_time', 'end_time',
+                                        'rest_start_times', 'rest_end_times',
                                         'individual_differences'])
 
     def __getattr__(self, name):
