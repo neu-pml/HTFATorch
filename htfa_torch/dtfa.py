@@ -474,7 +474,8 @@ class DeepTFA:
         return image_slice, reconstruction
 
     def reconstruction_diff(self, block, t=0, zscore_bound=3):
-        _, reconstruction = self.reconstruction(block)
+        results = self.results(block)
+        reconstruction = results['weights'] @ results['factors']
         squared_diff = (self.voxel_activations[block] - reconstruction) ** 2
 
         if zscore_bound is None:
@@ -485,10 +486,12 @@ class DeepTFA:
                               self._templates[block])
         if t is None:
             image_slice = nilearn.image.mean_img(image)
-            squared_diff = squared_diff.mean(dim=0)
+            squared_diff = self.voxel_activations[block].mean(dim=0) -\
+                           reconstruction.mean(dim=0)
         else:
             image_slice = nilearn.image.index_img(image, t)
-            squared_diff = squared_diff[t]
+            squared_diff = self.voxel_activations[block][t] - reconstruction[t]
+        squared_diff = squared_diff ** 2
 
         return image_slice, squared_diff
 
