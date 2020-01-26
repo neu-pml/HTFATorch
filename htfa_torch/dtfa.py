@@ -513,7 +513,7 @@ class DeepTFA:
 
         logging.info(
             'Reconstruction Error (Frobenius Norm): %.8e out of %.8e',
-            np.linalg.norm(diff.numpy()),
+            np.linalg.norm(diff.sqrt().numpy()),
             np.linalg.norm(self.voxel_activations[block].numpy())
         )
 
