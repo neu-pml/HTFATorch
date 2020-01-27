@@ -47,9 +47,10 @@ EPOCH_MSG = '[Epoch %d] (%dms) Posterior free-energy %.8e = KL from prior %.8e -
 class DeepTFA:
     """Overall container for a run of Deep TFA"""
     def __init__(self, query, mask, num_factors=tfa_models.NUM_FACTORS,
-                 embedding_dim=2, model_time_series=True):
+                 embedding_dim=2, model_time_series=True, query_name=None):
         self.num_factors = num_factors
         self._time_series = model_time_series
+        self._common_name = query_name
         self.mask = mask
         self._blocks = list(query)
         for block in self._blocks:
@@ -499,10 +500,10 @@ class DeepTFA:
                                  plot_abs=False, labeler=lambda b: None,
                                  zscore_bound=3, **kwargs):
         if filename == '' and t is None:
-            filename = '%s%s_ntfa_reconstruction_diff.pdf'
+            filename = '%s-%s_ntfa_reconstruction_diff.pdf'
             filename = filename % (self.common_name(), str(block))
         elif filename == '':
-            filename = '%s%s_ntfa_reconstruction_diff_tr%d.pdf'
+            filename = '%s-%s_ntfa_reconstruction_diff_tr%d.pdf'
             filename = filename % (self.common_name(), str(block), t)
 
         image_slice, diff = self.reconstruction_diff(block, t=t,
@@ -556,7 +557,8 @@ class DeepTFA:
     def plot_factor_centers(self, block, filename='', show=True, t=None,
                             labeler=None, serialize_data=True):
         if filename == '':
-            filename = self.common_name() + str(block) + '_factor_centers.pdf'
+            filename = self.common_name() + '-' + str(block) +\
+                       '_factor_centers.pdf'
         if labeler is None:
             labeler = lambda b: None
         results = self.results(block)
@@ -595,10 +597,10 @@ class DeepTFA:
         if zscore_bound is None:
             zscore_bound = self.activation_normalizers[block]
         if filename == '' and t is None:
-            filename = '%s%s_original_brain.pdf' % (self.common_name(),
-                                                    str(block))
+            filename = '%s-%s_original_brain.pdf' % (self.common_name(),
+                                                     str(block))
         elif filename == '':
-            filename = '%s%s_original_brain_tr%d.pdf'
+            filename = '%s-%s_original_brain_tr%d.pdf'
             filename = filename % (self.common_name(), str(block), t)
         if labeler is None:
             labeler = lambda b: None
@@ -650,10 +652,10 @@ class DeepTFA:
         if zscore_bound is None:
             zscore_bound = self.activation_normalizers[block]
         if filename == '' and t is None:
-            filename = '%s%s_ntfa_reconstruction.pdf' % (self.common_name(),
-                                                         str(block))
+            filename = '%s-%s_ntfa_reconstruction.pdf' % (self.common_name(),
+                                                          str(block))
         elif filename == '':
-            filename = '%s%s_ntfa_reconstruction_tr%d.pdf'
+            filename = '%s-%s_ntfa_reconstruction_tr%d.pdf'
             filename = filename % (self.common_name(), str(block), t)
         if labeler is None:
             labeler = lambda b: None
@@ -693,7 +695,8 @@ class DeepTFA:
                               plot_abs=False, serialize_data=True,
                               zscore_bound=3, **kwargs):
         if filename == '':
-            filename = self.common_name() + str(subject) + '_subject_template.pdf'
+            filename = self.common_name() + '-' + str(subject) +\
+                       '_subject_template.pdf'
         i = self.subjects().index(subject)
         results = self.results(block=None, task=None, subject=i)
         template = [i for (i, b) in enumerate(self._blocks)
@@ -734,7 +737,8 @@ class DeepTFA:
                            labeler=lambda x: x, serialize_data=True,
                            zscore_bound=3, **kwargs):
         if filename == '':
-            filename = self.common_name() + str(task) + '_task_template.pdf'
+            filename = self.common_name() + '-' + str(task) +\
+                       '_task_template.pdf'
         i = self.tasks().index(task)
         results = self.results(block=None, subject=None, task=i)
         template = [i for (i, b) in enumerate(self._blocks)
@@ -970,6 +974,8 @@ class DeepTFA:
                                      legend_ordering=legend_ordering)
 
     def common_name(self):
+        if self._common_name:
+            return self._common_name
         return os.path.commonprefix([os.path.basename(b.filename)
                                      for b in self._blocks])
 
