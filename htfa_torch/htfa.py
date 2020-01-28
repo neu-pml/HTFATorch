@@ -45,9 +45,11 @@ from . import utils
 
 class HierarchicalTopographicFactorAnalysis:
     """Overall container for a run of TFA"""
-    def __init__(self, query, mask, num_factors=tfa_models.NUM_FACTORS):
+    def __init__(self, query, mask, num_factors=tfa_models.NUM_FACTORS,
+                 query_name=None):
         self.num_factors = num_factors
         self.mask = mask
+        self._common_name = query_name
         self._blocks = list(query)
         for block in self._blocks:
             block.load()
@@ -428,10 +430,10 @@ class HierarchicalTopographicFactorAnalysis:
         if labeler is None:
             labeler = lambda b: None
         if filename == '' and t is None:
-            filename = '%s%s_original_brain.pdf' % (self.common_name(),
-                                                    str(block))
+            filename = '%s-%s_original_brain.pdf' % (self.common_name(),
+                                                     str(block))
         elif filename == '':
-            filename = '%s%s_original_brain_tr%d.pdf'
+            filename = '%s-%s_original_brain_tr%d.pdf'
             filename = filename % (self.common_name(), str(block), t)
 
         image = utils.cmu2nii(self.voxel_activations[block].numpy(),
@@ -489,10 +491,10 @@ class HierarchicalTopographicFactorAnalysis:
         if labeler is None:
             labeler = lambda b: None
         if filename == '' and t is None:
-            filename = '%s%s_htfa_reconstruction.pdf' % (self.common_name(),
-                                                         str(block))
+            filename = '%s-%s_htfa_reconstruction.pdf' % (self.common_name(),
+                                                          str(block))
         elif filename == '':
-            filename = '%s%s_htfa_reconstruction_tr%d.pdf'
+            filename = '%s-%s_htfa_reconstruction_tr%d.pdf'
             filename = filename % (self.common_name(), str(block), t)
 
         if blocks_filter(block):
@@ -528,10 +530,10 @@ class HierarchicalTopographicFactorAnalysis:
                                  plot_abs=False, t=0, labeler=lambda b: None,
                                  zscore_bound=3, **kwargs):
         if filename == '' and t is None:
-            filename = '%s%s_htfa_reconstruction_diff.pdf'
+            filename = '%s-%s_htfa_reconstruction_diff.pdf'
             filename = filename % (self.common_name(), str(block))
         elif filename == '':
-            filename = '%s%s_htfa_reconstruction_diff_tr%d.pdf'
+            filename = '%s-%s_htfa_reconstruction_diff_tr%d.pdf'
             filename = filename % (self.common_name(), str(block), t)
 
         results = self.results(block)
@@ -581,6 +583,8 @@ class HierarchicalTopographicFactorAnalysis:
         return plot
 
     def common_name(self):
+        if self._common_name:
+            return self._common_name
         return os.path.commonprefix([os.path.basename(b.filename)
                                      for b in self._blocks])
 
