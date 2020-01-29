@@ -135,12 +135,12 @@ def embedding_clusters_fig(mus, sigmas, embedding_colors, embedding_name, title,
                            ylims=None, figsize=FIGSIZE, plot_ellipse=True,
                            legend_ordering=None):
     with plt.style.context('seaborn-white'):
-        fig, ax = plt.subplots(facecolor='white', figsize=figsize,
-                               frameon=True)
+        fig, ax = plt.subplots(facecolor='white', figsize=figsize, frameon=True)
         plot_embedding_clusters(mus, sigmas, embedding_colors,
                                 embedding_name, title, palette, ax, xlims,
                                 ylims, plot_ellipse, legend_ordering)
 
+        plt.tight_layout()
         if filename is not None:
             fig.savefig(filename)
         if show:
