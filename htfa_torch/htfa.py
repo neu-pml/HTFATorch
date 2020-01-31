@@ -463,12 +463,16 @@ class HierarchicalTopographicFactorAnalysis:
             self.voxel_locations, results['factor_centers'],
             results['factor_log_widths']
         )
-        times = (0, self.voxel_activations[block].shape[0])
+        if block:
+            times = (0, self.num_times[block])
+            template = self._templates[block]
+        else:
+            times = (0, max(self.num_times))
+            template = self._templates[0]
         reconstruction = results['weights'][times[0]:times[1], :] @ factors
 
         image = utils.cmu2nii(reconstruction.numpy(),
-                              self.voxel_locations.numpy(),
-                              self._templates[block])
+                              self.voxel_locations.numpy(), template)
         if t is None:
             image_slice = nilearn.image.mean_img(image)
             reconstruction = reconstruction.mean(dim=0)
@@ -486,7 +490,7 @@ class HierarchicalTopographicFactorAnalysis:
                             blocks_filter=lambda block: True, **kwargs):
         if self.activation_normalizers is None:
             self.normalize_activations()
-        if zscore_bound is None:
+        if zscore_bound is None and block:
             zscore_bound = self.activation_normalizers[block]
         if labeler is None:
             labeler = lambda b: None
@@ -497,7 +501,7 @@ class HierarchicalTopographicFactorAnalysis:
             filename = '%s-%s_htfa_reconstruction_tr%d.pdf'
             filename = filename % (self.common_name(), str(block), t)
 
-        if blocks_filter(block):
+        if blocks_filter(self._blocks[block]):
             image_slice, reconstruction = self.posterior_reconstruction(
                 block=block, t=t
             )
