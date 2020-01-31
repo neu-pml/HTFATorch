@@ -470,9 +470,10 @@ class HierarchicalTopographicFactorAnalysis:
             times = (0, max(self.num_times))
             template = self._templates[0]
         reconstruction = results['weights'][times[0]:times[1], :] @ factors
+        reconstruction = reconstruction.detach()
 
-        image = utils.cmu2nii(reconstruction.detach().numpy(),
-                              self.voxel_locations.detach().numpy(), template)
+        image = utils.cmu2nii(reconstruction.numpy(),
+                              self.voxel_locations.numpy(), template)
         if t is None:
             image_slice = nilearn.image.mean_img(image)
             reconstruction = reconstruction.mean(dim=0)
