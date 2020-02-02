@@ -124,7 +124,7 @@ def plot_cov_ellipse(cov, pos, nstd=1, ax=None, plot_ellipse=True, **kwargs):
     # Width and height are "full" widths, not radius
     width, height = 2 * nstd * np.sqrt(vals)
     ellip = mpatches.Ellipse(xy=pos, width=width, height=height, angle=theta,
-                             **kwargs)
+                             fill=False, **kwargs)
     if plot_ellipse:
         ax.add_artist(ellip)
     color = np.expand_dims(kwargs['color'], axis=0)
