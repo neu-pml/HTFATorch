@@ -147,6 +147,8 @@ def embedding_clusters_fig(mus, sigmas, embedding_colors, embedding_name, title,
         if show:
             fig.show()
 
+MPL_PATCH_HATCHES = ['/', "\\", '|', '-', '+', 'x', 'o', 'O', '.', '*']
+
 def plot_embedding_clusters(mus, sigmas, embedding_colors, embedding_name,
                             title, palette, ax, xlims=None, ylims=None,
                             plot_ellipse=True, legend_ordering=None,
@@ -186,11 +188,15 @@ def plot_embedding_clusters(mus, sigmas, embedding_colors, embedding_name,
         palette_legend(list(palette.keys()), list(palette.values()),
                        ordering=legend_ordering)
 
+    hatch_styles = {str(color): None for color in embedding_colors}
+    for k, color in enumerate(hatch_styles.keys()):
+        hatch_styles[str(color)] = MPL_PATCH_HATCHES[k % len(MPL_PATCH_HATCHES)]
     for k, color in enumerate(embedding_colors):
         covk = torch.eye(2) * sigmas[k] ** 2
         alpha = 0.66
-        plot_cov_ellipse(covk, mus[k], nstd=1, ax=ax, alpha=alpha,
-                         color=color, plot_ellipse=plot_ellipse)
+        plot_cov_ellipse(covk, mus[k], nstd=1, ax=ax, alpha=alpha, color=color,
+                         plot_ellipse=plot_ellipse,
+                         hatch=hatch_styles[str(color)])
 
 def plot_clusters(Xs, mus, covs, K, figsize=(4, 4), xlim=(-10, 10),
                   ylim=(-10, 10)):
