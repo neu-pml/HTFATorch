@@ -7,6 +7,7 @@ __email__ = 'e.sennesh@northeastern.edu'
 import flatdict
 import glob
 import logging
+from ordered_set import OrderedSet
 import os
 import warnings
 
@@ -155,6 +156,17 @@ def plot_embedding_clusters(mus, sigmas, embedding_colors, embedding_name,
         ax.set_ylabel('$%s_2$' % embedding_name)
     ax.set_xticks([])
     ax.set_yticks([])
+    if legend_ordering is None:
+        legend_ordering = []
+        colors = list(palette.values())
+        sorted_colors = sorted(zip(mus, embedding_colors),
+                               key=lambda pair: pair[0][0])
+        for embedding_color in [color[1] for color in sorted_colors]:
+            for k, color in enumerate(colors):
+                if (color == embedding_color).all():
+                    legend_ordering.append(k)
+                    continue
+        legend_ordering = OrderedSet(legend_ordering)
 
     if xlims is not None:
         ax.set_xlim(*xlims)
