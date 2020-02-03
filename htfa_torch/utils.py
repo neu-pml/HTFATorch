@@ -113,7 +113,8 @@ def average_weighted_reconstruction_error(blocks, num_times, num_voxels,
 
     return reconstruction_error, image_norm, normed_error
 
-def plot_cov_ellipse(cov, pos, nstd=1, ax=None, plot_ellipse=True, **kwargs):
+def plot_cov_ellipse(cov, pos, nstd=1, ax=None, plot_ellipse=True, marker='x',
+                     **kwargs):
     def eigsorted(cov):
         vals, vecs = np.linalg.eigh(cov)
         order = vals.argsort()[::-1]
@@ -128,7 +129,7 @@ def plot_cov_ellipse(cov, pos, nstd=1, ax=None, plot_ellipse=True, **kwargs):
     if plot_ellipse:
         ax.add_artist(ellip)
     color = np.expand_dims(kwargs['color'], axis=0)
-    ax.scatter(x=pos[0], y=pos[1], c=color, marker='x')
+    ax.scatter(x=pos[0], y=pos[1], c=color, marker=marker)
     return ellip
 
 def embedding_clusters_fig(mus, sigmas, embedding_colors, embedding_name, title,
@@ -148,6 +149,8 @@ def embedding_clusters_fig(mus, sigmas, embedding_colors, embedding_name, title,
             fig.show()
 
 MPL_PATCH_HATCHES = ['/', "\\", '|', '-', '+', 'x', 'o', 'O', '.', '*']
+MPL_NICE_MARKERS = ['.', 'o', 'v', '^', '<', '>', '1', '2', '3', '4', '8',
+                    's', 'p', 'P', '*', 'h', 'H', '+', 'x', 'X', 'D', 'd']
 
 def plot_embedding_clusters(mus, sigmas, embedding_colors, embedding_name,
                             title, palette, ax, xlims=None, ylims=None,
@@ -188,15 +191,16 @@ def plot_embedding_clusters(mus, sigmas, embedding_colors, embedding_name,
         palette_legend(list(palette.keys()), list(palette.values()),
                        ordering=legend_ordering)
 
-    hatch_styles = {str(color): None for color in embedding_colors}
-    for k, color in enumerate(hatch_styles.keys()):
-        hatch_styles[str(color)] = MPL_PATCH_HATCHES[k % len(MPL_PATCH_HATCHES)]
+    styles = {str(color): None for color in embedding_colors}
+    for k, color in enumerate(styles.keys()):
+        styles[str(color)] = (MPL_PATCH_HATCHES[k % len(MPL_PATCH_HATCHES)],
+                              MPL_NICE_MARKERS[k % len(MPL_NICE_MARKERS)])
     for k, color in enumerate(embedding_colors):
         covk = torch.eye(2) * sigmas[k] ** 2
         alpha = 0.66
         plot_cov_ellipse(covk, mus[k], nstd=1, ax=ax, alpha=alpha, color=color,
-                         plot_ellipse=plot_ellipse,
-                         hatch=hatch_styles[str(color)])
+                         plot_ellipse=plot_ellipse, hatch=styles[str(color)][0],
+                         marker=styles[str(color)][1])
 
 def plot_clusters(Xs, mus, covs, K, figsize=(4, 4), xlim=(-10, 10),
                   ylim=(-10, 10)):
