@@ -158,17 +158,6 @@ def plot_embedding_clusters(mus, sigmas, embedding_colors, embedding_name,
         ax.set_ylabel('$%s_2$' % embedding_name)
     ax.set_xticks([])
     ax.set_yticks([])
-    if legend_ordering is None:
-        legend_ordering = []
-        colors = list(palette.values())
-        sorted_colors = sorted(zip(mus, embedding_colors),
-                               key=lambda pair: pair[0][0])
-        for embedding_color in [color[1] for color in sorted_colors]:
-            for k, color in enumerate(colors):
-                if (color == embedding_color).all():
-                    legend_ordering.append(k)
-                    continue
-        legend_ordering = OrderedSet(legend_ordering)
 
     if xlims is not None:
         ax.set_xlim(*xlims)
@@ -185,6 +174,17 @@ def plot_embedding_clusters(mus, sigmas, embedding_colors, embedding_name,
         palette.set_clim(0, 1)
         plt.colorbar(palette)
     elif color_legend:
+        if legend_ordering is None:
+            legend_ordering = []
+            colors = list(palette.values())
+            sorted_colors = sorted(zip(mus, embedding_colors),
+                                   key=lambda pair: pair[0][0])
+            for embedding_color in [color[1] for color in sorted_colors]:
+                for k, color in enumerate(colors):
+                    if (color == embedding_color).all():
+                        legend_ordering.append(k)
+                        continue
+            legend_ordering = OrderedSet(legend_ordering)
         palette_legend(list(palette.keys()), list(palette.values()),
                        ordering=legend_ordering)
 
