@@ -816,9 +816,9 @@ class DeepTFA:
 
     def heatmap_subject_embedding(self, heatmaps=[], filename='', show=True,
                                   xlims=None, ylims=None, figsize=utils.FIGSIZE,
-                                  colormap='Accent', serialize_data=True,
-                                  plot_ellipse=True, legend_ordering=None,
-                                  titles=[]):
+                                  colormap=plt.rcParams['image.cmap'],
+                                  serialize_data=True, plot_ellipse=True,
+                                  legend_ordering=None, titles=[]):
         if filename == '':
             filename = self.common_name() + '_subject_heatmap.pdf'
         hyperparams = self.variational.hyperparams.state_vardict()
@@ -879,8 +879,9 @@ class DeepTFA:
 
     def scatter_subject_embedding(self, labeler=None, filename='', show=True,
                                   xlims=None, ylims=None, figsize=utils.FIGSIZE,
-                                  colormap='Accent', serialize_data=True,
-                                  plot_ellipse=True, legend_ordering=None):
+                                  colormap=plt.rcParams['image.cmap'],
+                                  serialize_data=True, plot_ellipse=True,
+                                  legend_ordering=None):
         if filename == '':
             filename = self.common_name() + '_subject_embedding.pdf'
         hyperparams = self.variational.hyperparams.state_vardict()
@@ -927,8 +928,9 @@ class DeepTFA:
 
     def scatter_task_embedding(self, labeler=None, filename='', show=True,
                                xlims=None, ylims=None, figsize=utils.FIGSIZE,
-                               colormap='Accent', serialize_data=True,
-                               plot_ellipse=True, legend_ordering=None):
+                               colormap=plt.rcParams['image.cmap'],
+                               serialize_data=True, plot_ellipse=True,
+                               legend_ordering=None):
         if filename == '':
             filename = self.common_name() + '_task_embedding.pdf'
         hyperparams = self.variational.hyperparams.state_vardict()
