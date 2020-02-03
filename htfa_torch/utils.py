@@ -149,8 +149,8 @@ def embedding_clusters_fig(mus, sigmas, embedding_colors, embedding_name, title,
             fig.show()
 
 MPL_PATCH_HATCHES = ['/', "\\", '|', '-', '+', 'x', 'o', 'O', '.', '*']
-MPL_NICE_MARKERS = ['.', 'o', 'v', '^', '<', '>', '1', '2', '3', '4', '8',
-                    's', 'p', 'P', '*', 'h', 'H', '+', 'x', 'X', 'D', 'd']
+MPL_NICE_MARKERS = ['x', 'X', '.', 'o', 'v', '^', '<', '>', '1', '2', '3', '4',
+                    '8', 's', 'p', 'P', '*', 'h', 'H', '+', 'D', 'd']
 
 def plot_embedding_clusters(mus, sigmas, embedding_colors, embedding_name,
                             title, palette, ax, xlims=None, ylims=None,
