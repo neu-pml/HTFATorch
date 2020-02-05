@@ -307,7 +307,8 @@ class DeepTFAModel(nn.Module):
         ))
 
     def forward(self, decoder, trace, times=None, guide=probtorch.Trace(),
-                observations=[], blocks=None, locations=None):
+                observations=[], blocks=None, locations=None,
+                num_particles=tfa_models.NUM_PARTICLES):
         params = self.hyperparams.state_vardict()
         if times is None:
             times = (0, max(self._num_times))
@@ -323,7 +324,7 @@ class DeepTFAModel(nn.Module):
         weights, centers, log_widths = decoder(trace, blocks, block_subjects,
                                                block_tasks, params, times,
                                                guide=guide,
-                                               num_particles=1,
+                                               num_particles=num_particles,
                                                generative=True)
 
         return [self.likelihood(trace, weights[i], centers[i], log_widths[i],
