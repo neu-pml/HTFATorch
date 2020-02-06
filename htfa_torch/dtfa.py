@@ -282,12 +282,12 @@ class DeepTFA:
 
     def free_energy(self, batch_size=64, use_cuda=True, blocks_batch_size=4,
                     blocks_filter=lambda block: True, num_particles=1,
-                    sample_size=10):
-        training_blocks = [(b, block) for (b, block) in enumerate(self._blocks)
-                           if blocks_filter(block)]
+                    sample_size=10, predictive=False):
+        testing_blocks = [(b, block) for (b, block) in enumerate(self._blocks)
+                          if blocks_filter(block)]
         activations_loader = torch.utils.data.DataLoader(
             utils.TFADataset([block.activations.detach()
-                              for (_, block) in training_blocks]),
+                              for (_, block) in testing_blocks]),
             batch_size=batch_size,
             pin_memory=True,
         )
@@ -310,11 +310,11 @@ class DeepTFA:
 
         for k in range(sample_size // num_particles):
             for (batch, data) in enumerate(activations_loader):
-                block_batches = utils.chunks(list(range(len(training_blocks))),
+                block_batches = utils.chunks(list(range(len(testing_blocks))),
                                              n=blocks_batch_size)
                 for block_batch in block_batches:
                     activations = [{'Y': data[:, b, :]} for b in block_batch]
-                    block_batch = [training_blocks[b][0] for b in block_batch]
+                    block_batch = [testing_blocks[b][0] for b in block_batch]
                     if tfa.CUDA and use_cuda:
                         for b in block_batch:
                             generative.likelihoods[b].voxel_locations =\
