@@ -300,7 +300,7 @@ class DeepTFAModel(nn.Module):
         ))
 
     def forward(self, decoder, trace, times=None, guide=probtorch.Trace(),
-                observations=[], blocks=None):
+                observations=[], blocks=None, locations=None):
         params = self.hyperparams.state_vardict()
         if times is None:
             times = (0, max(self._num_times))
@@ -321,5 +321,6 @@ class DeepTFAModel(nn.Module):
 
         return [self.likelihood(trace, weights[i], centers[i], log_widths[i],
                                 params, times=times,
-                                observations=observations[i], block=b)
+                                observations=observations[i], block=b,
+                                locations=locations)
                 for (i, b) in enumerate(blocks)]
