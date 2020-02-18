@@ -229,18 +229,22 @@ class TFAGenerativeLikelihood(GenerativeLikelihood):
         self.block = block
 
     def forward(self, trace, weights, centers, log_widths, params, times=None,
-                observations=collections.defaultdict()):
+                observations=collections.defaultdict(), block=None,
+                locations=None):
         if times is None:
             times = (0, self._num_times)
 
-        factors = radial_basis(Variable(self.voxel_locations,
-                                        requires_grad=True),
-                               centers, log_widths)
-
+        if locations is not None:
+            voxel_locations = locations
+        else:
+            voxel_locations = self.voxel_locations
+        factors = radial_basis(voxel_locations, centers, log_widths)
+        block = block if block is not None else self.block
         activations = trace.normal(weights @ factors,
                                    softplus(params['voxel_noise'])[0],
                                    value=observations['Y'],
-                                   name='Y%dt%d-%d' % (self.block, times[0], times[1]))
+                                   name='Y%dt%d-%d' % (block, times[0],
+                                                       times[1]))
         return activations
 
 class TFAModel(nn.Module):
