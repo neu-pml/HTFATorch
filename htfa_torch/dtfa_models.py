@@ -295,11 +295,9 @@ class DeepTFAModel(nn.Module):
         self.hyperparams = DeepTFAGenerativeHyperparams(
             len(set(block_subjects)), len(set(block_tasks)), embedding_dim
         )
-        self.likelihoods = [tfa_models.TFAGenerativeLikelihood(
-            locations, self._num_times[b], block=b, register_locations=False
-        ) for b in range(self._num_blocks)]
-        for b, block_likelihood in enumerate(self.likelihoods):
-            self.add_module('likelihood' + str(b), block_likelihood)
+        self.add_module('likelihood', tfa_models.TFAGenerativeLikelihood(
+            locations, self._num_times, block=None, register_locations=False
+        ))
 
     def forward(self, decoder, trace, times=None, guide=probtorch.Trace(),
                 observations=[], blocks=None):
@@ -321,7 +319,7 @@ class DeepTFAModel(nn.Module):
                                                num_particles=1,
                                                generative=True)
 
-        return [self.likelihoods[b](trace, weights[i], centers[i],
-                                    log_widths[i], params, times=times,
-                                    observations=observations[i])
+        return [self.likelihood(trace, weights[i], centers[i], log_widths[i],
+                                params, times=times,
+                                observations=observations[i], block=b)
                 for (i, b) in enumerate(blocks)]
