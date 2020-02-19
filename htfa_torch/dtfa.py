@@ -144,11 +144,12 @@ class DeepTFA:
         decoder = self.decoder
         variational = self.variational
         generative = self.generative
+        voxel_locations = self.voxel_locations
         if tfa.CUDA and use_cuda:
             decoder.cuda()
             variational.cuda()
             generative.cuda()
-            cuda_locations = self.voxel_locations.cuda()
+            voxel_locations = voxel_locations.cuda()
         if not isinstance(learning_rate, dict):
             learning_rate = {
                 'q': learning_rate,
@@ -203,9 +204,6 @@ class DeepTFA:
                     activations = [{'Y': data[:, b, :]} for b in block_batch]
                     block_batch = [training_blocks[b][0] for b in block_batch]
                     if tfa.CUDA and use_cuda:
-                        for b in block_batch:
-                            generative.likelihoods[b].voxel_locations =\
-                                cuda_locations
                         for acts in activations:
                             acts['Y'] = acts['Y'].cuda()
                     trs = (batch * batch_size, None)
@@ -217,7 +215,8 @@ class DeepTFA:
                                 num_particles=num_particles)
                     p = probtorch.Trace()
                     generative(decoder, p, times=trs, guide=q,
-                               observations=activations, blocks=block_batch)
+                               observations=activations, blocks=block_batch,
+                               locations=voxel_locations)
 
                     def block_rv_weight(node, prior=True):
                         result = 1.0
@@ -239,9 +238,6 @@ class DeepTFA:
 
                     if tfa.CUDA and use_cuda:
                         del activations
-                        for b in block_batch:
-                            generative.likelihoods[b].voxel_locations =\
-                                self.voxel_locations
                         torch.cuda.empty_cache()
                 if tfa.CUDA and use_cuda:
                     epoch_free_energies[batch] = epoch_free_energies[batch].cpu().data.numpy()
@@ -300,13 +296,14 @@ class DeepTFA:
         decoder = self.decoder
         variational = self.variational
         generative = self.generative
+        voxel_locations = self.voxel_locations
         if tfa.CUDA and use_cuda:
             decoder.cuda()
             variational.cuda()
             generative.cuda()
-            cuda_locations = self.voxel_locations.cuda().detach()
-            log_likelihoods = log_likelihoods.to(cuda_locations)
-            prior_kls = prior_kls.to(cuda_locations)
+            voxel_locations = voxel_locations.cuda().detach()
+            log_likelihoods = log_likelihoods.to(voxel_locations)
+            prior_kls = prior_kls.to(voxel_locations)
 
         for k in range(sample_size // num_particles):
             for (batch, data) in enumerate(activations_loader):
@@ -316,9 +313,6 @@ class DeepTFA:
                     activations = [{'Y': data[:, b, :]} for b in block_batch]
                     block_batch = [testing_blocks[b][0] for b in block_batch]
                     if tfa.CUDA and use_cuda:
-                        for b in block_batch:
-                            generative.likelihoods[b].voxel_locations =\
-                                cuda_locations
                         for acts in activations:
                             acts['Y'] = acts['Y'].cuda()
                     trs = (batch * batch_size, None)
@@ -329,7 +323,8 @@ class DeepTFA:
                                 num_particles=num_particles)
                     p = probtorch.Trace()
                     generative(decoder, p, times=trs, guide=q,
-                               observations=activations, blocks=block_batch)
+                               observations=activations, blocks=block_batch,
+                               locations=voxel_locations)
 
                     _, ll, prior_kl = tfa.hierarchical_free_energy(
                         q, p, num_particles=num_particles
@@ -342,9 +337,6 @@ class DeepTFA:
 
                     if tfa.CUDA and use_cuda:
                         del activations
-                        for b in block_batch:
-                            generative.likelihoods[b].voxel_locations =\
-                                self.voxel_locations
                         torch.cuda.empty_cache()
 
         if tfa.CUDA and use_cuda:
