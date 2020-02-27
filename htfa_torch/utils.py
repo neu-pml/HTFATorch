@@ -290,7 +290,9 @@ def initial_hypermeans(activations, locations, num_factors, hotspot=False):
             ind = np.argmax(activations_mean)
             centers[k, :] = locations[ind, :]
             widths[k] = init_width(activations_mean, locations, activations_mean[ind], centers[k, :])
-            activations_mean = activations_mean - activations_mean[ind]*initial_radial_basis(locations, np.expand_dims(centers[k, :],axis=0), widths[k])
+            activations_mean = activations_mean - activations_mean[ind]*\
+                               initial_radial_basis(locations, np.expand_dims(centers[k, :],axis=0),
+                                                    np.array([widths[k]]))
             activations_mean = activations_mean.squeeze()
         initial_centers = centers
         initial_widths = widths
