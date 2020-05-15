@@ -183,6 +183,7 @@ class DeepTFA:
             optimizer, factor=0.5, min_lr=1e-5, patience=patience,
             verbose=True
         )
+        decoder.train()
         variational.train()
         generative.train()
 
