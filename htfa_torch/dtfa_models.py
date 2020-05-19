@@ -136,22 +136,22 @@ class DeepTFADecoder(nn.Module):
             return trace[name].value
         if predict:
             mu = predictions.select(-1, 0)
-            sigma = predictions.select(-1, 1)
+            log_sigma = predictions.select(-1, 1)
         else:
             mu = params[param]['mu']
-            sigma = params[param]['sigma']
+            log_sigma = params[param]['log_sigma']
             if index is None:
                 mu = mu.mean(dim=1)
-                sigma = sigma.mean(dim=1)
+                log_sigma = log_sigma.mean(dim=1)
             else:
                 if isinstance(index, tuple):
                     for i in index:
                         mu = mu.select(1, i)
-                        sigma = sigma.select(1, i)
+                        log_sigma = log_sigma.select(1, i)
                 else:
                     mu = mu[:, index]
-                    sigma = sigma[:, index]
-        result = trace.normal(mu, torch.exp(sigma),
+                    log_sigma = log_sigma[:, index]
+        result = trace.normal(mu, torch.exp(log_sigma),
                               value=utils.clamped(name, guide), name=name)
         return result
 
