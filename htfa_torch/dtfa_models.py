@@ -56,32 +56,33 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
         params = utils.vardict({
             'subject': {
                 'mu': torch.zeros(self.num_subjects, self.embedding_dim),
-                'sigma': torch.ones(self.num_subjects, self.embedding_dim).log(),
+                'log_sigma': torch.zeros(self.num_subjects, self.embedding_dim),
             },
             'task': {
                 'mu': torch.zeros(self.num_tasks, self.embedding_dim),
-                'sigma': torch.ones(self.num_tasks, self.embedding_dim).log(),
+                'log_sigma': torch.zeros(self.num_tasks, self.embedding_dim),
             },
             'factor_centers': {
                 'mu': hyper_means['factor_centers'].expand(self.num_subjects,
                                                            self._num_factors,
                                                            3),
-                'sigma': torch.ones(self.num_subjects, self._num_factors, 3).log(),
+                'log_sigma': torch.zeros(self.num_subjects, self._num_factors,
+                                         3),
             },
             'factor_log_widths': {
                 'mu': hyper_means['factor_log_widths'].expand(
                     self.num_subjects, self._num_factors
                 ),
-                'sigma': torch.ones(self.num_subjects, self._num_factors) *\
-                         hyper_means['factor_log_widths'].std().log(),
+                'log_sigma': torch.zeros(self.num_subjects, self._num_factors) +\
+                             hyper_means['factor_log_widths'].std().log(),
             },
         })
         if time_series:
             params['weights'] = {
                 'mu': torch.zeros(self.num_blocks, self.num_times,
                                   self._num_factors),
-                'sigma': torch.ones(self.num_blocks, self.num_times,
-                                    self._num_factors).log(),
+                'log_sigma': torch.zeros(self.num_blocks, self.num_times,
+                                         self._num_factors),
             }
 
         super(self.__class__, self).__init__(params, guide=True)
