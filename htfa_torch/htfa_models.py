@@ -233,9 +233,9 @@ class HTFAGenerativeSubjectPrior(tfa_models.GenerativePrior):
             sparams = utils.vardict({
                 'factor_centers': {
                     'mu': template['factor_centers'],
-                    'log_sigma': torch.eye(3).expand(
-                        template['factor_centers'].shape[0], 3, 3
-                    ).unsqueeze(1).to(template['factor_centers']),
+                    'log_sigma': torch.zeros(
+                        template['factor_centers'].shape[0], 3
+                    ),
                 },
                 'factor_log_widths': {
                     'mu': template['factor_log_widths'],
