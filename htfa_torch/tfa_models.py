@@ -204,7 +204,7 @@ class TFAGenerativePrior(GenerativePrior):
                                value=guide['Weights%dt%d-%d' % (self.block, times[0], times[1])],
                                name='Weights%dt%d-%d' % (self.block, times[0], times[1]))
 
-        factor_centers = trace.multivariate_normal(
+        factor_centers = trace.normal(
             params['factor_centers']['mu'], torch.exp(params['factor_centers']['log_sigma']),
             value=guide['FactorCenters' + str(self.block)],
             name='FactorCenters' + str(self.block)
