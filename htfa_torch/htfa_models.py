@@ -38,28 +38,30 @@ class HTFAGuideHyperParams(tfa_models.HyperParams):
             utils.gaussian_populator(self._num_factors, 3)
         params['template']['factor_centers']['mu'] +=\
             hyper_means['factor_centers']
+        params['template']['factor_centers']['log_sigma'] =\
+            torch.zeros(self._num_factors, 3)
         params['template']['factor_log_widths']['mu'] =\
-            hyper_means['factor_log_widths'] * torch.ones(self._num_factors)
+            hyper_means['factor_log_widths']
         params['template']['factor_log_widths']['log_sigma'] =\
-            torch.sqrt(torch.rand(self._num_factors)).log()
+            torch.zeros(self._num_factors)
 
         params['block'] = utils.vardict({
             'factor_centers': {
                 'mu': hyper_means['factor_centers'].\
                         repeat(self._num_blocks, 1, 1),
-                'log_sigma': torch.ones(self._num_blocks, self._num_factors, 3).log(),
+                'log_sigma': torch.zeros(self._num_blocks, self._num_factors, 3),
             },
             'factor_log_widths': {
                 'mu': torch.ones(self._num_blocks, self._num_factors) *\
                       hyper_means['factor_log_widths'],
-                'log_sigma': torch.sqrt(torch.rand(self._num_blocks, self._num_factors)).log(),
+                'log_sigma': torch.zeros(self._num_blocks, self._num_factors),
             },
             'weights': {
                 'mu':  hyper_means['weights'].mean(0).unsqueeze(0).expand(
                     self._num_blocks, self._num_times, self._num_factors
                 ),
-                'log_sigma': torch.ones(self._num_blocks, self._num_times,
-                                    self._num_factors).log(),
+                'log_sigma': torch.zeros(self._num_blocks, self._num_times,
+                                         self._num_factors),
             },
         })
 
