@@ -696,7 +696,7 @@ def populate_vardict(vdict, populator, *dims):
 def gaussian_populator(*dims):
     return {
         'mu': torch.zeros(*dims),
-        'sigma': torch.ones(*dims)
+        'log_sigma': torch.ones(*dims).log()
     }
 
 def uncertainty_alphas(uncertainties, scalars=None):
