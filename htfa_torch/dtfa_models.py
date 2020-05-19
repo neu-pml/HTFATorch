@@ -32,11 +32,11 @@ class DeepTFAGenerativeHyperparams(tfa_models.HyperParams):
         params = utils.vardict({
             'subject': {
                 'mu': torch.zeros(self.num_subjects, self.embedding_dim),
-                'sigma': torch.ones(self.num_subjects, self.embedding_dim),
+                'log_sigma': torch.zeros(self.num_subjects, self.embedding_dim),
             },
             'task': {
                 'mu': torch.zeros(self.num_tasks, self.embedding_dim),
-                'sigma': torch.ones(self.num_tasks, self.embedding_dim),
+                'log_sigma': torch.zeros(self.num_tasks, self.embedding_dim),
             },
             'voxel_noise': torch.ones(1) * tfa_models.VOXEL_NOISE,
         })
@@ -56,32 +56,33 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
         params = utils.vardict({
             'subject': {
                 'mu': torch.zeros(self.num_subjects, self.embedding_dim),
-                'sigma': torch.ones(self.num_subjects, self.embedding_dim),
+                'log_sigma': torch.zeros(self.num_subjects, self.embedding_dim),
             },
             'task': {
                 'mu': torch.zeros(self.num_tasks, self.embedding_dim),
-                'sigma': torch.ones(self.num_tasks, self.embedding_dim),
+                'log_sigma': torch.zeros(self.num_tasks, self.embedding_dim),
             },
             'factor_centers': {
                 'mu': hyper_means['factor_centers'].expand(self.num_subjects,
                                                            self._num_factors,
                                                            3),
-                'sigma': torch.ones(self.num_subjects, self._num_factors, 3),
+                'log_sigma': torch.zeros(self.num_subjects, self._num_factors,
+                                         3),
             },
             'factor_log_widths': {
                 'mu': hyper_means['factor_log_widths'].expand(
                     self.num_subjects, self._num_factors
                 ),
-                'sigma': torch.ones(self.num_subjects, self._num_factors) *\
-                         hyper_means['factor_log_widths'].std(),
+                'log_sigma': torch.zeros(self.num_subjects, self._num_factors) +\
+                             hyper_means['factor_log_widths'].std().log(),
             },
         })
         if time_series:
             params['weights'] = {
                 'mu': torch.zeros(self.num_blocks, self.num_times,
                                   self._num_factors),
-                'sigma': torch.ones(self.num_blocks, self.num_times,
-                                    self._num_factors),
+                'log_sigma': torch.zeros(self.num_blocks, self.num_times,
+                                         self._num_factors),
             }
 
         super(self.__class__, self).__init__(params, guide=True)
@@ -115,7 +116,7 @@ class DeepTFADecoder(nn.Module):
                 self._num_factors, 1
             )),
             dim=-1
-        )
+        ).log()
         self.factors_embedding[-1].bias = nn.Parameter(
             torch.stack((factor_bias_loc, factor_bias_scale), dim=-1).reshape(
                 self._num_factors * 4 * 2
@@ -135,22 +136,22 @@ class DeepTFADecoder(nn.Module):
             return trace[name].value
         if predict:
             mu = predictions.select(-1, 0)
-            sigma = predictions.select(-1, 1)
+            log_sigma = predictions.select(-1, 1)
         else:
             mu = params[param]['mu']
-            sigma = params[param]['sigma']
+            log_sigma = params[param]['log_sigma']
             if index is None:
                 mu = mu.mean(dim=1)
-                sigma = sigma.mean(dim=1)
+                log_sigma = log_sigma.mean(dim=1)
             else:
                 if isinstance(index, tuple):
                     for i in index:
                         mu = mu.select(1, i)
-                        sigma = sigma.select(1, i)
+                        log_sigma = log_sigma.select(1, i)
                 else:
                     mu = mu[:, index]
-                    sigma = sigma[:, index]
-        result = trace.normal(mu, softplus(sigma),
+                    log_sigma = log_sigma[:, index]
+        result = trace.normal(mu, torch.exp(log_sigma),
                               value=utils.clamped(name, guide), name=name)
         return result
 
