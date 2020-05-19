@@ -181,11 +181,11 @@ class HTFAGenerativeHyperParams(tfa_models.HyperParams):
         params['template']['factor_log_widths']['mu'] =\
             torch.ones(self._num_factors) * np.log(coefficient)
         params['template']['factor_log_widths']['log_sigma'] =\
-            torch.ones(self._num_factors).log()
+            torch.zeros(self._num_factors)
 
         params['weights'] = {
             'mu': torch.zeros(self._num_factors),
-            'log_sigma': torch.ones(self._num_factors).log()
+            'log_sigma': torch.zeros(self._num_factors),
         }
 
         params['voxel_noise'] = torch.ones(1) * tfa_models.VOXEL_NOISE
