@@ -201,12 +201,14 @@ class HTFAGenerativeTemplatePrior(tfa_models.GenerativePrior):
                 continue
             if len(params['template'][k]['mu'].shape) > 1:
                 template[k] = trace.multivariate_normal(
-                    params['template'][k]['mu'], torch.exp(params['template'][k]['log_sigma']),
+                    params['template'][k]['mu'],
+                    torch.exp(params['template'][k]['log_sigma']),
                     value=guide['template_' + k], name='template_' + k
                 )
             else:
                 template[k] = trace.normal(
-                    params['template'][k]['mu'], torch.exp(params['template'][k]['log_sigma']),
+                    params['template'][k]['mu'],
+                    torch.exp(params['template'][k]['log_sigma']),
                     value=guide['template_' + k], name='template_' + k
                 )
 
