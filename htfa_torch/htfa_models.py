@@ -239,7 +239,7 @@ class HTFAGenerativeSubjectPrior(tfa_models.GenerativePrior):
                     'mu': template['factor_centers'],
                     'log_sigma': torch.zeros(
                         template['factor_centers'].shape[0], 3
-                    ),
+                    ).to(template['factor_centers']),
                 },
                 'factor_log_widths': {
                     'mu': template['factor_log_widths'],
