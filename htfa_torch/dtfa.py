@@ -381,7 +381,7 @@ class DeepTFA:
                 guide.variable(
                     torch.distributions.Normal,
                     hyperparams['subject']['mu'][:, subject],
-                    softplus(hyperparams['subject']['sigma'][:, subject]),
+                    torch.exp(hyperparams['subject']['sigma'][:, subject]),
                     value=hyperparams['subject']['mu'][:, subject],
                     name='z^P_{%d,%d}' % (subject, b),
                 )
@@ -389,7 +389,7 @@ class DeepTFA:
                 guide.variable(
                     torch.distributions.Normal,
                     factor_centers_params['mu'][:, subject],
-                    softplus(factor_centers_params['sigma'][:, subject]),
+                    torch.exp(factor_centers_params['sigma'][:, subject]),
                     value=factor_centers_params['mu'][:, subject],
                     name='FactorCenters%d' % b,
                 )
@@ -397,7 +397,7 @@ class DeepTFA:
                 guide.variable(
                     torch.distributions.Normal,
                     factor_log_widths_params['mu'][:, subject],
-                    softplus(factor_log_widths_params['sigma'][:, subject]),
+                    torch.exp(factor_log_widths_params['sigma'][:, subject]),
                     value=factor_log_widths_params['mu'][:, subject],
                     name='FactorLogWidths%d' % b,
                 )
@@ -405,7 +405,7 @@ class DeepTFA:
                 guide.variable(
                     torch.distributions.Normal,
                     hyperparams['task']['mu'][:, task],
-                    softplus(hyperparams['task']['sigma'][:, task]),
+                    torch.exp(hyperparams['task']['sigma'][:, task]),
                     value=hyperparams['task']['mu'][:, task],
                     name='z^S_{%d,%d}' % (task, b),
                 )
@@ -416,7 +416,7 @@ class DeepTFA:
                 guide.variable(
                     torch.distributions.Normal,
                     weights_params['mu'][:, b],
-                    softplus(weights_params['sigma'][:, b]),
+                    torch.exp(weights_params['sigma'][:, b]),
                     value=weights_params['mu'][:, b],
                     name='Weights%d_%d-%d' % (b, times[0], times[1])
                 )
@@ -815,7 +815,7 @@ class DeepTFA:
             filename = self.common_name() + '_subject_heatmap.pdf'
         hyperparams = self.variational.hyperparams.state_vardict()
         z_p_mu = hyperparams['subject']['mu'].data
-        z_p_sigma = softplus(hyperparams['subject']['sigma'].data)
+        z_p_sigma = torch.exp(hyperparams['subject']['sigma'].data)
         subjects = self.subjects()
 
         minus_lims = torch.min(z_p_mu - z_p_sigma * 2, dim=0)[0].tolist()
@@ -878,7 +878,7 @@ class DeepTFA:
             filename = self.common_name() + '_subject_embedding.pdf'
         hyperparams = self.variational.hyperparams.state_vardict()
         z_p_mu = hyperparams['subject']['mu'].data
-        z_p_sigma = softplus(hyperparams['subject']['sigma'].data)
+        z_p_sigma = torch.exp(hyperparams['subject']['sigma'].data)
         subjects = self.subjects()
 
         minus_lims = torch.min(z_p_mu - z_p_sigma * 2, dim=0)[0].tolist()
@@ -927,7 +927,7 @@ class DeepTFA:
             filename = self.common_name() + '_task_embedding.pdf'
         hyperparams = self.variational.hyperparams.state_vardict()
         z_s_mu = hyperparams['task']['mu'].data
-        z_s_sigma = softplus(hyperparams['task']['sigma'].data)
+        z_s_sigma = torch.exp(hyperparams['task']['sigma'].data)
         tasks = self.tasks()
 
         minus_lims = torch.min(z_s_mu - z_s_sigma * 2, dim=0)[0].tolist()
