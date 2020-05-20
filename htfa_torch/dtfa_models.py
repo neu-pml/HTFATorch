@@ -10,6 +10,7 @@ __email__ = ('j.vandemeent@northeastern.edu',
 import collections
 
 import numpy as np
+import scipy
 import torch
 import torch.distributions as dists
 from torch.autograd import Variable
@@ -90,12 +91,19 @@ class DeepTFAGuideHyperparams(tfa_models.HyperParams):
 class DeepTFADecoder(nn.Module):
     """Neural network module mapping from embeddings to a topographic factor
        analysis"""
-    def __init__(self, num_factors, hyper_means, embedding_dim=2,
-                 time_series=True):
+    def __init__(self, num_factors, locations, embedding_dim=2,
+                 time_series=True, volume=None):
         super(DeepTFADecoder, self).__init__()
         self._embedding_dim = embedding_dim
         self._num_factors = num_factors
         self._time_series = time_series
+
+        center, center_sigma = utils.brain_centroid(locations)
+        center_sigma = center_sigma.sum(dim=1)
+        hull = scipy.spatial.ConvexHull(locations)
+        coefficient = 1.0
+        if volume is not None:
+            coefficient = np.cbrt(hull.volume / self._num_factors)
 
         self.factors_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim, self._embedding_dim * 2),
@@ -104,21 +112,19 @@ class DeepTFADecoder(nn.Module):
             nn.PReLU(),
             nn.Linear(self._embedding_dim * 4, self._num_factors * 4 * 2),
         )
-        factor_bias_loc = torch.cat(
-            (hyper_means['factor_centers'],
-             hyper_means['factor_log_widths'].unsqueeze(-1)),
+        factor_loc = torch.cat(
+            (center.expand(self._num_factors, 3),
+             torch.ones(self._num_factors, 1) * np.log(coefficient)),
             dim=-1
         )
-        factor_bias_scale = torch.cat(
-            (0.5 * hyper_means['factor_centers'].std(dim=0).expand(
+        factor_log_scale = torch.cat(
+            (torch.log(center_sigma / coefficient).expand(
                 self._num_factors, 3
-            ), hyper_means['factor_log_widths'].std().expand(
-                self._num_factors, 1
-            )),
+            ), torch.zeros(self._num_factors, 1)),
             dim=-1
-        ).log()
+        )
         self.factors_embedding[-1].bias = nn.Parameter(
-            torch.stack((factor_bias_loc, factor_bias_scale), dim=-1).reshape(
+            torch.stack((factor_loc, factor_log_scale), dim=-1).reshape(
                 self._num_factors * 4 * 2
             )
         )
