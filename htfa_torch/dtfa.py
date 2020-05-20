@@ -183,6 +183,7 @@ class DeepTFA:
             optimizer, factor=0.5, min_lr=1e-5, patience=patience,
             verbose=True
         )
+        decoder.train()
         variational.train()
         generative.train()
 
@@ -218,7 +219,8 @@ class DeepTFA:
                     p = probtorch.Trace()
                     generative(decoder, p, times=trs, guide=q,
                                observations=activations, blocks=block_batch,
-                               locations=voxel_locations)
+                               locations=voxel_locations,
+                               num_particles=num_particles)
 
                     def block_rv_weight(node, prior=True):
                         result = 1.0
@@ -326,7 +328,8 @@ class DeepTFA:
                     p = probtorch.Trace()
                     generative(decoder, p, times=trs, guide=q,
                                observations=activations, blocks=block_batch,
-                               locations=voxel_locations)
+                               locations=voxel_locations,
+                               num_particles=num_particles)
 
                     _, ll, prior_kl = tfa.hierarchical_free_energy(
                         q, p, num_particles=num_particles

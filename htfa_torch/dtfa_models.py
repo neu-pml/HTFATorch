@@ -128,6 +128,12 @@ class DeepTFADecoder(nn.Module):
                 self._num_factors * 4 * 2
             )
         )
+        self.factors_skip = nn.Linear(self._embedding_dim, self._num_factors * 4 * 2)
+        if locations is not None:
+            self.register_buffer('locations_min',
+                                 torch.min(locations, dim=0)[0])
+            self.register_buffer('locations_max',
+                                 torch.max(locations, dim=0)[0])
         self.weights_embedding = nn.Sequential(
             nn.Linear(self._embedding_dim * 2, self._embedding_dim * 4),
             nn.PReLU(),
@@ -135,6 +141,7 @@ class DeepTFADecoder(nn.Module):
             nn.PReLU(),
             nn.Linear(self._embedding_dim * 8, self._num_factors * 2),
         )
+        self.weights_skip = nn.Linear(self._embedding_dim * 2, self._num_factors * 2)
 
     def _predict_param(self, params, param, index, predictions, name, trace,
                        predict=True, guide=None):
@@ -180,14 +187,14 @@ class DeepTFADecoder(nn.Module):
             )
         else:
             task_embed = origin
-        factor_params = self.factors_embedding(subject_embed).view(
+        factor_params = (self.factors_embedding(subject_embed) + self.factors_skip(subject_embed)).view(
             -1, self._num_factors, 4, 2
         )
         centers_predictions = factor_params[:, :, :3]
         log_widths_predictions = factor_params[:, :, 3]
 
         joint_embed = torch.cat((subject_embed, task_embed), dim=-1)
-        weight_predictions = self.weights_embedding(joint_embed).view(
+        weight_predictions = (self.weights_embedding(joint_embed) + self.weights_skip(joint_embed)).view(
             -1, self._num_factors, 2
         )
         weight_predictions = weight_predictions.unsqueeze(1).expand(
@@ -199,6 +206,10 @@ class DeepTFADecoder(nn.Module):
             'FactorCenters%d' % block, trace, predict=generative,
             guide=guide,
         )
+        if 'locations_min' in self._buffers:
+            centers_predictions = utils.clamp_locations(centers_predictions,
+                                                        self.locations_min,
+                                                        self.locations_max)
         log_widths_predictions = self._predict_param(
             params, 'factor_log_widths', subject, log_widths_predictions,
             'FactorLogWidths%d' % block, trace, predict=generative,
@@ -307,7 +318,8 @@ class DeepTFAModel(nn.Module):
         ))
 
     def forward(self, decoder, trace, times=None, guide=probtorch.Trace(),
-                observations=[], blocks=None, locations=None):
+                observations=[], blocks=None, locations=None,
+                num_particles=tfa_models.NUM_PARTICLES):
         params = self.hyperparams.state_vardict()
         if times is None:
             times = (0, max(self._num_times))
@@ -323,7 +335,7 @@ class DeepTFAModel(nn.Module):
         weights, centers, log_widths = decoder(trace, blocks, block_subjects,
                                                block_tasks, params, times,
                                                guide=guide,
-                                               num_particles=1,
+                                               num_particles=num_particles,
                                                generative=True)
 
         return [self.likelihood(trace, weights[i], centers[i], log_widths[i],
