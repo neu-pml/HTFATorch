@@ -98,9 +98,11 @@ class DeepTFA:
             'factor_log_widths': widths,
         }
 
-        self.decoder = dtfa_models.DeepTFADecoder(self.num_factors, hyper_means,
+        self.decoder = dtfa_models.DeepTFADecoder(self.num_factors,
+                                                  self.voxel_locations,
                                                   embedding_dim,
-                                                  time_series=model_time_series)
+                                                  time_series=model_time_series,
+                                                  volume=True)
         self.generative = dtfa_models.DeepTFAModel(
             self.voxel_locations, block_subjects, block_tasks,
             self.num_factors, self.num_blocks, self.num_times, embedding_dim
@@ -381,7 +383,7 @@ class DeepTFA:
                 guide.variable(
                     torch.distributions.Normal,
                     hyperparams['subject']['mu'][:, subject],
-                    torch.exp(hyperparams['subject']['sigma'][:, subject]),
+                    torch.exp(hyperparams['subject']['log_sigma'][:, subject]),
                     value=hyperparams['subject']['mu'][:, subject],
                     name='z^P_{%d,%d}' % (subject, b),
                 )
@@ -389,7 +391,7 @@ class DeepTFA:
                 guide.variable(
                     torch.distributions.Normal,
                     factor_centers_params['mu'][:, subject],
-                    torch.exp(factor_centers_params['sigma'][:, subject]),
+                    torch.exp(factor_centers_params['log_sigma'][:, subject]),
                     value=factor_centers_params['mu'][:, subject],
                     name='FactorCenters%d' % b,
                 )
@@ -397,7 +399,7 @@ class DeepTFA:
                 guide.variable(
                     torch.distributions.Normal,
                     factor_log_widths_params['mu'][:, subject],
-                    torch.exp(factor_log_widths_params['sigma'][:, subject]),
+                    torch.exp(factor_log_widths_params['log_sigma'][:, subject]),
                     value=factor_log_widths_params['mu'][:, subject],
                     name='FactorLogWidths%d' % b,
                 )
@@ -405,7 +407,7 @@ class DeepTFA:
                 guide.variable(
                     torch.distributions.Normal,
                     hyperparams['task']['mu'][:, task],
-                    torch.exp(hyperparams['task']['sigma'][:, task]),
+                    torch.exp(hyperparams['task']['log_sigma'][:, task]),
                     value=hyperparams['task']['mu'][:, task],
                     name='z^S_{%d,%d}' % (task, b),
                 )
@@ -416,7 +418,7 @@ class DeepTFA:
                 guide.variable(
                     torch.distributions.Normal,
                     weights_params['mu'][:, b],
-                    torch.exp(weights_params['sigma'][:, b]),
+                    torch.exp(weights_params['log_sigma'][:, b]),
                     value=weights_params['mu'][:, b],
                     name='Weights%d_%d-%d' % (b, times[0], times[1])
                 )
@@ -815,7 +817,7 @@ class DeepTFA:
             filename = self.common_name() + '_subject_heatmap.pdf'
         hyperparams = self.variational.hyperparams.state_vardict()
         z_p_mu = hyperparams['subject']['mu'].data
-        z_p_sigma = torch.exp(hyperparams['subject']['sigma'].data)
+        z_p_sigma = torch.exp(hyperparams['subject']['log_sigma'].data)
         subjects = self.subjects()
 
         minus_lims = torch.min(z_p_mu - z_p_sigma * 2, dim=0)[0].tolist()
@@ -878,7 +880,7 @@ class DeepTFA:
             filename = self.common_name() + '_subject_embedding.pdf'
         hyperparams = self.variational.hyperparams.state_vardict()
         z_p_mu = hyperparams['subject']['mu'].data
-        z_p_sigma = torch.exp(hyperparams['subject']['sigma'].data)
+        z_p_sigma = torch.exp(hyperparams['subject']['log_sigma'].data)
         subjects = self.subjects()
 
         minus_lims = torch.min(z_p_mu - z_p_sigma * 2, dim=0)[0].tolist()
@@ -927,7 +929,7 @@ class DeepTFA:
             filename = self.common_name() + '_task_embedding.pdf'
         hyperparams = self.variational.hyperparams.state_vardict()
         z_s_mu = hyperparams['task']['mu'].data
-        z_s_sigma = torch.exp(hyperparams['task']['sigma'].data)
+        z_s_sigma = torch.exp(hyperparams['task']['log_sigma'].data)
         tasks = self.tasks()
 
         minus_lims = torch.min(z_s_mu - z_s_sigma * 2, dim=0)[0].tolist()
