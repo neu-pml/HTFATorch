@@ -198,20 +198,12 @@ class HTFAGenerativeTemplatePrior(tfa_models.GenerativePrior):
         template = utils.vardict(template_shape.copy())
         for (k, _) in template.iteritems():
             if 'template_' + k in trace:
-                continue
-            if len(params['template'][k]['mu'].shape) > 1:
-                template[k] = trace.multivariate_normal(
+                continue                
+            template[k] = trace.normal(
                     params['template'][k]['mu'],
                     torch.exp(params['template'][k]['log_sigma']),
                     value=guide['template_' + k], name='template_' + k
                 )
-            else:
-                template[k] = trace.normal(
-                    params['template'][k]['mu'],
-                    torch.exp(params['template'][k]['log_sigma']),
-                    value=guide['template_' + k], name='template_' + k
-                )
-
         return template
 
 class HTFAGenerativeSubjectPrior(tfa_models.GenerativePrior):
