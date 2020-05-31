@@ -415,7 +415,7 @@ class DeepTFA:
                     value=hyperparams['task']['mu'][:, task],
                     name='z^S_{%d,%d}' % (task, b),
                 )
-            if self._time_series and generative:
+            if self._time_series and not generative:
                 for k, v in hyperparams['weights'].items():
                     hyperparams['weights'][k] = v[:, :, times[0]:times[1]]
                 weights_params = hyperparams['weights']
