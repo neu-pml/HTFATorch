@@ -276,39 +276,41 @@ class DeepTFAModel(nn.Module):
         self._num_factors = num_factors
         self._num_blocks = num_blocks
         self._num_times = num_times
-        self.block_subjects = block_subjects
-        self.block_tasks = block_tasks
+        self.register_buffer('block_subjects', torch.tensor(block_subjects,
+                                                            dtype=torch.long),
+                             persistent=False)
+        self.register_buffer('block_tasks', torch.tensor(block_tasks,
+                                                         dtype=torch.long),
+                             persistent=False)
 
         self.hyperparams = DeepTFAGenerativeHyperparams(
-            len(set(block_subjects)), len(set(block_tasks)), embedding_dim
+            len(self.block_subjects.unique()), len(self.block_tasks.unique()),
+            embedding_dim
         )
         self.add_module('likelihood', tfa_models.TFAGenerativeLikelihood(
             locations, self._num_times, block=None, register_locations=False
         ))
 
-    def forward(self, decoder, trace, times=None, guide=probtorch.Trace(),
-                observations=[], blocks=None, locations=None,
+    def forward(self, decoder, trace, times=None, guide=None, observations=[],
+                blocks=None, locations=None, params=None,
                 num_particles=tfa_models.NUM_PARTICLES):
-        params = self.hyperparams.state_vardict()
+        if params is None:
+            params = self.hyperparams.state_vardict(num_particles)
+        if guide is None:
+            guide = probtorch.Trace()
         if times is None:
-            times = (0, max(self._num_times))
+            times = torch.arange(max(self._num_times))
         if blocks is None:
-            blocks = list(range(self._num_blocks))
+            blocks = torch.arange(self._num_blocks)
 
-        block_subjects = [self.block_subjects[b]
-                          for b in range(self._num_blocks)
-                          if b in blocks]
-        block_tasks = [self.block_tasks[b] for b in range(self._num_blocks)
-                       if b in blocks]
+        unique_blocks, block_idx = blocks.unique(return_inverse=True)
+        block_subjects = self.block_subjects[unique_blocks]
+        block_tasks = self.block_tasks[unique_blocks]
 
         weights, centers, log_widths = decoder(trace, blocks, block_subjects,
                                                block_tasks, params, times,
-                                               guide=guide,
-                                               num_particles=num_particles,
-                                               generative=True)
+                                               guide=guide, generative=True)
 
-        return [self.likelihood(trace, weights[i], centers[i], log_widths[i],
-                                params, times=times,
-                                observations=observations[i], block=b,
-                                locations=locations)
-                for (i, b) in enumerate(blocks)]
+        return self.likelihood(trace, weights, centers, log_widths, params,
+                               times=times, observations=observations,
+                               block_idx=block_idx, locations=locations)
