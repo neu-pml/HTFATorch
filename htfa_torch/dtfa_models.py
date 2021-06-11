@@ -156,35 +156,31 @@ class DeepTFADecoder(nn.Module):
             if index is None:
                 mu = mu.mean(dim=1)
                 log_sigma = log_sigma.mean(dim=1)
+            if isinstance(index, tuple):
+                mu = mu[:, index[0], index[1]]
+                log_sigma = log_sigma[:, index[0], index[1]]
             else:
-                if isinstance(index, tuple):
-                    for i in index:
-                        mu = mu.select(1, i)
-                        log_sigma = log_sigma.select(1, i)
-                else:
-                    mu = mu[:, index]
-                    log_sigma = log_sigma[:, index]
+                mu = mu[:, index]
+                log_sigma = log_sigma[:, index]
+
         result = trace.normal(mu, torch.exp(log_sigma),
                               value=utils.clamped(name, guide), name=name)
         return result
 
-    def predict(self, trace, params, guide, subject, task, times=(0, 1),
-                block=-1, generative=False):
-        origin = torch.zeros(params['subject']['mu'].shape[0],
+    def forward(self, trace, blocks, subjects, tasks, params, times, guide=None,
+                generative=False):
+        origin = torch.zeros(params['subject']['mu'].shape[0], len(blocks),
                              self._embedding_dim)
         origin = origin.to(params['subject']['mu'])
-        if subject is not None:
-            subject_embed = self._predict_param(
-                params, 'subject', subject, None,
-                'z^P_{%d,%d}' % (subject, block), trace, False, guide
-            )
+        if subjects is not None:
+            subject_embed = self._predict_param(params, 'subject', subjects,
+                                                None, 'z^P', trace, False,
+                                                guide)
         else:
             subject_embed = origin
-        if task is not None:
-            task_embed = self._predict_param(
-                params, 'task', task, None, 'z^S_{%d,%d}' % (task, block),
-                trace, False, guide
-            )
+        if tasks is not None:
+            task_embed = self._predict_param(params, 'task', tasks, None, 'z^S',
+                                             trace, False, guide)
         else:
             task_embed = origin
         factor_params = (self.factors_embedding(subject_embed) + self.factors_skip(subject_embed)).view(
@@ -195,63 +191,38 @@ class DeepTFADecoder(nn.Module):
 
         joint_embed = torch.cat((subject_embed, task_embed), dim=-1)
         weight_predictions = (self.weights_embedding(joint_embed) + self.weights_skip(joint_embed)).view(
-            -1, self._num_factors, 2
+            joint_embed.shape[0], joint_embed.shape[1], self._num_factors, 2
         )
-        weight_predictions = weight_predictions.unsqueeze(1).expand(
-            -1, times[1]-times[0], self._num_factors, 2
+        weight_predictions = weight_predictions.unsqueeze(2).expand(
+            joint_embed.shape[0], joint_embed.shape[1], len(times),
+            self._num_factors, 2
         )
 
         centers_predictions = self._predict_param(
-            params, 'factor_centers', subject, centers_predictions,
-            'FactorCenters%d' % block, trace, predict=generative,
-            guide=guide,
+            params, 'factor_centers', subjects, centers_predictions,
+            'FactorCenters', trace, predict=generative, guide=guide,
         )
         if 'locations_min' in self._buffers:
             centers_predictions = utils.clamp_locations(centers_predictions,
                                                         self.locations_min,
                                                         self.locations_max)
         log_widths_predictions = self._predict_param(
-            params, 'factor_log_widths', subject, log_widths_predictions,
-            'FactorLogWidths%d' % block, trace, predict=generative,
-            guide=guide,
-        )
-        weight_predictions = self._predict_param(
-            params, 'weights', block, weight_predictions,
-            'Weights%d_%d-%d' % (block, times[0], times[1]), trace,
-            predict=generative or block < 0 or not self._time_series,
-            guide=guide,
+            params, 'factor_log_widths', subjects, log_widths_predictions,
+            'FactorLogWidths', trace, predict=generative, guide=guide,
         )
 
-        return centers_predictions, log_widths_predictions, weight_predictions
-
-    def forward(self, trace, blocks, block_subjects, block_tasks, params, times,
-                guide=None, num_particles=tfa_models.NUM_PARTICLES,
-                generative=False):
-        params = utils.vardict(params)
         if generative:
-            for k, v in params.items():
-                params[k] = v.expand(num_particles, *v.shape)
+            _, block_indices = blocks.unique(return_inverse=True)
+            time_idx = torch.arange(len(times), dtype=torch.long)
+            weight_predictions = weight_predictions[:, block_indices, time_idx]
+        weight_predictions = self._predict_param(
+            params, 'weights', (blocks, times), weight_predictions,
+            'Weights_%s' % [t.item() for t in times], trace,
+            predict=generative or (blocks < 0).any() or not self._time_series,
+            guide=guide,
+        )
 
-        if blocks:
-            weights = [None for b in blocks]
-            factor_centers = [None for b in blocks]
-            factor_log_widths = [None for b in blocks]
-
-            for (i, b) in enumerate(blocks):
-                subject = block_subjects[i] if b is not None else None
-                task = block_tasks[i] if b is not None else None
-
-                factor_centers[i], factor_log_widths[i], weights[i] =\
-                    self.predict(trace, params, guide, subject, task, times, b,
-                                 generative)
-        else:
-            subject = block_subjects[0] if block_subjects else None
-            task = block_tasks[0] if block_tasks else None
-            factor_centers, factor_log_widths, weights =\
-                self.predict(trace, params, guide, subject, task, times,
-                             generative=generative)
-
-        return weights, factor_centers, factor_log_widths
+        return weight_predictions, centers_predictions, log_widths_predictions
 
 class DeepTFAGuide(nn.Module):
     """Variational guide for deep topographic factor analysis"""
