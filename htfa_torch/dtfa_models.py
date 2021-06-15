@@ -236,10 +236,14 @@ class DeepTFAGuide(nn.Module):
         self._embedding_dim = embedding_dim
         self._time_series = time_series
 
-        self.block_subjects = block_subjects
-        self.block_tasks = block_tasks
-        num_subjects = len(set(self.block_subjects))
-        num_tasks = len(set(self.block_tasks))
+        self.register_buffer('block_subjects', torch.tensor(block_subjects,
+                                                            dtype=torch.long),
+                             persistent=False)
+        self.register_buffer('block_tasks', torch.tensor(block_tasks,
+                                                         dtype=torch.long),
+                             persistent=False)
+        num_subjects = len(self.block_subjects.unique())
+        num_tasks = len(self.block_tasks.unique())
 
         self.hyperparams = DeepTFAGuideHyperparams(self._num_blocks,
                                                    self._num_times,
@@ -248,25 +252,19 @@ class DeepTFAGuide(nn.Module):
                                                    hyper_means,
                                                    embedding_dim, time_series)
 
-    def forward(self, decoder, trace, times=None, blocks=None,
+    def forward(self, decoder, trace, times=None, blocks=None, params=None,
                 num_particles=tfa_models.NUM_PARTICLES):
-        params = self.hyperparams.state_vardict()
-        for k, v in params.items():
-            params[k] = v.expand(num_particles, *v.shape)
+        if params is None:
+            params = self.hyperparams.state_vardict(num_particles)
         if blocks is None:
-            blocks = list(range(self._num_blocks))
+            blocks = torch.arange(self._num_blocks)
 
-        block_subjects = [self.block_subjects[b]
-                          for b in range(self._num_blocks)
-                          if b in blocks]
-        block_tasks = [self.block_tasks[b] for b in range(self._num_blocks)
-                       if b in blocks]
-        if times and self._time_series:
-            for k, v in params['weights'].items():
-                params['weights'][k] = v[:, :, times[0]:times[1], :]
+        unique_blocks = blocks.unique()
+        block_subjects = self.block_subjects[unique_blocks]
+        block_tasks = self.block_tasks[unique_blocks]
 
         return decoder(trace, blocks, block_subjects, block_tasks, params,
-                       times=times, num_particles=num_particles)
+                       times=times)
 
 class DeepTFAModel(nn.Module):
     """Generative model for deep topographic factor analysis"""
