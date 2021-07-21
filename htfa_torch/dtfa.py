@@ -42,7 +42,7 @@ from . import tfa
 from . import tfa_models
 from . import utils
 
-EPOCH_MSG = '[Epoch %d] (%dms) Posterior free-energy %.8e = KL from prior %.8e - log-likelihood %.8e'
+EPOCH_MSG = '[Epoch %d] (%dms) ELBO %.8e = log-likelihood %.8e - KL from prior %.8e'
 
 class DeepTFA:
     """Overall container for a run of Deep TFA"""
@@ -259,8 +259,8 @@ class DeepTFA:
 
             end = time.time()
             msg = EPOCH_MSG % (epoch + 1, (end - start) * 1000,
-                               free_energies[epoch], np.mean(epoch_prior_kls),
-                               np.mean(epoch_lls))
+                               -free_energies[epoch], np.mean(epoch_lls),
+                               np.mean(epoch_prior_kls))
             logging.info(msg)
             if checkpoint_steps is not None and epoch % checkpoint_steps == 0:
                 now = datetime.datetime.now()
