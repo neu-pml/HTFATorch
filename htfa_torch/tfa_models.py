@@ -4,6 +4,7 @@ __author__ = 'Eli Sennesh', 'Zulqarnain Khan'
 __email__ = 'e.sennesh@northeastern.edu', 'khan.zu@husky.neu.edu'
 
 import collections
+from functools import lru_cache
 
 import numpy as np
 import torch
@@ -56,11 +57,15 @@ class HyperParams(Model):
         self._guide = guide
         utils.register_vardict(vs, self, self._guide)
 
-    def state_vardict(self):
+    def state_vardict(self, num_particles=None):
         result = utils.vardict(self.state_dict(keep_vars=True))
         for k, v in result.items():
+            if num_particles:
+                v = v.expand(num_particles, *v.shape)
             if not isinstance(v, Variable):
-                result[k] = Variable(v)
+                v = Variable(v)
+            result[k] = v
+
         return result
 
 class GuidePrior(Model):
