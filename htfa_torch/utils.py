@@ -89,7 +89,7 @@ def average_weighted_reconstruction_error(blocks, num_times, num_voxels,
         reconstruction = results['weights'] @ results['factors']
         image = activations[block]['activations']
 
-        for t in range(results['weights'].shape[0]):
+        for t in range(num_times[block]):
             diff = np.linalg.norm(reconstruction[t] - image[t]) ** 2
             normalizer = np.linalg.norm(image[t]) ** 2
 
